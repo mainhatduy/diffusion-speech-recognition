@@ -31,9 +31,8 @@ def parse_args():
     
     # Check if a config file is provided as the first argument
     if len(sys.argv) == 2 and sys.argv[1].endswith('.json'):
-        # Load config from JSON file
         config_file = sys.argv[1]
-        data_args, model_args, train_args, gen_args = parser.parse_json_file(json_file=config_file)
+        data_args, model_args, train_args, gen_args = parser.parse_json_file(json_file=config_file, allow_extra_keys=True)
     else:
         # Parse from command line arguments (original behavior)
         data_args, model_args, train_args, gen_args = parser.parse_args_into_dataclasses()

@@ -8,15 +8,15 @@
     "batch_by_tokens": false,
     "num_diffusion_timesteps": 50,
     "diffusion_type": "absorbing",
-    "pretrained": "FacebookAI/xlm-roberta-large",
+    "pretrained": "FacebookAI/xlm-roberta-base",
     "cache_dir": "cache",
     "attention_strategy": "full",
     "vocab_pad_to_multiple": 1,
     "lora": false,
     "output_dir": "outputs/my_experiment",
-    "per_device_train_batch_size": 8,
-    "per_device_eval_batch_size": 8,
-    "gradient_accumulation_steps": 16,
+    "per_device_train_batch_size": 64,
+    "per_device_eval_batch_size": 64,
+    "gradient_accumulation_steps": 1,
     "max_steps": 150000,
     "do_eval": true,
     "eval_strategy": "steps",
@@ -56,6 +56,5 @@
     "bpe": "sentencepiece",
     "bleu_tokenize": "13a",
     "return_history": false,
-    "temperature": 1.0,
-    "save_safetensors": false
+    "temperature": 1.0
 }

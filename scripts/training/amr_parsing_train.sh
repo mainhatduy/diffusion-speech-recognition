@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DEVICE_VISIBLE=1  
+DEVICE_VISIBLE=0  
 # Default config file
 CONFIG_FILE="configs/my_amr_parsing_config.json"
 

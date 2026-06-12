@@ -264,6 +264,48 @@ class DiscreteDiffusionTrainer(Trainer):
         
         delattr(self, "prediction_write_to")
  
+    def _save(self, output_dir: Optional[str] = None, state_dict: Optional[Dict[str, Any]] = None):
+        output_dir = output_dir if output_dir is not None else self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        
+        logger = logging.get_logger(__name__)
+        logger.info(f"Saving model checkpoint to {output_dir}")
+
+        from transformers.modeling_utils import PreTrainedModel
+        from transformers.utils import is_peft_available, WEIGHTS_NAME
+        
+        if is_peft_available():
+            from peft import PeftModel
+            supported_classes = (PreTrainedModel, PeftModel)
+        else:
+            supported_classes = (PreTrainedModel,)
+
+        if not isinstance(self.model, supported_classes):
+            if state_dict is None:
+                state_dict = self.model.state_dict()
+
+            if isinstance(self.accelerator.unwrap_model(self.model, keep_torch_compile=False), supported_classes):
+                self.accelerator.unwrap_model(self.model, keep_torch_compile=False).save_pretrained(
+                    output_dir, state_dict=state_dict
+                )
+            else:
+                logger.info("Trainer.model is not a `PreTrainedModel`, saving its state dict with torch.save to avoid safetensors shared memory error.")
+                torch.save(state_dict, os.path.join(output_dir, WEIGHTS_NAME))
+        else:
+            self.model.save_pretrained(output_dir, state_dict=state_dict)
+
+        if self.processing_class is not None:
+            self.processing_class.save_pretrained(output_dir)
+        elif (
+            self.data_collator is not None
+            and hasattr(self.data_collator, "tokenizer")
+            and self.data_collator.tokenizer is not None
+        ):
+            logger.info("Saving Trainer.data_collator.tokenizer by default as Trainer.processing_class is `None`")
+            self.data_collator.tokenizer.save_pretrained(output_dir)
+
+        # Good practice: save your training arguments together with the trained model
+        torch.save(self.args, os.path.join(output_dir, "training_args.bin"))
          
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
         self.has_printed_sample = False

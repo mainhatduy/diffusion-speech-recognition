@@ -95,6 +95,12 @@ class DiscreteDiffusionBase(nn.Module):
     def gradient_checkpointing_enable(self):
         assert hasattr(self, "model"), "self.model is not set"
         self.model.gradient_checkpointing_enable()
+        
+    def num_parameters(self, only_trainable: bool = False, exclude_shared: bool = False) -> int:
+        """
+        Get number of (optionally, trainable or non-shared) parameters in the module.
+        """
+        return sum(p.numel() for p in self.parameters() if not only_trainable or p.requires_grad)
     
     def add_fake_layer(self):
         assert hasattr(self, "config"), "could not infer embedding dimension because self.config is not found."

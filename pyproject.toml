@@ -13,7 +13,7 @@ dependencies = [
     "numpy>=2.4.6",
     "peft>=0.19.1",
     "py-rouge>=1.1",
-    "pynvml>=13.0.1",
+    "nvidia-ml-py",
     "python-dotenv>=1.2.2",
     "sacrebleu>=2.6.0",
     "sentencepiece>=0.2.1",

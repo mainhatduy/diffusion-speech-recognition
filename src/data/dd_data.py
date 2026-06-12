@@ -164,6 +164,11 @@ class BilingualDataset(PromptDataset):
     @staticmethod    
     def load_data(args, tokenizer, train=True, valid=True, test=False):
         import os
+        import logging
+        
+        # Set tokenizer model_max_length from config and suppress warnings during filtering
+        tokenizer.model_max_length = args.max_length
+        logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
         
         # Get HF token from args or environment variable
         hf_token = args.hf_token or os.getenv('HF_TOKEN')
@@ -507,6 +512,11 @@ class AMRDataset(BilingualDataset):
         from .amr_process.prepare_dataset import prepare_dataset
         from .amr_process.additional_tokens import get_added_vocabulary
         import os
+        import logging
+        
+        # Set tokenizer model_max_length from config and suppress warnings during filtering
+        tokenizer.model_max_length = args.max_length
+        logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
         
         # Add additional tokens
         new_tokens = get_added_vocabulary()

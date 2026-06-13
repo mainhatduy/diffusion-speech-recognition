@@ -37,7 +37,7 @@ class DiscreteDiffusionDataArguments:
         default="bilingual"   # fairseq | flan | flanv2 | pair | bilingual | speech_recognition
     )
     audio_encoder_name: str = field(
-        default="facebook/mms-300m",
+        default="UsefulSensors/moonshine-streaming-medium",
         metadata={"help": "pretrained audio encoder model name for speech_recognition"}
     )
     data_path: str = field(
@@ -403,8 +403,9 @@ class DiscreteDiffusionDataCollator(object):
         has_audio = "audio_values" in samples[0]
         if has_audio:
             audio_values_list = [s["audio_values"] for s in samples]
-            # Pad audio to max length in batch
+            # Pad audio to max length in batch, rounded up to a multiple of 80 (frame_len of Moonshine)
             max_audio_len = max(av.size(-1) for av in audio_values_list)
+            max_audio_len = ((max_audio_len + 79) // 80) * 80
             padded_audio = torch.zeros(batch_size, max_audio_len)
             audio_attention_mask = torch.zeros(batch_size, max_audio_len, dtype=torch.long)
             for i, av in enumerate(audio_values_list):
@@ -713,7 +714,7 @@ class SpeechDataset(PromptDataset):
             )
         
         # Load feature extractor for audio preprocessing
-        audio_encoder_name = getattr(args, 'audio_encoder_name', 'facebook/mms-300m')
+        audio_encoder_name = getattr(args, 'audio_encoder_name', 'UsefulSensors/moonshine-streaming-medium')
         feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
             audio_encoder_name, cache_dir=getattr(args, 'cache_dir', None)
         )

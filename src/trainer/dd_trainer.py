@@ -342,7 +342,8 @@ class DiscreteDiffusionTrainer(Trainer):
                 json_path = "test/test_data/test_sample.json"
                 mp3_path = "test/test_data/test_sample.mp3"
                 
-                is_speech = "audio_features" in inputs["net_input"] or (hasattr(self, "eval_dataset") and self.eval_dataset is not None and hasattr(self.eval_dataset, "feature_extractor"))
+                raw_model = model.module if hasattr(model, "module") else model
+                is_speech = getattr(raw_model, "has_audio_encoder", False) or "audio_features" in inputs["net_input"] or (hasattr(self, "eval_dataset") and self.eval_dataset is not None and hasattr(self.eval_dataset, "feature_extractor"))
                 
                 if is_speech and os.path.exists(json_path) and os.path.exists(mp3_path):
                     with open(json_path, "r", encoding="utf-8") as f:
@@ -366,19 +367,37 @@ class DiscreteDiffusionTrainer(Trainer):
                         feature_extractor = self.eval_dataset.feature_extractor
                     else:
                         from transformers import Wav2Vec2FeatureExtractor
-                        audio_encoder_name = getattr(model.config, "audio_encoder_name", "facebook/mms-300m")
+                        audio_encoder_name = getattr(raw_model.args, "audio_encoder_name", "facebook/mms-300m")
                         feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(audio_encoder_name)
                         
                     audio_inputs = feature_extractor(
                         waveform,
                         sampling_rate=target_sample_rate,
                         return_tensors="pt",
-                        padding=False,
+                        padding=True,
                     )
                     
                     device = inputs["net_input"]["src_tokens"].device
                     audio_values = audio_inputs.input_values.to(device)
-                    audio_attention_mask = torch.ones_like(audio_values, dtype=torch.long).to(device)
+                    
+                    # Round up audio length to a multiple of 80 if we are using Moonshine encoder
+                    audio_encoder_name = getattr(raw_model.args, "audio_encoder_name", "facebook/mms-300m")
+                    if "moonshine" in audio_encoder_name.lower():
+                        audio_len = audio_values.size(-1)
+                        padded_len = ((audio_len + 79) // 80) * 80
+                        
+                        padded_audio = torch.zeros(1, padded_len, device=device)
+                        padded_audio[0, :audio_len] = audio_values[0]
+                        audio_values = padded_audio
+                        
+                        padded_mask = torch.zeros(1, padded_len, dtype=torch.long, device=device)
+                        padded_mask[0, :audio_len] = 1
+                        audio_attention_mask = padded_mask
+                    else:
+                        if "attention_mask" in audio_inputs:
+                            audio_attention_mask = audio_inputs.attention_mask.to(device)
+                        else:
+                            audio_attention_mask = torch.ones_like(audio_values, dtype=torch.long).to(device)
                     
                     tokenizer = self.generator.tokenizer
                     tgt = tokenizer.encode(target_text, add_special_tokens=True)
@@ -416,7 +435,6 @@ class DiscreteDiffusionTrainer(Trainer):
                         "ntokens": len(targets[0])
                     }
                     
-                    raw_model = model.module if hasattr(model, "module") else model
                     test_hyps, _ = self.generator.generate(raw_model, test_batch)
                     
                     ref_str = target_text

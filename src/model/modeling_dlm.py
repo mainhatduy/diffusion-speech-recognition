@@ -71,9 +71,16 @@ class DiscreteDiffusionModel(PreTrainedModel):
         self.has_audio_encoder = getattr(config, 'dataset_type', 'bilingual') == 'speech_recognition'
         if self.has_audio_encoder:
             audio_encoder_name = getattr(config, 'audio_encoder_name', 'facebook/mms-300m')
-            self.audio_encoder = Wav2Vec2Model.from_pretrained(
-                audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
-            )
+            if "moonshine" in audio_encoder_name:
+                from transformers import MoonshineStreamingModel
+                moonshine_model = MoonshineStreamingModel.from_pretrained(
+                    audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
+                )
+                self.audio_encoder = moonshine_model.encoder
+            else:
+                self.audio_encoder = Wav2Vec2Model.from_pretrained(
+                    audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
+                )
             # Freeze the audio encoder
             for param in self.audio_encoder.parameters():
                 param.requires_grad = False
@@ -266,7 +273,14 @@ class DiscreteDiffusionModel(PreTrainedModel):
         if attention_mask is None:
             attention_mask = prev_output_tokens.ne(self.pad_id).int()        
         
-        embeddings = self.model.roberta.embeddings.word_embeddings(input_ids)
+        # Build full embeddings first (word + position + token type + LayerNorm + dropout)
+        embeddings = self.model.roberta.embeddings(
+            input_ids=input_ids,
+            position_ids=None,
+            token_type_ids=None,
+            inputs_embeds=None,
+            past_key_values_length=0,
+        )
         
         if hasattr(self, "fake_layer") and self.training:
             self.fake_layer.requires_grad = True
@@ -285,9 +299,12 @@ class DiscreteDiffusionModel(PreTrainedModel):
             
             # Cross-Attention over audio_embeds using embeddings as queries:
             if audio_attention_mask is not None:
-                audio_attn = self.audio_encoder._get_feature_vector_attention_mask(
-                    T_audio, audio_attention_mask
-                )
+                if hasattr(audio_outputs, "attention_mask") and audio_outputs.attention_mask is not None:
+                    audio_attn = audio_outputs.attention_mask
+                else:
+                    audio_attn = self.audio_encoder._get_feature_vector_attention_mask(
+                        T_audio, audio_attention_mask
+                    )
                 key_padding_mask = ~(audio_attn.bool())
             else:
                 key_padding_mask = None
@@ -305,9 +322,36 @@ class DiscreteDiffusionModel(PreTrainedModel):
             ext_partial_mask = torch.bmm(ext_partial_mask[:, :, None], ext_partial_mask[:, None, :]).int()
             ext_mask = attention_mask[:, None, :].repeat(1, attention_mask.size(-1), 1)
             ext_mask[partial_mask] = ext_partial_mask[partial_mask]
-            outputs = self.model.roberta(inputs_embeds=embeddings, attention_mask=ext_mask)[0]
+            
+            # Convert 3D mask using _create_attention_masks
+            attention_mask, _ = self.model.roberta._create_attention_masks(
+                attention_mask=ext_mask,
+                encoder_attention_mask=None,
+                embedding_output=embeddings,
+                encoder_hidden_states=None,
+                past_key_values=None,
+            )
         else:
-            outputs = self.model.roberta(inputs_embeds=embeddings, attention_mask=attention_mask)[0]
+            # Convert 2D mask using _create_attention_masks
+            attention_mask, _ = self.model.roberta._create_attention_masks(
+                attention_mask=attention_mask,
+                encoder_attention_mask=None,
+                embedding_output=embeddings,
+                encoder_hidden_states=None,
+                past_key_values=None,
+            )
+            
+        # Call the encoder directly, bypassing self.model.roberta's embedding layer (which would double-embed)
+        encoder_outputs = self.model.roberta.encoder(
+            embeddings,
+            attention_mask=attention_mask,
+            encoder_hidden_states=None,
+            encoder_attention_mask=None,
+            past_key_values=None,
+            use_cache=False,
+            position_ids=None,
+        )
+        outputs = encoder_outputs.last_hidden_state
         
         if not (~torch.isnan(outputs)).all():
             outputs.masked_fill_(outputs.isnan(), 0)

@@ -81,6 +81,15 @@ class DiscreteDiffusionModel(PreTrainedModel):
             
             audio_hidden_size = self.audio_encoder.config.hidden_size
             self.audio_projector = nn.Linear(audio_hidden_size, self.config.hidden_size)
+            
+            # Cross-attention layer
+            self.cross_attn = nn.MultiheadAttention(
+                embed_dim=self.config.hidden_size,
+                num_heads=self.config.num_attention_heads,
+                dropout=0.1,
+                batch_first=True
+            )
+            self.cross_attn_ln = nn.LayerNorm(self.config.hidden_size)
 
         # Length predictor (optional, as in original code)
         self.length_trm = nn.TransformerEncoder(
@@ -263,8 +272,7 @@ class DiscreteDiffusionModel(PreTrainedModel):
             self.fake_layer.requires_grad = True
             embeddings = embeddings + self.fake_layer * 0 
         
-        # Audio fusion via prefix concatenation
-        T_audio = 0
+        # Audio fusion via Cross-Attention
         if self.has_audio_encoder and audio_features is not None:
             with torch.no_grad():
                 audio_outputs = self.audio_encoder(
@@ -275,25 +283,22 @@ class DiscreteDiffusionModel(PreTrainedModel):
             audio_embeds = self.audio_projector(audio_embeds)    # (B, T_audio, hidden_size)
             T_audio = audio_embeds.size(1)
             
-            # Prepend audio embeddings to text embeddings
-            embeddings = torch.cat([audio_embeds, embeddings], dim=1)
-            
-            # Create audio attention mask
+            # Cross-Attention over audio_embeds using embeddings as queries:
             if audio_attention_mask is not None:
                 audio_attn = self.audio_encoder._get_feature_vector_attention_mask(
                     T_audio, audio_attention_mask
-                ).int()
-            else:
-                audio_attn = torch.ones(
-                    audio_embeds.size(0), T_audio, dtype=torch.int, device=audio_embeds.device
                 )
-            attention_mask = torch.cat([audio_attn, attention_mask], dim=1)
-            
-            # Extend partial_mask: audio prefix positions are "fixed" (True)
-            audio_partial = torch.ones(
-                partial_mask.size(0), T_audio, dtype=torch.bool, device=partial_mask.device
+                key_padding_mask = ~(audio_attn.bool())
+            else:
+                key_padding_mask = None
+                
+            attn_output, _ = self.cross_attn(
+                query=embeddings,
+                key=audio_embeds,
+                value=audio_embeds,
+                key_padding_mask=key_padding_mask
             )
-            partial_mask = torch.cat([audio_partial, partial_mask], dim=1)
+            embeddings = self.cross_attn_ln(embeddings + attn_output)
         
         if self.config.attention_strategy == "prefix_lm":
             ext_partial_mask = partial_mask.float()
@@ -306,10 +311,6 @@ class DiscreteDiffusionModel(PreTrainedModel):
         
         if not (~torch.isnan(outputs)).all():
             outputs.masked_fill_(outputs.isnan(), 0)
-        
-        # Strip audio prefix from output, keep only text representations
-        if T_audio > 0:
-            outputs = outputs[:, T_audio:]
         
         outputs = outputs[loss_mask] if loss_mask is not None else outputs
         return self.model.lm_head(outputs)

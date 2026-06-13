@@ -314,6 +314,7 @@ class DiscreteDiffusionTrainer(Trainer):
             self.data_collator.tokenizer.save_pretrained(output_dir)
 
         # Good practice: save your training arguments together with the trained model
+        os.makedirs(output_dir, exist_ok=True)
         torch.save(self.args, os.path.join(output_dir, "training_args.bin"))
          
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):

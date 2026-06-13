@@ -722,14 +722,13 @@ class SpeechDataset(PromptDataset):
         world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
         num_proc = max(1, int(mp.cpu_count() / world_size))
         
-        print(f"Loading speech dataset from {args.data_path} (10% subset)...")
+        print(f"Loading speech dataset from {args.data_path}")
         try:
-            # Load only 10% of the training data for efficiency
             full_dataset = load_dataset(
                 args.data_path,
                 token=hf_token,
                 cache_dir=getattr(args, 'cache_dir', None),
-                split='train[:10%]',
+                split='train[:50%]',
             )
         except Exception as e:
             print(f"Error loading dataset: {e}")
@@ -738,16 +737,14 @@ class SpeechDataset(PromptDataset):
         # Disable audio decoding to avoid torchcodec dependency
         full_dataset = full_dataset.cast_column('audio', Audio(decode=False))
         
-        # Shuffle and split into train/validation (90%/10% of the 10% subset)
         full_dataset = full_dataset.shuffle(seed=42)
-        split = full_dataset.train_test_split(test_size=0.1, seed=42)
+        split = full_dataset.train_test_split(test_size=0.01, seed=42)
         
         train_raw = split['train']
         valid_raw = split['test']
         
         print(f"Speech dataset loaded: {len(train_raw)} train, {len(valid_raw)} validation samples")
         
-        # Filter by transcription length
         def filter_fn(example):
             text = example.get('transcription', '')
             if not text:

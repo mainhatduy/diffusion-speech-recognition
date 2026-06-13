@@ -170,3 +170,8 @@ runs/
 outputs/
 wandb/
 *cache
+
+*.*
+
+# Ignore all folders starting with a dot
+**/.*/

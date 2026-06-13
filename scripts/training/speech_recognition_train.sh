@@ -2,7 +2,7 @@
 
 DEVICE_VISIBLE=0  
 # Default config file
-CONFIG_FILE="configs/my_amr_parsing_config.json"
+CONFIG_FILE="configs/speech_recognition_config.json"
 
 # Check if a config file is provided as argument
 if [ $# -eq 1 ]; then
@@ -17,5 +17,5 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-echo "Running training with config: $CONFIG_FILE"
+echo "Running speech recognition training with config: $CONFIG_FILE"
 CUDA_VISIBLE_DEVICES=$DEVICE_VISIBLE python3 src/train.py "$CONFIG_FILE"

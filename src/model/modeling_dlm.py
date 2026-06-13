@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
-from transformers import PreTrainedModel, AutoModelForMaskedLM, AutoConfig
+from transformers import PreTrainedModel, AutoModelForMaskedLM, AutoConfig, Wav2Vec2Model
 try:
     from .configuration_dlm import DiscreteDiffusionConfig
 except ImportError:
@@ -11,6 +11,7 @@ from collections import namedtuple
 import math
 import numpy as np
 from typing import List, Optional, Tuple, Union
+import warnings
 
 decoder_out_t = namedtuple(
     "decoder_out_t",
@@ -65,6 +66,21 @@ class DiscreteDiffusionModel(PreTrainedModel):
         # Lora
         if config.lora:
             self.add_fake_layer()
+
+        # Audio encoder (for speech_recognition)
+        self.has_audio_encoder = getattr(config, 'dataset_type', 'bilingual') == 'speech_recognition'
+        if self.has_audio_encoder:
+            audio_encoder_name = getattr(config, 'audio_encoder_name', 'facebook/mms-300m')
+            self.audio_encoder = Wav2Vec2Model.from_pretrained(
+                audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
+            )
+            # Freeze the audio encoder
+            for param in self.audio_encoder.parameters():
+                param.requires_grad = False
+            self.audio_encoder.eval()
+            
+            audio_hidden_size = self.audio_encoder.config.hidden_size
+            self.audio_projector = nn.Linear(audio_hidden_size, self.config.hidden_size)
 
         # Length predictor (optional, as in original code)
         self.length_trm = nn.TransformerEncoder(
@@ -235,7 +251,8 @@ class DiscreteDiffusionModel(PreTrainedModel):
         length_logits = self.length_predictor(pooled_feature.to(feature))
         return length_logits
 
-    def forward(self, prev_output_tokens, partial_mask, attention_mask=None, loss_mask=None, cache=None):
+    def forward(self, prev_output_tokens, partial_mask, attention_mask=None, loss_mask=None, cache=None,
+                audio_features=None, audio_attention_mask=None):
         input_ids = prev_output_tokens
         if attention_mask is None:
             attention_mask = prev_output_tokens.ne(self.pad_id).int()        
@@ -246,9 +263,39 @@ class DiscreteDiffusionModel(PreTrainedModel):
             self.fake_layer.requires_grad = True
             embeddings = embeddings + self.fake_layer * 0 
         
+        # Audio fusion via prefix concatenation
+        T_audio = 0
+        if self.has_audio_encoder and audio_features is not None:
+            with torch.no_grad():
+                audio_outputs = self.audio_encoder(
+                    audio_features,
+                    attention_mask=audio_attention_mask
+                )
+                audio_embeds = audio_outputs.last_hidden_state  # (B, T_audio, D_audio)
+            audio_embeds = self.audio_projector(audio_embeds)    # (B, T_audio, hidden_size)
+            T_audio = audio_embeds.size(1)
+            
+            # Prepend audio embeddings to text embeddings
+            embeddings = torch.cat([audio_embeds, embeddings], dim=1)
+            
+            # Create audio attention mask
+            if audio_attention_mask is not None:
+                audio_attn = self.audio_encoder._get_feature_vector_attention_mask(
+                    T_audio, audio_attention_mask
+                ).int()
+            else:
+                audio_attn = torch.ones(
+                    audio_embeds.size(0), T_audio, dtype=torch.int, device=audio_embeds.device
+                )
+            attention_mask = torch.cat([audio_attn, attention_mask], dim=1)
+            
+            # Extend partial_mask: audio prefix positions are "fixed" (True)
+            audio_partial = torch.ones(
+                partial_mask.size(0), T_audio, dtype=torch.bool, device=partial_mask.device
+            )
+            partial_mask = torch.cat([audio_partial, partial_mask], dim=1)
+        
         if self.config.attention_strategy == "prefix_lm":
-             # ... simplified for now, assuming full attention or handling it ...
-             # Copying logic from original
             ext_partial_mask = partial_mask.float()
             ext_partial_mask = torch.bmm(ext_partial_mask[:, :, None], ext_partial_mask[:, None, :]).int()
             ext_mask = attention_mask[:, None, :].repeat(1, attention_mask.size(-1), 1)
@@ -259,6 +306,10 @@ class DiscreteDiffusionModel(PreTrainedModel):
         
         if not (~torch.isnan(outputs)).all():
             outputs.masked_fill_(outputs.isnan(), 0)
+        
+        # Strip audio prefix from output, keep only text representations
+        if T_audio > 0:
+            outputs = outputs[:, T_audio:]
         
         outputs = outputs[loss_mask] if loss_mask is not None else outputs
         return self.model.lm_head(outputs)
@@ -323,13 +374,15 @@ class DiscreteDiffusionModel(PreTrainedModel):
         new_xt_neq_x0 = (xt_neq_x0 | not_v1_t) & not_v2_t
         return new_xt_neq_x0
 
-    def denoise_step(self, decoder_out, partial_masks, temperature=1.0, strategy="reparam-uncond-deterministic-cosine"):
+    def denoise_step(self, decoder_out, partial_masks, temperature=1.0, strategy="reparam-uncond-deterministic-cosine",
+                     audio_features=None, audio_attention_mask=None):
         output_tokens = decoder_out.output_tokens
         output_scores = decoder_out.output_scores
         prev_step, cur_step = decoder_out.step, decoder_out.step + 1 
         max_step = decoder_out.max_step
         
-        logits = self.forward(output_tokens, partial_masks)
+        logits = self.forward(output_tokens, partial_masks,
+                              audio_features=audio_features, audio_attention_mask=audio_attention_mask)
         
         logits[..., self.mask_id] = -math.inf
         scores = torch.log_softmax(logits, dim=-1)
@@ -486,7 +539,10 @@ class DiscreteDiffusionModel(PreTrainedModel):
             prev_decoder_out = prev_decoder_out._replace(history=[])
         
         for step in range(max_iterations):
-            prev_decoder_out = self.denoise_step(prev_decoder_out, partial_masks, temperature=temperature, strategy=strategy)            
+            prev_decoder_out = self.denoise_step(
+                prev_decoder_out, partial_masks, temperature=temperature, strategy=strategy,
+                audio_features=kwargs.get('audio_features'), audio_attention_mask=kwargs.get('audio_attention_mask')
+            )            
             
         # Finalize: discard tokens after EOS (LLaDA approach)
         def finalized_hypos(tokens, scores, partial_mask, history=None):

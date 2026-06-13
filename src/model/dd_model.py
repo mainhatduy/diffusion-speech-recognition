@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 
-from transformers import PreTrainedModel
+from transformers import PreTrainedModel, Wav2Vec2Model
 
 import dataclasses
 from dataclasses import dataclass, field
@@ -11,7 +11,7 @@ from collections import namedtuple
 
 import math
 
-from typing import List
+from typing import List, Optional
 
 
 import warnings
@@ -68,6 +68,16 @@ class DiscreteDiffusionModelArguments:
     )
     lora_dropout: float = field(
         default=0
+    )
+    dataset_type: str = field(
+        default="bilingual",
+        init=False,
+        metadata={"help": "dataset type: bilingual, speech_recognition, amr_parsing, etc."}
+    )
+    audio_encoder_name: str = field(
+        default="facebook/mms-300m",
+        init=False,
+        metadata={"help": "pretrained audio encoder model name"}
     )
        
     def __post_init__(self):
@@ -199,6 +209,22 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         self.config = model.config
         if args.lora:
             self.add_fake_layer() 
+        
+        # Audio encoder (for speech_recognition dataset_type)
+        self.has_audio_encoder = getattr(args, 'dataset_type', 'bilingual') == 'speech_recognition'
+        if self.has_audio_encoder:
+            audio_encoder_name = getattr(args, 'audio_encoder_name', 'facebook/mms-300m')
+            self.audio_encoder = Wav2Vec2Model.from_pretrained(
+                audio_encoder_name, cache_dir=args.cache_dir
+            )
+            # Freeze the audio encoder
+            for param in self.audio_encoder.parameters():
+                param.requires_grad = False
+            self.audio_encoder.eval()
+            
+            audio_hidden_size = self.audio_encoder.config.hidden_size  # 1024 for mms-300m
+            self.audio_projector = nn.Linear(audio_hidden_size, self.config.hidden_size)
+        
         # length predictor
         self.length_trm = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
@@ -290,7 +316,8 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         length_logits = self.length_predictor(pooled_feature.to(feature))
         return length_logits
     
-    def forward(self, prev_output_tokens, partial_mask, attention_mask=None, loss_mask=None, cache=None):
+    def forward(self, prev_output_tokens, partial_mask, attention_mask=None, loss_mask=None, cache=None,
+                audio_features=None, audio_attention_mask=None):
         input_ids = prev_output_tokens
         if attention_mask is None:
             attention_mask = prev_output_tokens.ne(self.pad_id).int()        
@@ -303,6 +330,38 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             embeddings = embeddings + self.fake_layer * 0   # trick to support lora + gradient checkpointing
             # self.model.roberta.embeddings.word_embeddings.weight.requires_grad = True
         
+        # Audio fusion via prefix concatenation
+        T_audio = 0
+        if self.has_audio_encoder and audio_features is not None:
+            with torch.no_grad():
+                audio_outputs = self.audio_encoder(
+                    audio_features, 
+                    attention_mask=audio_attention_mask
+                )
+                audio_embeds = audio_outputs.last_hidden_state  # (B, T_audio, D_audio)
+            audio_embeds = self.audio_projector(audio_embeds)    # (B, T_audio, hidden_size)
+            T_audio = audio_embeds.size(1)
+            
+            # Prepend audio embeddings to text embeddings
+            embeddings = torch.cat([audio_embeds, embeddings], dim=1)
+            
+            # Create audio attention mask (all 1s for non-padded audio frames)
+            if audio_attention_mask is not None:
+                # Wav2Vec2 downsamples the attention mask internally; get the output mask
+                audio_attn = self.audio_encoder._get_feature_vector_attention_mask(
+                    T_audio, audio_attention_mask
+                ).int()
+            else:
+                audio_attn = torch.ones(
+                    audio_embeds.size(0), T_audio, dtype=torch.int, device=audio_embeds.device
+                )
+            attention_mask = torch.cat([audio_attn, attention_mask], dim=1)
+            
+            # Extend partial_mask: audio prefix positions are "fixed" (True)
+            audio_partial = torch.ones(
+                partial_mask.size(0), T_audio, dtype=torch.bool, device=partial_mask.device
+            )
+            partial_mask = torch.cat([audio_partial, partial_mask], dim=1)
         
         if self.args.prefix_lm:
             # TODO: support cache
@@ -326,6 +385,10 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         if not (~torch.isnan(outputs)).all():
             outputs.masked_fill_(outputs.isnan(), 0)
             print("nan bug!")
+        
+        # Strip audio prefix from output, keep only text representations
+        if T_audio > 0:
+            outputs = outputs[:, T_audio:]
         
         outputs = outputs[loss_mask] if loss_mask is not None else outputs
         return self.model.lm_head(outputs)

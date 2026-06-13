@@ -18,7 +18,7 @@ from trainer.dd_trainer import DiscreteDiffusionTrainer, DiscreteDiffusionLength
 from utils import load_ckpt, is_master, argument_filter, load_model_tokenizer
 from data.dd_data import (
     DiscreteDiffusionDataArguments, DiscreteDiffusionDataCollator,
-    MemoryMapTokensDataset, BilingualDataset, AMRDataset
+    MemoryMapTokensDataset, BilingualDataset, AMRDataset, SpeechDataset
 )       
 
 import json
@@ -85,6 +85,10 @@ def main():
                 os.environ["WANDB_RUN_NAME"] = wandb_run_name
     
     # init model
+    # Pass dataset_type info to model_args so model knows whether to initialize audio encoder
+    model_args.dataset_type = data_args.dataset_type
+    if hasattr(data_args, 'audio_encoder_name'):
+        model_args.audio_encoder_name = data_args.audio_encoder_name
     model, tokenizer = load_model_tokenizer(model_args, do_train=True)
     
     # load datasets 
@@ -99,6 +103,16 @@ def main():
         setattr(data_args, "cache_dir", model_args.cache_dir)
         (train_set, valid_set, test_set) = AMRDataset.load_data(data_args, tokenizer)
         model.resize_token_embeddings(len(tokenizer))
+        collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
+        generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
+    
+    elif data_args.dataset_type == "speech_recognition":
+        setattr(data_args, "cache_dir", model_args.cache_dir)
+        if hasattr(data_args, 'audio_encoder_name'):
+            pass  # already set
+        else:
+            data_args.audio_encoder_name = getattr(model_args, 'audio_encoder_name', 'facebook/mms-300m')
+        (train_set, valid_set, test_set) = SpeechDataset.load_data(data_args, tokenizer)
         collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
         generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
     

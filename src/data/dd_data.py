@@ -728,7 +728,7 @@ class SpeechDataset(PromptDataset):
                 args.data_path,
                 token=hf_token,
                 cache_dir=getattr(args, 'cache_dir', None),
-                split='train[:50%]',
+                split='train[:100%]',
             )
         except Exception as e:
             print(f"Error loading dataset: {e}")

@@ -15,6 +15,11 @@ import sacrebleu
 from rouge import Rouge
 
 try:
+    import jiwer
+except ImportError:
+    jiwer = None
+
+try:
     import penman
     from smatchpp import Smatchpp, solvers
     from smatchpp.formalism.generic import tools as generictools
@@ -160,7 +165,80 @@ class MergeSmatchPP(object):
                 "smatchpp_precision": float(metrics_tensor[1]) if len(metrics_tensor) > 1 else 0.0,
                 "smatchpp_recall": float(metrics_tensor[2]) if len(metrics_tensor) > 2 else 0.0
             }
-        
+
+
+class MergeWER(object):
+    """Word Error Rate metric aggregator.
+
+    evalpreds[0]: float32 tensor of shape [N] containing per-batch WER numerators
+                  (total edit distance across the batch).
+    evalpreds[1]: float32 tensor of shape [N] containing per-batch WER denominators
+                  (total reference word count across the batch).
+
+    WER = sum(edit_distances) / sum(ref_word_counts)  (lower is better).
+    """
+
+    def __call__(self, evalpreds):
+        numerators = evalpreds[0].astype("float64")  # [N]
+        denominators = evalpreds[1].astype("float64")  # [N]
+
+        total_edits = numerators.sum()
+        total_refs = denominators.sum()
+
+        wer = (total_edits / total_refs) if total_refs > 0 else 0.0
+
+        return {"wer": float(wer)}
+
+
+# ---------------------------------------------------------------------------
+# Multi-metric aggregator
+# ---------------------------------------------------------------------------
+# Fixed number of stat slots reserved for each metric.
+# Both sys_stat and ref_stat use the same layout.
+_METRIC_SLOT_SIZES = {
+    "bleu": 5,    # [c1, c2, c3, c4, sys/ref_len]
+    "wer":  1,    # [edit_dist / ref_word_count]
+    "rouge": 1,   # [weighted_sum / batch_count]
+}
+
+
+class MultiMetric:
+    """Compute multiple evaluation metrics in a single evaluation pass.
+
+    ``prediction_step`` packs all metric stats into one concatenated tensor.
+    This class unpacks them and delegates to the individual Merge* classes.
+
+    Parameters
+    ----------
+    metrics : list[str]
+        Ordered list of metric names, e.g. ``["wer", "bleu"]``.
+        The order must match the order used in ``prediction_step``.
+    """
+
+    def __init__(self, metrics: list):
+        self.metrics = metrics
+        # Validate & compute slot layout
+        for m in metrics:
+            if m not in _METRIC_SLOT_SIZES:
+                raise ValueError(f"Unknown metric '{m}'. Supported: {list(_METRIC_SLOT_SIZES)}")
+        self._delegates = {
+            "bleu": MergeBLEU(),
+            "wer": MergeWER(),
+            "rouge": MergeRouge(),
+        }
+
+    def __call__(self, evalpreds):
+        sys_stats, ref_stats = evalpreds  # [N, total_slots] each
+        results = {}
+        offset = 0
+        for metric in self.metrics:
+            size = _METRIC_SLOT_SIZES[metric]
+            sys_slice = sys_stats[..., offset:offset + size]
+            ref_slice = ref_stats[..., offset:offset + size]
+            results.update(self._delegates[metric]((sys_slice, ref_slice)))
+            offset += size
+        return results
+
 
 class DiscreteDiffusionGenerator:
     def __init__(self, args, dictionary=None, tokenizer=None) -> None:
@@ -400,7 +478,49 @@ class DiscreteDiffusionGenerator:
         if isinstance(refs, torch.Tensor):
             refs = self.decode(refs) 
         return self.rouge.get_scores(hyps, [[ref] for ref in refs])['rouge-l']['f']
-    
+
+    def compute_wer(self, hyps, refs):
+        """Return (total_edit_distance, total_ref_word_count) for the batch.
+
+        Uses jiwer when available; falls back to a simple word-split approach.
+        These two scalars are then aggregated across all batches inside
+        MergeWER.__call__ to compute corpus-level WER.
+        """
+        if isinstance(hyps, torch.Tensor):
+            hyps = self.decode(hyps)
+        if isinstance(refs, torch.Tensor):
+            refs = self.decode(refs)
+
+        total_edit = 0.0
+        total_ref_words = 0
+
+        for hyp, ref in zip(hyps, refs):
+            ref_words = ref.split()
+            total_ref_words += len(ref_words)
+            if jiwer is not None:
+                # jiwer >= 3.x: use jiwer.wer(reference, hypothesis) directly
+                if hasattr(jiwer, "wer"):
+                    wer_val = jiwer.wer(ref, hyp)
+                else:
+                    # older jiwer: compute_measures
+                    wer_val = jiwer.compute_measures(ref, hyp)["wer"]
+                total_edit += wer_val * len(ref_words)
+            else:
+                # Fallback: word-level Levenshtein
+                hyp_words = hyp.split()
+                n, m = len(ref_words), len(hyp_words)
+                dp = list(range(n + 1))
+                for j in range(1, m + 1):
+                    new_dp = [j] + [0] * n
+                    for i in range(1, n + 1):
+                        cost = 0 if ref_words[i - 1] == hyp_words[j - 1] else 1
+                        new_dp[i] = min(new_dp[i - 1] + 1, dp[i] + 1, dp[i - 1] + cost)
+                    dp = new_dp
+                total_edit += dp[n]
+
+        return total_edit, total_ref_words
+
+
     def compute_penman(self, hyps, refs):
         """Compute percentage of valid Penman AMR graphs."""
         if isinstance(hyps, torch.Tensor):

@@ -44,6 +44,10 @@ class DiscreteDiffusionArguments(TrainingArguments):
     eval_metric: str = field(
         default="none"
     )
+    eval_metrics: List[str] = field(
+        default_factory=list,
+        metadata={"help": "list of metrics to compute, e.g. ['wer', 'bleu']. Overrides eval_metric when non-empty."}
+    )
     weighting: str = field(
         default="linear",
         metadata={"help": "weighting for training losses"}
@@ -515,27 +519,45 @@ class DiscreteDiffusionTrainer(Trainer):
                         self.write_to.write(f"SRC-{index}\t{src}\nHYP-{index}\t{hyp}\nREF-{index}\t{ref}\n")
                     
             if (not prediction_loss_only) and (self.compute_metrics is not None):
-                if self.args.eval_metric == "bleu":
-                    bleu = self.generator.compute_bleu(hyps_seqs, refs_seqs)
-                    
-                    sys_stat = torch.tensor([*bleu.counts, bleu.sys_len]).to(loss)
-                    ref_stat = torch.tensor([*bleu.totals, bleu.ref_len]).to(loss)
-                elif self.args.eval_metric == "rouge":
-                    rouge = self.generator.compute_rouge(hyps_seqs, refs_seqs)
-                    sys_stat = torch.tensor([rouge]).to(loss)
-                    ref_stat = torch.tensor([len(hyps_seqs)]).to(loss)
-                elif self.args.eval_metric == "smatchpp":
-                    smatchpp_scores = self.generator.compute_smatchpp(hyps_seqs, refs_seqs)
-                    # Return all metrics: F1, Precision, Recall
-                    sys_stat = torch.tensor([
-                        smatchpp_scores['f1'],
-                        smatchpp_scores['precision'],
-                        smatchpp_scores['recall']
-                    ]).to(loss)
-                    ref_stat = torch.tensor([1.0, 1.0, 1.0]).to(loss)
-                    
-                return (loss, sys_stat, ref_stat)
+                # ── Determine which metrics to compute ──────────────────────
+                active_metrics = (
+                    self.args.eval_metrics
+                    if self.args.eval_metrics
+                    else ([self.args.eval_metric] if self.args.eval_metric != "none" else [])
+                )
+
+                if active_metrics:
+                    sys_parts = []
+                    ref_parts = []
+
+                    for metric in active_metrics:
+                        if metric == "bleu":
+                            bleu = self.generator.compute_bleu(hyps_seqs, refs_seqs)
+                            sys_parts.append(torch.tensor([*bleu.counts, bleu.sys_len], dtype=torch.float32).to(loss))
+                            ref_parts.append(torch.tensor([*bleu.totals, bleu.ref_len], dtype=torch.float32).to(loss))
+                        elif metric == "wer":
+                            edit_dist, ref_words = self.generator.compute_wer(hyps_seqs, refs_seqs)
+                            sys_parts.append(torch.tensor([edit_dist], dtype=torch.float32).to(loss))
+                            ref_parts.append(torch.tensor([float(ref_words)], dtype=torch.float32).to(loss))
+                        elif metric == "rouge":
+                            rouge = self.generator.compute_rouge(hyps_seqs, refs_seqs)
+                            sys_parts.append(torch.tensor([rouge], dtype=torch.float32).to(loss))
+                            ref_parts.append(torch.tensor([float(len(hyps_seqs))], dtype=torch.float32).to(loss))
+                        elif metric == "smatchpp":
+                            smatchpp_scores = self.generator.compute_smatchpp(hyps_seqs, refs_seqs)
+                            sys_parts.append(torch.tensor([
+                                smatchpp_scores['f1'],
+                                smatchpp_scores['precision'],
+                                smatchpp_scores['recall']
+                            ], dtype=torch.float32).to(loss))
+                            ref_parts.append(torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32).to(loss))
+
+                    sys_stat = torch.cat(sys_parts)
+                    ref_stat = torch.cat(ref_parts)
+                    return (loss, sys_stat, ref_stat)
+
         return (loss, None, None)
+
 
 class DiscreteDiffusionLengthTrainer(DiscreteDiffusionTrainer):
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):

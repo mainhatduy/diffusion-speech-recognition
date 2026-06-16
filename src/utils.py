@@ -104,6 +104,12 @@ def _get_missing_special_tokens(tokenizer, tokenizer_pad_to_multiple):
     return special_token_dict, padding_tokens
     
 
+# Task tokens that are permanently reserved for multi-task speech translation.
+# These are added to EVERY tokenizer load so that model vocab and tokenizer
+# are always in sync regardless of dataset_type or checkpoint resume.
+TASK_SPECIAL_TOKENS = ["<vi_en>", "<vi_zh>", "<vi_ko>"]
+
+
 # @serialized_func 
 def load_model_tokenizer(model_args, do_train):
     pretrained, config = model_args.pretrained, model_args.config
@@ -119,12 +125,42 @@ def load_model_tokenizer(model_args, do_train):
             "xlm-roberta": AutoModelForMaskedLM
         }[model_type].from_config(config, cache_dir=model_args.cache_dir)
         tokenizer = AutoTokenizer.from_pretrained(config, padding_side="right", use_fast=False, cache_dir=model_args.cache_dir)
-    
+
+    # ---------------------------------------------------------------
+    # Permanently add the task special tokens to the tokenizer and
+    # resize model embeddings accordingly.  We do this here — before
+    # any dataset is loaded — so that:
+    #   1. The vocab size is fixed and deterministic.
+    #   2. Resuming from a checkpoint (where the tokenizer was saved
+    #      with these tokens) stays consistent.
+    #   3. Inference scripts that call load_model_tokenizer() directly
+    #      automatically get the correct vocabulary.
+    # ---------------------------------------------------------------
+    tokens_to_add = [
+        tok for tok in TASK_SPECIAL_TOKENS
+        if tok not in tokenizer.get_vocab()
+    ]
+    if tokens_to_add:
+        num_added = tokenizer.add_special_tokens({"additional_special_tokens": tokens_to_add})
+        logger.info(
+            f"[load_model_tokenizer] Added {num_added} task token(s) as special tokens: "
+            f"{tokens_to_add}  (new vocab size: {len(tokenizer)})"
+        )
+    else:
+        logger.info(
+            f"[load_model_tokenizer] Task tokens already in vocab: {TASK_SPECIAL_TOKENS}"
+        )
 
     dd_model = {
         "xlm-roberta": DiscreteDiffusionXLMRModel
     }[model_type](model_args, tokenizer, model)
-    
+
+    # Resize model token embeddings to match the updated tokenizer vocab.
+    dd_model.resize_token_embeddings(len(tokenizer))
+    logger.info(
+        f"[load_model_tokenizer] Model embeddings resized to vocab size: {len(tokenizer)}"
+    )
+
     if model_args.lora:
         lora_config = LoraConfig(
             TaskType.TOKEN_CLS, r=model_args.lora_rank, lora_alpha=model_args.lora_alpha, 

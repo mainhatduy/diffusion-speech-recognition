@@ -210,8 +210,8 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         if args.lora:
             self.add_fake_layer() 
         
-        # Audio encoder (for speech_recognition dataset_type)
-        self.has_audio_encoder = getattr(args, 'dataset_type', 'bilingual') == 'speech_recognition'
+        # Audio encoder (for speech_recognition and speech_translation dataset_type)
+        self.has_audio_encoder = getattr(args, 'dataset_type', 'bilingual') in ['speech_recognition', 'speech_translation']
         if self.has_audio_encoder:
             audio_encoder_name = getattr(args, 'audio_encoder_name', 'facebook/mms-300m')
             if "moonshine" in audio_encoder_name:

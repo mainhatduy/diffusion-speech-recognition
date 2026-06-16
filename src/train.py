@@ -13,13 +13,14 @@ from dotenv import load_dotenv
 from model.dd_model import DiscreteDiffusionModelArguments
 from trainer.dd_trainer import DiscreteDiffusionTrainingArguments
 from dd_generator import DiscreteDiffusionGenerator, DiscreteDiffusionGeneratorArguments
-from dd_generator import MergeBLEU, MergeRouge, MergeSmatchPP
+from dd_generator import MergeBLEU, MergeRouge, MergeSmatchPP, MergeWER, MultiMetric
 from trainer.dd_trainer import DiscreteDiffusionTrainer, DiscreteDiffusionLengthTrainer
 from utils import load_ckpt, is_master, argument_filter, load_model_tokenizer
 from data.dd_data import (
     DiscreteDiffusionDataArguments, DiscreteDiffusionDataCollator,
-    MemoryMapTokensDataset, BilingualDataset, AMRDataset, SpeechDataset
-)       
+    MemoryMapTokensDataset, BilingualDataset, AMRDataset, SpeechDataset,
+    TranslatedSpeechDataset, MultiTaskTranslatedSpeechDataset
+)
 
 import json
 import sys
@@ -116,18 +117,43 @@ def main():
         collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
         generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
     
+    elif data_args.dataset_type == "speech_translation":
+        setattr(data_args, "cache_dir", model_args.cache_dir)
+        if hasattr(data_args, 'audio_encoder_name'):
+            pass  # already set
+        else:
+            data_args.audio_encoder_name = getattr(model_args, 'audio_encoder_name', 'facebook/mms-300m')
+        (train_set, valid_set, test_set) = TranslatedSpeechDataset.load_data(data_args, tokenizer)
+        collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
+        generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
+
+    elif data_args.dataset_type == "speech_translation_multitask":
+        setattr(data_args, "cache_dir", model_args.cache_dir)
+        if not hasattr(data_args, 'audio_encoder_name') or not data_args.audio_encoder_name:
+            data_args.audio_encoder_name = getattr(model_args, 'audio_encoder_name', 'UsefulSensors/moonshine-streaming-medium')
+        # Task tokens (<vi_en>, <vi_zh>, <vi_ko>) are already registered in the tokenizer
+        # and model embeddings are already resized inside load_model_tokenizer() — no need
+        # to call resize_token_embeddings() again here.
+        (train_set, valid_set, test_set) = MultiTaskTranslatedSpeechDataset.load_data(data_args, tokenizer)
+        collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
+        generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
+    
     # resume checkpoint
     if train_args.finetune_from_model is not None:
         model = load_ckpt(model, train_args.finetune_from_model)
     
     # build trainer
     metric = None
-    if train_args.eval_metric == "bleu":
+    if train_args.eval_metrics:  # multi-metric path (eval_metrics list takes priority)
+        metric = MultiMetric(train_args.eval_metrics)
+    elif train_args.eval_metric == "bleu":
         metric = MergeBLEU()
-    elif train_args.eval_metric ==  "rouge":
+    elif train_args.eval_metric == "rouge":
         metric = MergeRouge()
     elif train_args.eval_metric == "smatchpp":
         metric = MergeSmatchPP()
+    elif train_args.eval_metric == "wer":
+        metric = MergeWER()
     Trainer = DiscreteDiffusionTrainer if not train_args.train_length else DiscreteDiffusionLengthTrainer
     trainer = Trainer(
         model=model, args=train_args, 
@@ -137,6 +163,12 @@ def main():
         compute_metrics=metric,
         
     )
+    # Save tokenizer alongside the model so that the task special tokens
+    # (<vi_en>, <vi_zh>, <vi_ko>) are preserved in every checkpoint directory.
+    if is_master():
+        tokenizer.save_pretrained(train_args.output_dir)
+        print(f"[train] Tokenizer saved to '{train_args.output_dir}' (vocab size: {len(tokenizer)})")
+
     # train!
     trainer.train(resume_from_checkpoint=train_args.resume_from_checkpoint)
 

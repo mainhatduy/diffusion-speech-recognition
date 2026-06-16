@@ -7,7 +7,7 @@ import json
 from model.dd_model import DiscreteDiffusionModelArguments
 from data.dd_data import DiscreteDiffusionDataArguments, PairDataset, DiscreteDiffusionDataCollator
 from trainer.dd_trainer import DiscreteDiffusionArguments, DiscreteDiffusionTrainingArguments, DiscreteDiffusionTrainer
-from dd_generator import DiscreteDiffusionGeneratorArguments, DiscreteDiffusionGenerator, MergeBLEU
+from dd_generator import DiscreteDiffusionGeneratorArguments, DiscreteDiffusionGenerator, MergeBLEU, MergeWER
 
 from copy import deepcopy
 from typing import List
@@ -60,8 +60,9 @@ def main():
     
     metric = {
         "none": None,
-        "bleu": MergeBLEU()
-    }[train_args.eval_metric]
+        "bleu": MergeBLEU(),
+        "wer": MergeWER(),
+    }.get(train_args.eval_metric, None)
     
     model = load_ckpt(model, train_args.resume_from_checkpoint)
     

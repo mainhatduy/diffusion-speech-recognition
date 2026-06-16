@@ -20,4 +20,5 @@ dependencies = [
     "tqdm>=4.68.2",
     "wandb>=0.27.2",
     "miniaudio>=1.71",
+    "jiwer>=4.0.0",
 ]

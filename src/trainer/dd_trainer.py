@@ -16,7 +16,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from typing import List, Dict, Any, Union, Optional, Tuple, Callable
 
-from data.dd_data import TokenSizeDistributedLengthGroupSampler
+from data.sampler import TokenSizeDistributedLengthGroupSampler
 from dd_generator import DiscreteDiffusionGenerator
 
 from dataclasses import dataclass, field

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import json
 
 from model.dd_model import DiscreteDiffusionModelArguments
-from data.dd_data import DiscreteDiffusionDataArguments, PairDataset, DiscreteDiffusionDataCollator
+from data.dd_data import DiscreteDiffusionDataArguments, DiscreteDiffusionDataCollator, load_data
 from trainer.dd_trainer import DiscreteDiffusionArguments, DiscreteDiffusionTrainingArguments, DiscreteDiffusionTrainer
 from dd_generator import DiscreteDiffusionGeneratorArguments, DiscreteDiffusionGenerator, MergeBLEU, MergeWER
 
@@ -73,10 +73,10 @@ def main():
         data_item_args_dict = deepcopy(data_args.__dict__)
         data_item_args_dict["data_path"] = data_path
         data_item_args = DiscreteDiffusionDataArguments(**data_item_args_dict)
-        if data_item_args.dataset_type == "pair":
-            _, _, testset = PairDataset.load_data(data_item_args, tokenizer, train=False, valid=False, test=True)
-            collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
-            generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer) 
+        (train_set, valid_set, testset), collator = load_data(
+            data_item_args, model_args, tokenizer, train=False, valid=False, test=True
+        )
+        generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer) 
         
 
         trainer = DiscreteDiffusionTrainer(

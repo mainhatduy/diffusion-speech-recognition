@@ -17,9 +17,7 @@ from dd_generator import MergeBLEU, MergeRouge, MergeSmatchPP, MergeWER, MultiMe
 from trainer.dd_trainer import DiscreteDiffusionTrainer, DiscreteDiffusionLengthTrainer
 from utils import load_ckpt, is_master, argument_filter, load_model_tokenizer
 from data.dd_data import (
-    DiscreteDiffusionDataArguments, DiscreteDiffusionDataCollator,
-    MemoryMapTokensDataset, BilingualDataset, AMRDataset, SpeechDataset,
-    TranslatedSpeechDataset, MultiTaskTranslatedSpeechDataset
+    DiscreteDiffusionDataArguments, DiscreteDiffusionDataCollator, load_data
 )
 
 import json
@@ -93,50 +91,8 @@ def main():
     model, tokenizer = load_model_tokenizer(model_args, do_train=True)
     
     # load datasets 
-    # FIXME: merge them
-    if  data_args.dataset_type == "bilingual":
-        setattr(data_args, "cache_dir", model_args.cache_dir)
-        (train_set, valid_set, test_set) = BilingualDataset.load_data(data_args, tokenizer)
-        collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
-        generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
-        
-    elif data_args.dataset_type == "amr_parsing":
-        setattr(data_args, "cache_dir", model_args.cache_dir)
-        (train_set, valid_set, test_set) = AMRDataset.load_data(data_args, tokenizer)
-        model.resize_token_embeddings(len(tokenizer))
-        collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
-        generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
-    
-    elif data_args.dataset_type == "speech_recognition":
-        setattr(data_args, "cache_dir", model_args.cache_dir)
-        if hasattr(data_args, 'audio_encoder_name'):
-            pass  # already set
-        else:
-            data_args.audio_encoder_name = getattr(model_args, 'audio_encoder_name', 'facebook/mms-300m')
-        (train_set, valid_set, test_set) = SpeechDataset.load_data(data_args, tokenizer)
-        collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
-        generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
-    
-    elif data_args.dataset_type == "speech_translation":
-        setattr(data_args, "cache_dir", model_args.cache_dir)
-        if hasattr(data_args, 'audio_encoder_name'):
-            pass  # already set
-        else:
-            data_args.audio_encoder_name = getattr(model_args, 'audio_encoder_name', 'facebook/mms-300m')
-        (train_set, valid_set, test_set) = TranslatedSpeechDataset.load_data(data_args, tokenizer)
-        collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
-        generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
-
-    elif data_args.dataset_type == "speech_translation_multitask":
-        setattr(data_args, "cache_dir", model_args.cache_dir)
-        if not hasattr(data_args, 'audio_encoder_name') or not data_args.audio_encoder_name:
-            data_args.audio_encoder_name = getattr(model_args, 'audio_encoder_name', 'UsefulSensors/moonshine-streaming-medium')
-        # Task tokens (<vi_en>, <vi_zh>, <vi_ko>) are already registered in the tokenizer
-        # and model embeddings are already resized inside load_model_tokenizer() — no need
-        # to call resize_token_embeddings() again here.
-        (train_set, valid_set, test_set) = MultiTaskTranslatedSpeechDataset.load_data(data_args, tokenizer)
-        collator = DiscreteDiffusionDataCollator(bos_id=tokenizer.bos_token_id, eos_id=tokenizer.eos_token_id, pad_id=tokenizer.pad_token_id)
-        generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
+    (train_set, valid_set, test_set), collator = load_data(data_args, model_args, tokenizer)
+    generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)
     
     # resume checkpoint
     if train_args.finetune_from_model is not None:

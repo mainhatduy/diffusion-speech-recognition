@@ -158,8 +158,8 @@ Thumbs.db
 *.swo
 
 # Project specific: data & checkpoints
-data/
-datasets/
+/data/
+/datasets/
 models/*.pt
 models/*.pth
 models/*.ckpt
@@ -170,8 +170,6 @@ runs/
 outputs/
 wandb/
 *cache
-
-*.*
 
 # Ignore all folders starting with a dot
 **/.*/

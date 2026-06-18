@@ -4,6 +4,7 @@ import multiprocessing as mp
 import numpy as np
 import torch
 from typing import List
+from collections import OrderedDict
 from datasets import load_dataset, Audio
 from transformers import Wav2Vec2FeatureExtractor
 from .base import PromptDataset
@@ -51,6 +52,8 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         self.feature_extractor = feature_extractor
         self.target_sample_rate = 16000
         self.n_tasks = len(task_configs)
+        self.audio_cache = OrderedDict()
+        self.max_cache_size = 10000
 
     def __len__(self):
         # Each base sample appears n_tasks times (one per target language)
@@ -67,28 +70,38 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         wav_id = translated_item["id"]
 
         # ---- Fetch matching audio from VietSpeech ----
-        vs_idx = self.path_to_vs_idx.get(wav_id)
-        if vs_idx is None:
-            raise ValueError(f"WAV ID '{wav_id}' not found in NhutP/VietSpeech index.")
+        if wav_id in self.audio_cache:
+            audio_values = self.audio_cache[wav_id]
+            # Move to end to mark as recently used
+            self.audio_cache.move_to_end(wav_id)
+        else:
+            vs_idx = self.path_to_vs_idx.get(wav_id)
+            if vs_idx is None:
+                raise ValueError(f"WAV ID '{wav_id}' not found in NhutP/VietSpeech index.")
 
-        vs_item = self.vietspeech_dataset[vs_idx]
-        audio_info = vs_item["audio"]
-        waveform, sample_rate = _decode_wav_bytes(audio_info["bytes"])
+            vs_item = self.vietspeech_dataset[vs_idx]
+            audio_info = vs_item["audio"]
+            waveform, sample_rate = _decode_wav_bytes(audio_info["bytes"])
 
-        # Resample to 16 kHz if necessary
-        if sample_rate != self.target_sample_rate:
-            ratio = self.target_sample_rate / sample_rate
-            new_length = int(len(waveform) * ratio)
-            indices = np.linspace(0, len(waveform) - 1, new_length)
-            waveform = np.interp(indices, np.arange(len(waveform)), waveform)
+            # Resample to 16 kHz if necessary
+            if sample_rate != self.target_sample_rate:
+                ratio = self.target_sample_rate / sample_rate
+                new_length = int(len(waveform) * ratio)
+                indices = np.linspace(0, len(waveform) - 1, new_length)
+                waveform = np.interp(indices, np.arange(len(waveform)), waveform)
 
-        audio_inputs = self.feature_extractor(
-            waveform,
-            sampling_rate=self.target_sample_rate,
-            return_tensors="pt",
-            padding=False,
-        )
-        audio_values = audio_inputs.input_values.squeeze(0)  # (T_samples,)
+            audio_inputs = self.feature_extractor(
+                waveform,
+                sampling_rate=self.target_sample_rate,
+                return_tensors="pt",
+                padding=False,
+            )
+            audio_values = audio_inputs.input_values.squeeze(0)  # (T_samples,)
+
+            # Add to cache and prune if necessary
+            self.audio_cache[wav_id] = audio_values
+            if len(self.audio_cache) > self.max_cache_size:
+                self.audio_cache.popitem(last=False)
 
         # ---- Normalize target text ----
         text = translated_item.get(tgt_field, "") or ""

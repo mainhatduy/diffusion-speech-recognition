@@ -123,13 +123,13 @@ class SpeechDataset(PromptDataset):
         
         if train:
             train_raw = train_raw.filter(filter_fn, num_proc=num_proc)
-        if valid:
+        if valid or test:
             valid_raw = valid_raw.filter(filter_fn, num_proc=num_proc)
         
-        print(f"After filtering: {len(train_raw)} train, {len(valid_raw)} validation samples")
+        print(f"After filtering: {len(train_raw) if train else 0} train, {len(valid_raw) if (valid or test) else 0} validation samples")
         
         train_dataset = SpeechDataset(args, train_raw, tokenizer, feature_extractor) if train else None
         valid_dataset = SpeechDataset(args, valid_raw, tokenizer, feature_extractor) if valid else None
-        test_dataset = None  # No test set for now
+        test_dataset = SpeechDataset(args, valid_raw, tokenizer, feature_extractor) if test else None
         
         return train_dataset, valid_dataset, test_dataset

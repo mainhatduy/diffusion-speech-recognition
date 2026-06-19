@@ -182,12 +182,12 @@ class TranslatedSpeechDataset(PromptDataset):
         else:
             translated_dataset_train = None
             
-        if valid:
+        if valid or test:
             translated_dataset_valid = valid_raw.filter(filter_fn, num_proc=num_proc)
         else:
             translated_dataset_valid = None
             
-        print(f"After filtering: {len(translated_dataset_train) if train else 0} train, {len(translated_dataset_valid) if valid else 0} validation samples")
+        print(f"After filtering: {len(translated_dataset_train) if train else 0} train, {len(translated_dataset_valid) if (valid or test) else 0} validation samples")
         
         train_dataset = TranslatedSpeechDataset(
             args, translated_dataset_train, vietspeech_dataset, path_to_vs_idx, tgt_field, tokenizer, feature_extractor
@@ -197,6 +197,8 @@ class TranslatedSpeechDataset(PromptDataset):
             args, translated_dataset_valid, vietspeech_dataset, path_to_vs_idx, tgt_field, tokenizer, feature_extractor
         ) if valid else None
         
-        test_dataset = None
+        test_dataset = TranslatedSpeechDataset(
+            args, translated_dataset_valid, vietspeech_dataset, path_to_vs_idx, tgt_field, tokenizer, feature_extractor
+        ) if test else None
         
         return train_dataset, valid_dataset, test_dataset

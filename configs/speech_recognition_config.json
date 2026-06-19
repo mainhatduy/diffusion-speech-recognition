@@ -37,7 +37,7 @@
     "weight_decay": 0.01,
     "adam_beta1": 0.9,
     "adam_beta2": 0.98,
-    "lr_scheduler": "cosine",
+    "lr_scheduler_type": "cosine",
     "warmup_steps": 0.1,
     "bf16": true,
     "bf16_full_eval": true,

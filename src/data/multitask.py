@@ -257,11 +257,11 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
 
         if train:
             train_raw = train_raw.filter(filter_fn, num_proc=num_proc)
-        if valid:
+        if valid or test:
             valid_raw = valid_raw.filter(filter_fn, num_proc=num_proc)
 
         print(
-            f"[MultiTask] After filtering: {len(train_raw)} train / {len(valid_raw)} val "
+            f"[MultiTask] After filtering: {len(train_raw) if train else 0} train / {len(valid_raw) if (valid or test) else 0} val "
             f"base samples"
         )
 
@@ -280,5 +280,12 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             )
             if valid else None
         )
+        test_dataset = (
+            MultiTaskTranslatedSpeechDataset(
+                args, valid_raw, vietspeech_dataset,
+                path_to_vs_idx, task_configs, tokenizer, feature_extractor,
+            )
+            if test else None
+        )
 
-        return train_dataset, valid_dataset, None
+        return train_dataset, valid_dataset, test_dataset

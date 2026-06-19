@@ -1,2 +1,7 @@
-{"file_name": "test_sample.mp3",
-"text": "đây là một đoạn audio dùng để kiểm tra độ chính xác của mô hình"}
+{
+  "file_name": "test_sample.mp3",
+  "text": "đây là một đoạn audio dùng để kiểm tra độ chính xác của mô hình",
+  "english": "this is an audio clip used to test the accuracy of the model",
+  "chinese": "这是一段用于测试模型准确性的音频",
+  "korean": "이것은 모델의 정확도를 테스트하는 데 사용되는 오디오 클립입니다"
+}

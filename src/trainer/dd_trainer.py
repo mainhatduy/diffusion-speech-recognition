@@ -87,6 +87,14 @@ class DiscreteDiffusionTrainingArguments(DiscreteDiffusionArguments):
         metadata={"help": "learning rate scheduler for training"}
     )
 
+    def __post_init__(self):
+        super().__post_init__()
+        # If lr_scheduler is specified as a string in the config, map it to lr_scheduler_type
+        if isinstance(self.lr_scheduler, str):
+            self.lr_scheduler_type = self.lr_scheduler
+            self.lr_scheduler = None
+
+
 
 
 class DiscreteDiffusionTrainer(Trainer):
@@ -323,7 +331,12 @@ class DiscreteDiffusionTrainer(Trainer):
          
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
         self.has_printed_sample = False
-        return super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
+        self._current_eval_dataset = eval_dataset if eval_dataset is not None else self.eval_dataset
+        try:
+            result = super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
+        finally:
+            self._current_eval_dataset = None
+        return result
 
     @torch.no_grad()
     def prediction_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], prediction_loss_only: bool, ignore_keys: Optional[List[str]] = None) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
@@ -404,95 +417,338 @@ class DiscreteDiffusionTrainer(Trainer):
                             audio_attention_mask = torch.ones_like(audio_values, dtype=torch.long).to(device)
                     
                     tokenizer = self.generator.tokenizer
-                    tgt = tokenizer.encode(target_text, add_special_tokens=True)
-                    if len(tgt) > 0 and tgt[0] == tokenizer.bos_token_id:
-                        tgt = tgt[1:]
-                    src = [tokenizer.bos_token_id]
+                    is_multitask = (
+                        (hasattr(self, "_current_eval_dataset") and self._current_eval_dataset is not None and hasattr(self._current_eval_dataset, "task_configs"))
+                        or (hasattr(self, "eval_dataset") and self.eval_dataset is not None and hasattr(self.eval_dataset, "task_configs"))
+                    )
                     
-                    sources = [torch.tensor(src + tgt)]
-                    targets = [torch.tensor([tokenizer.bos_token_id] + tgt)]
-                    src_lengths = [len(src)]
-                    
-                    source_padded = torch.nn.utils.rnn.pad_sequence(
-                        sources, batch_first=True, padding_value=tokenizer.pad_token_id
-                    ).to(device)
-                    target_padded = torch.nn.utils.rnn.pad_sequence(
-                        targets, batch_first=True, padding_value=tokenizer.pad_token_id
-                    ).to(device)
-                    
-                    batch_size, seq_len = source_padded.size()
-                    src_lengths_tensor = torch.tensor(src_lengths, dtype=torch.long)
-                    position_ids = torch.arange(seq_len).unsqueeze(0).expand(batch_size, -1)
-                    partial_masks = (position_ids < src_lengths_tensor.unsqueeze(1)).to(device)
-                    
-                    test_batch = {
-                        "id": torch.tensor([0]).to(device),
-                        "net_input": {
-                            "src_tokens": source_padded,
-                            "src_lengths": torch.tensor([len(s) for s in sources]).to(device),
-                            "partial_masks": partial_masks,
-                            "audio_features": audio_values,
-                            "audio_attention_mask": audio_attention_mask
-                        },
-                        "target": target_padded,
-                        "nsentences": 1,
-                        "ntokens": len(targets[0])
-                    }
-                    
-                    test_hyps, _ = self.generator.generate(raw_model, test_batch)
-                    
-                    ref_str = target_text
-                    hyp_str = self.generator.decode(test_hyps)[0]
-                    
-                    print("\n" + "="*80)
-                    print(f"VALIDATION SAMPLE PREDICTION (Fixed Audio Sample from {mp3_path})")
-                    print(f"INPUT: [Audio File: {mp3_path}]")
-                    print(f"TARGET:", ref_str)
-                    print(f"PRED:",  hyp_str)
-                    print("="*80 + "\n")
-                    
-                    self.has_printed_sample = True
+                    if is_multitask:
+                        task_configs = (
+                            self._current_eval_dataset.task_configs 
+                            if (hasattr(self, "_current_eval_dataset") and self._current_eval_dataset is not None and hasattr(self._current_eval_dataset, "task_configs"))
+                            else self.eval_dataset.task_configs
+                        )
+                        
+                        print("\n" + "="*80)
+                        print(f"VALIDATION SAMPLE PREDICTIONS (Fixed Audio Sample from {mp3_path})")
+                        print(f"INPUT: [Audio File: {mp3_path}]")
+                        
+                        for tgt_field, task_token_id in task_configs:
+                            # 1. Get reference (target) text if available in sample_info
+                            ref_str = sample_info.get(tgt_field, sample_info.get("text", ""))
+                            from data.utils import normalize_text
+                            ref_str = normalize_text(ref_str)
+                            
+                            # 2. Encode source prefix with the task token: [BOS, task_token_id]
+                            src = [tokenizer.bos_token_id, task_token_id]
+                            tgt = tokenizer.encode(ref_str, add_special_tokens=True)
+                            if len(tgt) > 0 and tgt[0] == tokenizer.bos_token_id:
+                                tgt = tgt[1:]
+                                
+                            sources = [torch.tensor(src + tgt)]
+                            targets = [torch.tensor([tokenizer.bos_token_id] + tgt)]
+                            src_lengths = [len(src)]
+                            
+                            source_padded = torch.nn.utils.rnn.pad_sequence(
+                                sources, batch_first=True, padding_value=tokenizer.pad_token_id
+                            ).to(device)
+                            target_padded = torch.nn.utils.rnn.pad_sequence(
+                                targets, batch_first=True, padding_value=tokenizer.pad_token_id
+                            ).to(device)
+                            
+                            batch_size_dummy, seq_len = source_padded.size()
+                            src_lengths_tensor = torch.tensor(src_lengths, dtype=torch.long)
+                            position_ids = torch.arange(seq_len).unsqueeze(0).expand(batch_size_dummy, -1)
+                            partial_masks = (position_ids < src_lengths_tensor.unsqueeze(1)).to(device)
+                            
+                            test_batch = {
+                                "id": torch.tensor([0]).to(device),
+                                "net_input": {
+                                    "src_tokens": source_padded,
+                                    "src_lengths": torch.tensor([len(s) for s in sources]).to(device),
+                                    "partial_masks": partial_masks,
+                                    "audio_features": audio_values,
+                                    "audio_attention_mask": audio_attention_mask
+                                },
+                                "target": target_padded,
+                                "nsentences": 1,
+                                "ntokens": len(targets[0])
+                            }
+                            
+                            test_hyps, _ = self.generator.generate(raw_model, test_batch)
+                            hyp_str = self.generator.decode(test_hyps)[0]
+                            
+                            print(f"--- Language: {tgt_field} ---")
+                            print(f"TARGET:", ref_str)
+                            print(f"PRED:",  hyp_str)
+                        print("="*80 + "\n")
+                        self.has_printed_sample = True
+                    else:
+                        tgt = tokenizer.encode(target_text, add_special_tokens=True)
+                        if len(tgt) > 0 and tgt[0] == tokenizer.bos_token_id:
+                            tgt = tgt[1:]
+                        src = [tokenizer.bos_token_id]
+                        
+                        sources = [torch.tensor(src + tgt)]
+                        targets = [torch.tensor([tokenizer.bos_token_id] + tgt)]
+                        src_lengths = [len(src)]
+                        
+                        source_padded = torch.nn.utils.rnn.pad_sequence(
+                            sources, batch_first=True, padding_value=tokenizer.pad_token_id
+                        ).to(device)
+                        target_padded = torch.nn.utils.rnn.pad_sequence(
+                            targets, batch_first=True, padding_value=tokenizer.pad_token_id
+                        ).to(device)
+                        
+                        batch_size, seq_len = source_padded.size()
+                        src_lengths_tensor = torch.tensor(src_lengths, dtype=torch.long)
+                        position_ids = torch.arange(seq_len).unsqueeze(0).expand(batch_size, -1)
+                        partial_masks = (position_ids < src_lengths_tensor.unsqueeze(1)).to(device)
+                        
+                        test_batch = {
+                            "id": torch.tensor([0]).to(device),
+                            "net_input": {
+                                "src_tokens": source_padded,
+                                "src_lengths": torch.tensor([len(s) for s in sources]).to(device),
+                                "partial_masks": partial_masks,
+                                "audio_features": audio_values,
+                                "audio_attention_mask": audio_attention_mask
+                            },
+                            "target": target_padded,
+                            "nsentences": 1,
+                            "ntokens": len(targets[0])
+                        }
+                        
+                        test_hyps, _ = self.generator.generate(raw_model, test_batch)
+                        
+                        ref_str = target_text
+                        hyp_str = self.generator.decode(test_hyps)[0]
+                        
+                        print("\n" + "="*80)
+                        print(f"VALIDATION SAMPLE PREDICTION (Fixed Audio Sample from {mp3_path})")
+                        print(f"INPUT: [Audio File: {mp3_path}]")
+                        print(f"TARGET:", ref_str)
+                        print(f"PRED:",  hyp_str)
+                        print("="*80 + "\n")
+                        
+                        self.has_printed_sample = True
                 else:
-                    batch_size = inputs["net_input"]["src_tokens"].size(0)
-                    random_idx = torch.randint(0, batch_size, (1,)).item()
+                    tokenizer = self.generator.tokenizer
+                    is_multitask = (
+                        (hasattr(self, "_current_eval_dataset") and self._current_eval_dataset is not None and hasattr(self._current_eval_dataset, "task_configs"))
+                        or (hasattr(self, "eval_dataset") and self.eval_dataset is not None and hasattr(self.eval_dataset, "task_configs"))
+                    )
                     
-                    mask = inputs["net_input"]["partial_masks"][random_idx]
-                    src_tokens = inputs["net_input"]["src_tokens"][random_idx]
-                    real_src_tokens = src_tokens[mask]
-                    
-                    src_str = self.generator.decode(real_src_tokens[None, :])[0]
-                    ref_str = self.generator.decode(refs[random_idx:random_idx+1])[0]
-                    hyp_str = self.generator.decode(hyps[random_idx:random_idx+1])[0]
-                    
-                    print("\n" + "="*80)
-                    print(f"VALIDATION SAMPLE PREDICTION (Random sample {random_idx} from batch of {batch_size})")
-                    print(f"INPUT:",  src_str)
-                    print(f"TARGET:", ref_str)
-                    print(f"PRED:",  hyp_str)
-                    print("="*80 + "\n")
-                    
-                    self.has_printed_sample = True
+                    if is_multitask:
+                        task_configs = (
+                            self._current_eval_dataset.task_configs 
+                            if (hasattr(self, "_current_eval_dataset") and self._current_eval_dataset is not None and hasattr(self._current_eval_dataset, "task_configs"))
+                            else self.eval_dataset.task_configs
+                        )
+                        
+                        batch_size = inputs["net_input"]["src_tokens"].size(0)
+                        random_idx = torch.randint(0, batch_size, (1,)).item()
+                        
+                        audio_features = inputs["net_input"].get("audio_features", None)
+                        audio_attention_mask = inputs["net_input"].get("audio_attention_mask", None)
+                        if audio_features is not None:
+                            sample_audio_features = audio_features[random_idx:random_idx+1]
+                            sample_audio_attention_mask = audio_attention_mask[random_idx:random_idx+1] if audio_attention_mask is not None else None
+                        else:
+                            sample_audio_features = None
+                            sample_audio_attention_mask = None
+                        
+                        flat_index = inputs["id"][random_idx].item()
+                        sample_idx = flat_index // len(task_configs)
+                        
+                        dataset_obj = (
+                            self._current_eval_dataset 
+                            if (hasattr(self, "_current_eval_dataset") and self._current_eval_dataset is not None)
+                            else self.eval_dataset
+                        )
+                        raw_item = dataset_obj.raw_data[sample_idx]
+                        device = inputs["net_input"]["src_tokens"].device
+                        
+                        print("\n" + "="*80)
+                        print(f"VALIDATION SAMPLE PREDICTIONS (Random base sample {sample_idx} from batch of {batch_size})")
+                        
+                        for tgt_field, task_token_id in task_configs:
+                            ref_str = raw_item.get(tgt_field, "")
+                            from data.utils import normalize_text
+                            ref_str = normalize_text(ref_str)
+                            
+                            src = [tokenizer.bos_token_id, task_token_id]
+                            tgt = tokenizer.encode(ref_str, add_special_tokens=True)
+                            if len(tgt) > 0 and tgt[0] == tokenizer.bos_token_id:
+                                tgt = tgt[1:]
+                                
+                            sources = [torch.tensor(src + tgt)]
+                            targets = [torch.tensor([tokenizer.bos_token_id] + tgt)]
+                            src_lengths = [len(src)]
+                            
+                            source_padded = torch.nn.utils.rnn.pad_sequence(
+                                sources, batch_first=True, padding_value=tokenizer.pad_token_id
+                            ).to(device)
+                            target_padded = torch.nn.utils.rnn.pad_sequence(
+                                targets, batch_first=True, padding_value=tokenizer.pad_token_id
+                            ).to(device)
+                            
+                            batch_size_dummy, seq_len = source_padded.size()
+                            src_lengths_tensor = torch.tensor(src_lengths, dtype=torch.long)
+                            position_ids = torch.arange(seq_len).unsqueeze(0).expand(batch_size_dummy, -1)
+                            partial_masks = (position_ids < src_lengths_tensor.unsqueeze(1)).to(device)
+                            
+                            test_batch = {
+                                "id": torch.tensor([0]).to(device),
+                                "net_input": {
+                                    "src_tokens": source_padded,
+                                    "src_lengths": torch.tensor([len(s) for s in sources]).to(device),
+                                    "partial_masks": partial_masks,
+                                    "audio_features": sample_audio_features,
+                                    "audio_attention_mask": sample_audio_attention_mask
+                                },
+                                "target": target_padded,
+                                "nsentences": 1,
+                                "ntokens": len(targets[0])
+                            }
+                            
+                            test_hyps, _ = self.generator.generate(raw_model, test_batch)
+                            hyp_str = self.generator.decode(test_hyps)[0]
+                            
+                            print(f"--- Language: {tgt_field} ---")
+                            print(f"TARGET:", ref_str)
+                            print(f"PRED:",  hyp_str)
+                        print("="*80 + "\n")
+                        self.has_printed_sample = True
+                    else:
+                        batch_size = inputs["net_input"]["src_tokens"].size(0)
+                        random_idx = torch.randint(0, batch_size, (1,)).item()
+                        
+                        mask = inputs["net_input"]["partial_masks"][random_idx]
+                        src_tokens = inputs["net_input"]["src_tokens"][random_idx]
+                        real_src_tokens = src_tokens[mask]
+                        
+                        src_str = self.generator.decode(real_src_tokens[None, :])[0]
+                        ref_str = self.generator.decode(refs[random_idx:random_idx+1])[0]
+                        hyp_str = self.generator.decode(hyps[random_idx:random_idx+1])[0]
+                        
+                        print("\n" + "="*80)
+                        print(f"VALIDATION SAMPLE PREDICTION (Random sample {random_idx} from batch of {batch_size})")
+                        print(f"INPUT:",  src_str)
+                        print(f"TARGET:", ref_str)
+                        print(f"PRED:",  hyp_str)
+                        print("="*80 + "\n")
+                        
+                        self.has_printed_sample = True
             except Exception as e:
                 print(f"Failed to print validation sample: {e}")
                 try:
-                    batch_size = inputs["net_input"]["src_tokens"].size(0)
-                    random_idx = torch.randint(0, batch_size, (1,)).item()
+                    tokenizer = self.generator.tokenizer
+                    is_multitask = (
+                        (hasattr(self, "_current_eval_dataset") and self._current_eval_dataset is not None and hasattr(self._current_eval_dataset, "task_configs"))
+                        or (hasattr(self, "eval_dataset") and self.eval_dataset is not None and hasattr(self.eval_dataset, "task_configs"))
+                    )
                     
-                    mask = inputs["net_input"]["partial_masks"][random_idx]
-                    src_tokens = inputs["net_input"]["src_tokens"][random_idx]
-                    real_src_tokens = src_tokens[mask]
-                    
-                    src_str = self.generator.decode(real_src_tokens[None, :])[0]
-                    ref_str = self.generator.decode(refs[random_idx:random_idx+1])[0]
-                    hyp_str = self.generator.decode(hyps[random_idx:random_idx+1])[0]
-                    
-                    print("\n" + "="*80)
-                    print(f"VALIDATION SAMPLE PREDICTION (Fallback Random sample {random_idx} from batch of {batch_size})")
-                    print(f"INPUT:",  src_str)
-                    print(f"TARGET:", ref_str)
-                    print(f"PRED:",  hyp_str)
-                    print("="*80 + "\n")
-                    self.has_printed_sample = True
+                    if is_multitask:
+                        task_configs = (
+                            self._current_eval_dataset.task_configs 
+                            if (hasattr(self, "_current_eval_dataset") and self._current_eval_dataset is not None and hasattr(self._current_eval_dataset, "task_configs"))
+                            else self.eval_dataset.task_configs
+                        )
+                        
+                        batch_size = inputs["net_input"]["src_tokens"].size(0)
+                        random_idx = torch.randint(0, batch_size, (1,)).item()
+                        
+                        audio_features = inputs["net_input"].get("audio_features", None)
+                        audio_attention_mask = inputs["net_input"].get("audio_attention_mask", None)
+                        if audio_features is not None:
+                            sample_audio_features = audio_features[random_idx:random_idx+1]
+                            sample_audio_attention_mask = audio_attention_mask[random_idx:random_idx+1] if audio_attention_mask is not None else None
+                        else:
+                            sample_audio_features = None
+                            sample_audio_attention_mask = None
+                        
+                        flat_index = inputs["id"][random_idx].item()
+                        sample_idx = flat_index // len(task_configs)
+                        
+                        dataset_obj = (
+                            self._current_eval_dataset 
+                            if (hasattr(self, "_current_eval_dataset") and self._current_eval_dataset is not None)
+                            else self.eval_dataset
+                        )
+                        raw_item = dataset_obj.raw_data[sample_idx]
+                        device = inputs["net_input"]["src_tokens"].device
+                        
+                        print("\n" + "="*80)
+                        print(f"VALIDATION SAMPLE PREDICTIONS (Fallback Random base sample {sample_idx} from batch of {batch_size})")
+                        
+                        for tgt_field, task_token_id in task_configs:
+                            ref_str = raw_item.get(tgt_field, "")
+                            from data.utils import normalize_text
+                            ref_str = normalize_text(ref_str)
+                            
+                            src = [tokenizer.bos_token_id, task_token_id]
+                            tgt = tokenizer.encode(ref_str, add_special_tokens=True)
+                            if len(tgt) > 0 and tgt[0] == tokenizer.bos_token_id:
+                                tgt = tgt[1:]
+                                
+                            sources = [torch.tensor(src + tgt)]
+                            targets = [torch.tensor([tokenizer.bos_token_id] + tgt)]
+                            src_lengths = [len(src)]
+                            
+                            source_padded = torch.nn.utils.rnn.pad_sequence(
+                                sources, batch_first=True, padding_value=tokenizer.pad_token_id
+                            ).to(device)
+                            target_padded = torch.nn.utils.rnn.pad_sequence(
+                                targets, batch_first=True, padding_value=tokenizer.pad_token_id
+                            ).to(device)
+                            
+                            batch_size_dummy, seq_len = source_padded.size()
+                            src_lengths_tensor = torch.tensor(src_lengths, dtype=torch.long)
+                            position_ids = torch.arange(seq_len).unsqueeze(0).expand(batch_size_dummy, -1)
+                            partial_masks = (position_ids < src_lengths_tensor.unsqueeze(1)).to(device)
+                            
+                            test_batch = {
+                                "id": torch.tensor([0]).to(device),
+                                "net_input": {
+                                    "src_tokens": source_padded,
+                                    "src_lengths": torch.tensor([len(s) for s in sources]).to(device),
+                                    "partial_masks": partial_masks,
+                                    "audio_features": sample_audio_features,
+                                    "audio_attention_mask": sample_audio_attention_mask
+                                },
+                                "target": target_padded,
+                                "nsentences": 1,
+                                "ntokens": len(targets[0])
+                            }
+                            
+                            test_hyps, _ = self.generator.generate(raw_model, test_batch)
+                            hyp_str = self.generator.decode(test_hyps)[0]
+                            
+                            print(f"--- Language: {tgt_field} ---")
+                            print(f"TARGET:", ref_str)
+                            print(f"PRED:",  hyp_str)
+                        print("="*80 + "\n")
+                        self.has_printed_sample = True
+                    else:
+                        batch_size = inputs["net_input"]["src_tokens"].size(0)
+                        random_idx = torch.randint(0, batch_size, (1,)).item()
+                        
+                        mask = inputs["net_input"]["partial_masks"][random_idx]
+                        src_tokens = inputs["net_input"]["src_tokens"][random_idx]
+                        real_src_tokens = src_tokens[mask]
+                        
+                        src_str = self.generator.decode(real_src_tokens[None, :])[0]
+                        ref_str = self.generator.decode(refs[random_idx:random_idx+1])[0]
+                        hyp_str = self.generator.decode(hyps[random_idx:random_idx+1])[0]
+                        
+                        print("\n" + "="*80)
+                        print(f"VALIDATION SAMPLE PREDICTION (Fallback Random sample {random_idx} from batch of {batch_size})")
+                        print(f"INPUT:",  src_str)
+                        print(f"TARGET:", ref_str)
+                        print(f"PRED:",  hyp_str)
+                        print("="*80 + "\n")
+                        self.has_printed_sample = True
                 except Exception as e2:
                     print(f"Fallback failed too: {e2}")
 

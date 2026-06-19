@@ -67,8 +67,8 @@ class DiscreteDiffusionModel(PreTrainedModel):
         if config.lora:
             self.add_fake_layer()
 
-        # Audio encoder (for speech_recognition)
-        self.has_audio_encoder = getattr(config, 'dataset_type', 'bilingual') == 'speech_recognition'
+        # Audio encoder (for speech_recognition, speech_translation and speech_translation_multitask dataset_type)
+        self.has_audio_encoder = getattr(config, 'dataset_type', 'bilingual') in ['speech_recognition', 'speech_translation', 'speech_translation_multitask']
         if self.has_audio_encoder:
             audio_encoder_name = getattr(config, 'audio_encoder_name', 'facebook/mms-300m')
             if "moonshine" in audio_encoder_name:

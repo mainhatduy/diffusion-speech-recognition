@@ -2,10 +2,10 @@
 # End-to-end pipeline to download precomputed dataset and train the model.
 #
 # Usage:
-#   # Run full end-to-end training (downloads full dataset if precomputed_data_1 does not exist):
+#   # Run full end-to-end training (downloads full dataset if precomputed_data does not exist):
 #   bash scripts/training/run_pipeline_end2end.sh
 #
-#   # Run test/dry-run mode (pretends precomputed_data_1 doesn't exist, downloads one shard, trains for 10 steps):
+#   # Run test/dry-run mode (pretends precomputed_data doesn't exist, downloads one shard, trains for 10 steps):
 #   bash scripts/training/run_pipeline_end2end.sh --test
 #
 #   # Specify GPU devices:
@@ -18,7 +18,7 @@ set -e
 DEVICE_VISIBLE=${CUDA_VISIBLE_DEVICES:-0}
 
 # Target directory for precomputed data
-TARGET_DIR="precomputed_data_1"
+TARGET_DIR="precomputed_data"
 BACKUP_DIR="${TARGET_DIR}_backup"
 
 # Default mode
@@ -62,7 +62,7 @@ echo "  GPUs        : $DEVICE_VISIBLE"
 echo "  Test Mode   : $TEST_MODE"
 echo "============================================================"
 
-# Handle "Pretend precomputed_data_1 does not exist" in Test Mode
+# Handle "Pretend precomputed_data does not exist" in Test Mode
 if [ "$TEST_MODE" = true ]; then
     if [ -d "$TARGET_DIR" ]; then
         echo "[Test Mode] Pretending '$TARGET_DIR' does not exist."

@@ -9,7 +9,7 @@
     ],
     "max_length": 128,
     "packing": false,
-    "precomputed_data_dir": "precomputed_data_1",
+    "precomputed_data_dir": "precomputed_data",
     "batch_by_tokens": false,
     "num_diffusion_timesteps": 50,
     "diffusion_type": "absorbing",

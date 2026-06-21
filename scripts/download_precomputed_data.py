@@ -3,7 +3,7 @@
 
 Usage:
     python scripts/download_precomputed_data.py \
-        --target_dir precomputed_data_1 \
+        --target_dir precomputed_data \
         [--test] [--force]
 """
 
@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument(
         "--target_dir",
         type=str,
-        default="precomputed_data_1",
+        default="precomputed_data",
         help="Local directory to save the downloaded dataset.",
     )
     parser.add_argument(

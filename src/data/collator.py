@@ -49,7 +49,21 @@ class DiscreteDiffusionDataCollator(object):
         
         # Handle audio features if present (for speech_recognition)
         has_audio = "audio_values" in samples[0]
-        if has_audio:
+        has_precomputed = "precomputed_audio_embeds" in samples[0]
+        if has_precomputed:
+            # Pre-computed audio embeddings: 2D tensors (T_frames, D_audio)
+            embeds_list = [s["precomputed_audio_embeds"] for s in samples]
+            max_T = max(e.size(0) for e in embeds_list)
+            D = embeds_list[0].size(1)
+            padded_embeds = torch.zeros(batch_size, max_T, D)
+            embed_mask = torch.zeros(batch_size, max_T, dtype=torch.long)
+            for i, e in enumerate(embeds_list):
+                T = e.size(0)
+                padded_embeds[i, :T, :] = e
+                embed_mask[i, :T] = 1
+            net_input["precomputed_audio_embeds"] = padded_embeds
+            net_input["precomputed_audio_mask"] = embed_mask
+        elif has_audio:
             audio_values_list = [s["audio_values"] for s in samples]
             # Pad audio to max length in batch, rounded up to a multiple of 80 (frame_len of Moonshine)
             max_audio_len = max(av.size(-1) for av in audio_values_list)

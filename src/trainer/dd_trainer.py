@@ -219,14 +219,22 @@ class DiscreteDiffusionTrainer(Trainer):
         # Extract audio features if present (for speech_recognition)
         audio_features = inputs["net_input"].get("audio_features", None)
         audio_attention_mask = inputs["net_input"].get("audio_attention_mask", None)
+        precomputed_audio_embeds = inputs["net_input"].get("precomputed_audio_embeds", None)
+        precomputed_audio_mask = inputs["net_input"].get("precomputed_audio_mask", None)
         if audio_features is not None:
             audio_features = audio_features.repeat(2, 1)
         if audio_attention_mask is not None:
             audio_attention_mask = audio_attention_mask.repeat(2, 1)
+        if precomputed_audio_embeds is not None:
+            precomputed_audio_embeds = precomputed_audio_embeds.repeat(2, 1, 1)
+        if precomputed_audio_mask is not None:
+            precomputed_audio_mask = precomputed_audio_mask.repeat(2, 1)
         
         attention_mask = torch.ones_like(x_t) if self.args.mask_on_paddings else None
         logits = model(x_t, partial_masks, attention_mask=attention_mask, loss_mask=loss_mask,
-                       audio_features=audio_features, audio_attention_mask=audio_attention_mask)
+                       audio_features=audio_features, audio_attention_mask=audio_attention_mask,
+                       precomputed_audio_embeds=precomputed_audio_embeds,
+                       precomputed_audio_mask=precomputed_audio_mask)
         
         num_timesteps = raw_model.args.num_diffusion_timesteps
         weight = {

@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Union
 
@@ -8,6 +9,7 @@ from .memory_map import MemoryMapTokensDataset
 from .speech import SpeechDataset
 from .translated_speech import TranslatedSpeechDataset
 from .multitask import MultiTaskTranslatedSpeechDataset
+from .precomputed_multitask import PrecomputedMultiTaskDataset
 from .collator import DiscreteDiffusionDataCollator
 from .sampler import TokenSizeDistributedLengthGroupSampler
 from .utils import normalize_text, _decode_wav_bytes
@@ -85,6 +87,10 @@ class DiscreteDiffusionDataArguments:
         default_factory=lambda: ["<vi_en>", "<vi_zh>", "<vi_ko>"],
         metadata={"help": "List of task token strings (with <>) for multi-task speech translation. E.g. ['<vi_en>', '<vi_zh>', '<vi_ko>']"}
     )
+    precomputed_data_dir: str = field(
+        default="",
+        metadata={"help": "Path to pre-computed audio embeddings & token IDs. If set, uses fast PrecomputedMultiTaskDataset."}
+    )
 
 def load_data(
     data_args: DiscreteDiffusionDataArguments,
@@ -111,7 +117,12 @@ def load_data(
     elif data_args.dataset_type == "speech_translation_multitask":
         if not hasattr(data_args, 'audio_encoder_name') or not data_args.audio_encoder_name:
             data_args.audio_encoder_name = getattr(model_args, 'audio_encoder_name', 'UsefulSensors/moonshine-streaming-medium')
-        datasets = MultiTaskTranslatedSpeechDataset.load_data(data_args, tokenizer, train, valid, test)
+        # Use precomputed dataset if available
+        if getattr(data_args, 'precomputed_data_dir', '') and os.path.exists(data_args.precomputed_data_dir):
+            print(f"[load_data] Using PrecomputedMultiTaskDataset from '{data_args.precomputed_data_dir}'")
+            datasets = PrecomputedMultiTaskDataset.load_data(data_args, tokenizer, train, valid, test)
+        else:
+            datasets = MultiTaskTranslatedSpeechDataset.load_data(data_args, tokenizer, train, valid, test)
     else:
         raise ValueError(f"Unknown or unsupported dataset type: {data_args.dataset_type}")
         

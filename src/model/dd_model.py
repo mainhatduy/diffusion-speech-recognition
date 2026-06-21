@@ -333,7 +333,8 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         return length_logits
     
     def forward(self, prev_output_tokens, partial_mask, attention_mask=None, loss_mask=None, cache=None,
-                audio_features=None, audio_attention_mask=None):
+                audio_features=None, audio_attention_mask=None, precomputed_audio_embeds=None,
+                precomputed_audio_mask=None):
         input_ids = prev_output_tokens
         if attention_mask is None:
             attention_mask = prev_output_tokens.ne(self.pad_id).int()        
@@ -353,7 +354,19 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             embeddings = embeddings + self.fake_layer * 0   # trick to support lora + gradient checkpointing
         
         # Audio fusion via Prefix Conditioning (Sequence Concatenation)
-        if self.has_audio_encoder and audio_features is not None:
+        if self.has_audio_encoder and precomputed_audio_embeds is not None:
+            # Fast path: use pre-computed encoder output, only apply trainable projector
+            audio_embeds = self.audio_projector(precomputed_audio_embeds)  # (B, T_audio, hidden_size)
+            T_audio = audio_embeds.size(1)
+            
+            if precomputed_audio_mask is not None:
+                audio_attn = precomputed_audio_mask.int()
+            else:
+                audio_attn = torch.ones(audio_embeds.size(0), T_audio, dtype=torch.int, device=audio_embeds.device)
+            
+            embeddings = torch.cat([audio_embeds, embeddings], dim=1)
+            combined_attention_mask = torch.cat([audio_attn, attention_mask], dim=1)
+        elif self.has_audio_encoder and audio_features is not None:
             with torch.no_grad():
                 audio_outputs = self.audio_encoder(
                     audio_features, 

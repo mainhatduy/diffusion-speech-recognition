@@ -173,3 +173,10 @@ wandb/
 
 # Ignore all folders starting with a dot
 **/.*/
+
+precomputed_data/*
+
+# Allow committing .agents/rules
+!/.agents/
+/.agents/*
+!/.agents/rules/

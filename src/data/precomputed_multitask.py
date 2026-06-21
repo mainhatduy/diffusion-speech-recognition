@@ -120,7 +120,10 @@ class PrecomputedMultiTaskDataset(PromptDataset):
         if parquet_files:
             print(f"[PrecomputedMultiTask] Found {len(parquet_files)} parquet files. Using Parquet loading.")
             from datasets import load_dataset
-            embed_dataset = load_dataset("parquet", data_files=parquet_files)["train"]
+            num_cores = os.cpu_count() or 1
+            num_proc = max(1, int(num_cores * 0.5))
+            print(f"[PrecomputedMultiTask] Loading parquet with {num_proc} CPU processes (50% of {num_cores} cores)...")
+            embed_dataset = load_dataset("parquet", data_files=parquet_files, num_proc=num_proc)["train"]
             print("[PrecomputedMultiTask] Building embed_file index map...")
             embed_file_col = embed_dataset["embed_file"]
             embed_file_to_row = {name: i for i, name in enumerate(embed_file_col)}

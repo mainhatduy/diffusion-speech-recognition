@@ -1,4 +1,4 @@
-uv run python scripts/precompute_embeddings.py \
+uv run python scripts/data-preprocess/precompute_embeddings.py \
     --output_dir precomputed_data \
     --audio_encoder_name UsefulSensors/moonshine-streaming-medium \
     --pretrained FacebookAI/xlm-roberta-base \

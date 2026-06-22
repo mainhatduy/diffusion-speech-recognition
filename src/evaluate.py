@@ -7,7 +7,10 @@ import json
 from model.dd_model import DiscreteDiffusionModelArguments
 from data.dd_data import DiscreteDiffusionDataArguments, DiscreteDiffusionDataCollator, load_data
 from trainer.dd_trainer import DiscreteDiffusionArguments, DiscreteDiffusionTrainingArguments, DiscreteDiffusionTrainer
-from dd_generator import DiscreteDiffusionGeneratorArguments, DiscreteDiffusionGenerator, MergeBLEU, MergeWER
+from dd_generator import (
+    DiscreteDiffusionGeneratorArguments, DiscreteDiffusionGenerator,
+    MergeBLEU, MergeWER, MergeRouge, MergeSmatchPP, MultiMetric
+)
 
 from copy import deepcopy
 from typing import List
@@ -58,11 +61,17 @@ def main():
     model, tokenizer = load_model_tokenizer(model_args, do_train=False)
     
     
-    metric = {
-        "none": None,
-        "bleu": MergeBLEU(),
-        "wer": MergeWER(),
-    }.get(train_args.eval_metric, None)
+    metric = None
+    if train_args.eval_metrics:  # multi-metric path (eval_metrics list takes priority)
+        metric = MultiMetric(train_args.eval_metrics)
+    elif train_args.eval_metric == "bleu":
+        metric = MergeBLEU()
+    elif train_args.eval_metric == "rouge":
+        metric = MergeRouge()
+    elif train_args.eval_metric == "smatchpp":
+        metric = MergeSmatchPP()
+    elif train_args.eval_metric == "wer":
+        metric = MergeWER()
     
     model = load_ckpt(model, train_args.resume_from_checkpoint)
     

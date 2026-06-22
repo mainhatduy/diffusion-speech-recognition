@@ -35,7 +35,7 @@
     ],
     "load_best_model_at_end": true,
     "metric_for_best_model": "wer",
-    "greater_is_better": true,
+    "greater_is_better": false,
     "logging_steps": 1,
     "save_steps": 5,
     "save_total_limit": 1,

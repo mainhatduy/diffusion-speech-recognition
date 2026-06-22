@@ -172,7 +172,7 @@ class DiscreteDiffusionBase(nn.Module):
                             )
                 output_tokens = pad_sequence(output_tokens, batch_first=True, padding_value=self.pad_id)
                 output_mask = output_tokens.eq(self.mask_id)
-                # partial_masks = output_tokens.ne(self.mask_id) & output_tokens.ne(self.eos_id) & output_tokens.ne(self.pad_id)
+                partial_masks = output_tokens.ne(self.mask_id) & output_tokens.ne(self.eos_id) & output_tokens.ne(self.pad_id)
             else:
                 output_tokens = torch.stack([token for token in tokens for m in range(mbr)])
                 partial_masks = torch.stack([mask for mask in partial_masks for m in range(mbr)])

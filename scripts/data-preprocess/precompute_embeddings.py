@@ -2,7 +2,7 @@
 """Pre-compute audio embeddings and tokenized text targets for fast training.
 
 Usage:
-    python scripts/precompute_embeddings.py \
+    python scripts/data-preprocess/precompute_embeddings.py \
         --output_dir precomputed_data \
         --audio_encoder_name UsefulSensors/moonshine-streaming-medium \
         --pretrained FacebookAI/xlm-roberta-base \
@@ -16,7 +16,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 from tqdm import tqdm
 
-project_root = str(Path(__file__).resolve().parent.parent / "src")
+project_root = str(Path(__file__).resolve().parent.parent.parent / "src")
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 

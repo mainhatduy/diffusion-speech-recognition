@@ -74,7 +74,7 @@ if [ "$TEST_MODE" = true ]; then
     
     # 1. Download only a single shard and metadata for fast testing
     echo "[Test Mode] Downloading lightweight test subset..."
-    uv run python scripts/download_precomputed_data.py --target_dir "$TARGET_DIR" --test
+    uv run python scripts/data-preprocess/download_precomputed_data.py --target_dir "$TARGET_DIR" --test
     
     # 2. Run training with the test config (10 steps)
     CONFIG_FILE="configs/test_vi_multitask_precomputed_config.json"
@@ -91,7 +91,7 @@ else
     # 1. Download full dataset if target directory does not exist or is empty
     if [ ! -d "$TARGET_DIR" ] || [ -z "$(ls -A "$TARGET_DIR")" ]; then
         echo "Precomputed data not found in '$TARGET_DIR'. Triggering download..."
-        uv run python scripts/download_precomputed_data.py --target_dir "$TARGET_DIR"
+        uv run python scripts/data-preprocess/download_precomputed_data.py --target_dir "$TARGET_DIR"
     else
         echo "Precomputed data already exists in '$TARGET_DIR'. Skipping download."
     fi

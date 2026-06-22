@@ -2,7 +2,7 @@
 """Download precomputed audio embeddings and tokenized text from Hugging Face.
 
 Usage:
-    python scripts/download_precomputed_data.py \
+    python scripts/data-preprocess/download_precomputed_data.py \
         --target_dir precomputed_data \
         [--test] [--force]
 """

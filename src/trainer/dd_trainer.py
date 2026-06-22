@@ -816,8 +816,8 @@ class DiscreteDiffusionTrainer(Trainer):
                             ], dtype=torch.float32).to(loss))
                             ref_parts.append(torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32).to(loss))
 
-                    sys_stat = torch.cat(sys_parts)
-                    ref_stat = torch.cat(ref_parts)
+                    sys_stat = torch.cat(sys_parts).unsqueeze(0)
+                    ref_stat = torch.cat(ref_parts).unsqueeze(0)
                     return (loss, sys_stat, ref_stat)
 
         return (loss, None, None)

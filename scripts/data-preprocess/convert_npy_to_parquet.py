@@ -11,7 +11,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 def main():
-    project_root = Path(__file__).resolve().parent.parent
+    project_root = Path(__file__).resolve().parent.parent.parent
     precomputed_dir = project_root / "precomputed_data"
     npy_dir = precomputed_dir / "audio_embeds"
     parquet_dir = precomputed_dir / "audio_embeds_parquet"

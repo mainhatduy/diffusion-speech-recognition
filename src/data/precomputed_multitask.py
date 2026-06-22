@@ -100,7 +100,7 @@ class PrecomputedMultiTaskDataset(PromptDataset):
         if not os.path.exists(precomputed_dir):
             raise FileNotFoundError(
                 f"Precomputed data dir '{precomputed_dir}' not found. "
-                f"Run scripts/precompute_embeddings.py first."
+                f"Run scripts/data-preprocess/precompute_embeddings.py first."
             )
 
         # Load metadata

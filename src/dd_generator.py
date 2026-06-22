@@ -364,7 +364,8 @@ class DiscreteDiffusionGenerator:
         return new_xt_neq_x0
     
     def denoise_step(self, model, decoder_out, partial_masks,
-                     audio_features=None, audio_attention_mask=None):
+                     audio_features=None, audio_attention_mask=None,
+                     precomputed_audio_embeds=None, precomputed_audio_mask=None):
         output_tokens = decoder_out.output_tokens
         output_scores = decoder_out.output_scores
         prev_step, cur_step = decoder_out.step, decoder_out.step + 1 
@@ -380,7 +381,8 @@ class DiscreteDiffusionGenerator:
         #     [(max_step - prev_step) * (model.num_diffusion_timesteps // max_step)] * output_tokens.size(0)
         # ).to(output_tokens)
         logits = model(output_tokens, partial_masks,
-                       audio_features=audio_features, audio_attention_mask=audio_attention_mask)
+                       audio_features=audio_features, audio_attention_mask=audio_attention_mask,
+                       precomputed_audio_embeds=precomputed_audio_embeds, precomputed_audio_mask=precomputed_audio_mask)
         
         logits[..., self.mask_id] = -math.inf
         scores = torch.log_softmax(logits, dim=-1)
@@ -613,6 +615,8 @@ class DiscreteDiffusionGenerator:
         # Extract audio features if present
         audio_features = inputs["net_input"].get("audio_features", None)
         audio_attention_mask = inputs["net_input"].get("audio_attention_mask", None)
+        precomputed_audio_embeds = inputs["net_input"].get("precomputed_audio_embeds", None)
+        precomputed_audio_mask = inputs["net_input"].get("precomputed_audio_mask", None)
         
         # TODO: FIXME: to support general blockwise generation.
         partial_masks, prev_decoder_out = raw_model.initialize_decode_samples(
@@ -623,7 +627,8 @@ class DiscreteDiffusionGenerator:
         )
         for step in range(self.args.max_iterations):
             prev_decoder_out = self.denoise_step(model, prev_decoder_out, partial_masks,
-                                                 audio_features=audio_features, audio_attention_mask=audio_attention_mask)
+                                                 audio_features=audio_features, audio_attention_mask=audio_attention_mask,
+                                                 precomputed_audio_embeds=precomputed_audio_embeds, precomputed_audio_mask=precomputed_audio_mask)
             yield prev_decoder_out
             
     @torch.no_grad()
@@ -642,6 +647,8 @@ class DiscreteDiffusionGenerator:
         # Extract audio features if present
         audio_features = inputs["net_input"].get("audio_features", None)
         audio_attention_mask = inputs["net_input"].get("audio_attention_mask", None)
+        precomputed_audio_embeds = inputs["net_input"].get("precomputed_audio_embeds", None)
+        precomputed_audio_mask = inputs["net_input"].get("precomputed_audio_mask", None)
         
         partial_masks, prev_decoder_out = model.initialize_decode_samples(
             src_tokens, partial_masks, prefix_masks, oracle_length=self.args.oracle_length, length_beam=self.args.length_beam, mbr=self.args.mbr
@@ -652,7 +659,8 @@ class DiscreteDiffusionGenerator:
         
         for step in range(self.args.max_iterations):
             prev_decoder_out = self.denoise_step(model, prev_decoder_out, partial_masks,
-                                                 audio_features=audio_features, audio_attention_mask=audio_attention_mask)            
+                                                 audio_features=audio_features, audio_attention_mask=audio_attention_mask,
+                                                 precomputed_audio_embeds=precomputed_audio_embeds, precomputed_audio_mask=precomputed_audio_mask)            
             
         def finalized_hypos(tokens, scores, partial_mask, history=None):
             cutoff = (

@@ -4,7 +4,7 @@ import json
 import torch
 from transformers import AutoTokenizer, AutoConfig
 from huggingface_hub import HfApi
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -16,15 +16,18 @@ from model.modeling_dlm import DiscreteDiffusionModel
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python scripts/push_to_hub.py <repo_id>")
+        print("Usage: python scripts/model-manager/push_model.py <repo_id> [experiment_dir] [checkpoint_dir]")
         sys.exit(1)
         
     repo_id = sys.argv[1]
-    checkpoint_dir = sys.argv[2] if len(sys.argv) > 2 else None
+    experiment_dir = sys.argv[2] if len(sys.argv) > 2 else "outputs/vi_multitask"
+    checkpoint_dir = sys.argv[3] if len(sys.argv) > 3 else None
     
-    experiment_dir = "outputs/amr_parsing"
     args_path = os.path.join(experiment_dir, "args.json")
-    
+    if not os.path.exists(args_path):
+        print(f"Args file {args_path} not found.")
+        sys.exit(1)
+        
     # Find the highest checkpoint
     checkpoints = [d for d in os.listdir(experiment_dir) if d.startswith("checkpoint-")]
     if not checkpoints:
@@ -42,8 +45,6 @@ def main():
         sys.exit(1)
         
     print(f"Loading args from {args_path}")
-    # Use cat via os.popen if file is gitignored and python can't read it? 
-    # Python open() should work even if gitignored, gitignore only affects git.
     with open(args_path, "r") as f:
         all_args = json.load(f)
         
@@ -51,8 +52,13 @@ def main():
     data_args = all_args["data"]
     
     # Load tokenizer
-    print(f"Loading tokenizer from {model_args['pretrained']}")
-    tokenizer = AutoTokenizer.from_pretrained(model_args['pretrained'], use_fast=False)
+    # If saved tokenizer exists in experiment_dir, load it from there to preserve added tokens
+    if os.path.exists(os.path.join(experiment_dir, "tokenizer.json")):
+        print(f"Loading tokenizer from {experiment_dir}")
+        tokenizer = AutoTokenizer.from_pretrained(experiment_dir, use_fast=False)
+    else:
+        print(f"Loading tokenizer from {model_args['pretrained']}")
+        tokenizer = AutoTokenizer.from_pretrained(model_args['pretrained'], use_fast=False)
     
     # Add AMR tokens if this is an AMR parsing model
     if data_args.get("dataset_type") == "amr_parsing":
@@ -91,6 +97,8 @@ def main():
         eos_token_id=tokenizer.eos_token_id,
         pad_token_id=tokenizer.pad_token_id,
         argmax_decoding=True,  # Add this for deterministic inference
+        dataset_type=data_args.get("dataset_type", "bilingual"),
+        audio_encoder_name=data_args.get("audio_encoder_name", "facebook/mms-300m"),
     )
     
     # Update config auto_map
@@ -129,14 +137,14 @@ def main():
         path_in_repo="configuration_dlm.py",
         repo_id=repo_id,
         repo_type="model",
-        commit_message="Update configuration with argmax_decoding parameter"
+        commit_message="Update configuration"
     )
     api.upload_file(
         path_or_fileobj="src/model/modeling_dlm.py",
         path_in_repo="modeling_dlm.py",
         repo_id=repo_id,
         repo_type="model",
-        commit_message="Update modeling with argmax_decoding support"
+        commit_message="Update modeling"
     )
     api.upload_file(
         path_or_fileobj="src/dd_generator.py",
@@ -148,8 +156,28 @@ def main():
     
     # Create and upload README.md
     print("Creating and uploading README.md...")
-    with open("MODEL_README.md", "r", encoding="utf-8") as f:
-        readme_content = f.read()
+    if os.path.exists("MODEL_README.md"):
+        with open("MODEL_README.md", "r", encoding="utf-8") as f:
+            readme_content = f.read()
+    else:
+        readme_content = f"""---
+language: vi
+tags:
+- diffusion
+- speech-recognition
+- speech-translation
+---
+# Discrete Diffusion Model
+
+This is a Discrete Diffusion Model for Speech Recognition and Multi-task Speech Translation.
+
+## Usage
+```python
+from transformers import AutoModel, AutoTokenizer
+model = AutoModel.from_pretrained("{repo_id}", trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained("{repo_id}")
+```
+"""
     
     # Replace @@@MODEL_ID with actual repo_id
     readme_content = readme_content.replace("@@@MODEL_ID", repo_id)

@@ -21,4 +21,6 @@ dependencies = [
     "wandb>=0.27.2",
     "miniaudio>=1.71",
     "jiwer>=4.0.0",
+    "soundfile>=0.14.0",
+    "librosa>=0.11.0",
 ]

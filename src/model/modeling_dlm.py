@@ -39,7 +39,8 @@ def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
 
 class DiscreteDiffusionModel(PreTrainedModel):
     config_class = DiscreteDiffusionConfig
-    _keys_to_ignore_on_load_missing = ["fake_layer", "length_trm", "length_predictor", "model.lm_head.decoder.weight"] 
+    _keys_to_ignore_on_load_missing = ["fake_layer", "length_trm", "length_predictor", "model.lm_head.decoder.weight"]
+    _tied_weights_keys = {"model.lm_head.decoder.weight": "model.roberta.embeddings.word_embeddings.weight"}
 
     def __init__(self, config: DiscreteDiffusionConfig):
         super().__init__(config)
@@ -135,12 +136,7 @@ class DiscreteDiffusionModel(PreTrainedModel):
         # Ensure weights are tied after initialization
         self._tie_weights()
 
-    @property
-    def _tied_weights_keys(self):
-        """Return the keys of tied weights."""
-        if self.config.tie_word_embeddings:
-            return ["model.lm_head.decoder.weight"]
-        return []
+
 
     def q_sample_coupled(self, x_0, t1, t2, maskable_mask):
         # ... copy from DiscreteDiffusionBase ...

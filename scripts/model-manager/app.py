@@ -171,92 +171,12 @@ def tokens_to_html_denoise_single_line(canvas_steps, tokenizer, step_idx, max_it
     """
     return html
 
-def tokens_to_html_noise_single_line(final_tokens, max_steps, tokenizer, step_idx):
-    mask_id = tokenizer.mask_token_id
-    canvas_len = len(final_tokens)
-    
-    import random
-    random.seed(sum(final_tokens))
-    
-    # Let's generate the tokens for this step
-    if step_idx == 0:
-        curr_tokens = final_tokens
-        prev_tokens = None
-    elif step_idx == max_steps:
-        curr_tokens = [mask_id] * canvas_len
-        # The step before was generated based on the formula
-        t_prev = max_steps - 1
-        rate_prev = np.cos(t_prev / max_steps * np.pi * 0.5)
-        num_unmasked_prev = int(round(canvas_len * rate_prev))
-        num_masked_prev = canvas_len - num_unmasked_prev
-        masked_indices_prev = set(random.sample(range(canvas_len), num_masked_prev))
-        prev_tokens = [mask_id if i in masked_indices_prev else final_tokens[i] for i in range(canvas_len)]
-    else:
-        # Current step
-        rate = np.cos(step_idx / max_steps * np.pi * 0.5)
-        num_unmasked = int(round(canvas_len * rate))
-        num_masked = canvas_len - num_unmasked
-        masked_indices = set(random.sample(range(canvas_len), num_masked))
-        curr_tokens = [mask_id if i in masked_indices else final_tokens[i] for i in range(canvas_len)]
-        
-        # Previous step
-        t_prev = step_idx - 1
-        rate_prev = np.cos(t_prev / max_steps * np.pi * 0.5)
-        num_unmasked_prev = int(round(canvas_len * rate_prev))
-        num_masked_prev = canvas_len - num_unmasked_prev
-        masked_indices_prev = set(random.sample(range(canvas_len), num_masked_prev))
-        prev_tokens = [mask_id if i in masked_indices_prev else final_tokens[i] for i in range(canvas_len)]
-        
-    progress_percent = int((step_idx / max_steps) * 100) if max_steps > 0 else 100
-    num_masks = sum(1 for c in curr_tokens if c == mask_id)
-    
-    header_html = f"""
-    <div class="console-header noise-header">
-        <div class="console-status-group">
-            <span class="status-dot status-pulse-red"></span>
-            <span class="console-title text-red">Forward Process (Noise Addition) — Step {step_idx}/{max_steps}</span>
-        </div>
-        <div class="console-progress-container">
-            <div class="console-progress-bar noise-bar" style="width: {progress_percent}%;"></div>
-        </div>
-        <span class="console-stats text-red">{num_masks}/{canvas_len} tokens masked</span>
-    </div>
-    """
-    
-    tokens_html = []
-    for i, c_id in enumerate(curr_tokens):
-        if c_id == mask_id:
-            # Highlight newly masked tokens with red badge showing original word
-            if prev_tokens is not None and prev_tokens[i] != mask_id:
-                orig_str = tokenizer.decode([prev_tokens[i]]).strip()
-                if not orig_str:
-                    orig_str = " "
-                tokens_html.append(f'<span class="token token-masked-orig">░░░ <small>({orig_str})</small></span>')
-            else:
-                tokens_html.append('<span class="token token-mask">░░░</span>')
-        else:
-            token_str = tokenizer.decode([c_id]).strip()
-            if not token_str:
-                token_str = " "
-            tokens_html.append(f'<span class="token token-normal">{token_str}</span>')
-            
-    joined_tokens = "".join(tokens_html)
-    
-    html = f"""
-    <div class="realtime-console">
-        {header_html}
-        <div class="console-line">
-            {joined_tokens}
-        </div>
-    </div>
-    """
-    return html
 
 # ─── Core translation function ───────────────────────────────────────────────
 def run_speech_translation(audio_path, max_iterations, strategy, slow_mode_enabled):
     import time
     if not audio_path:
-        yield "Please select or record an audio file.", "", "", "", "", "", "", "", ""
+        yield "Please select or record an audio file.", "", "", "", "", ""
         return
         
     try:
@@ -366,9 +286,9 @@ def run_speech_translation(audio_path, max_iterations, strategy, slow_mode_enabl
                 curr_translations["english"],
                 curr_translations["chinese"],
                 curr_translations["korean"],
-                denoise_htmls["english"], "",
-                denoise_htmls["chinese"], "",
-                denoise_htmls["korean"], ""
+                denoise_htmls["english"],
+                denoise_htmls["chinese"],
+                denoise_htmls["korean"]
             )
             time.sleep(0.1)
 
@@ -418,59 +338,9 @@ def run_speech_translation(audio_path, max_iterations, strategy, slow_mode_enabl
                     curr_translations["english"],
                     curr_translations["chinese"],
                     curr_translations["korean"],
-                    denoise_htmls["english"], "",
-                    denoise_htmls["chinese"], "",
-                    denoise_htmls["korean"], ""
-                )
-                if slow_mode_enabled:
-                    time.sleep(0.2)
-
-            # Finalize states
-            for lang in TASKS:
-                lang_state = state[lang]
-                out_tokens = lang_state["decoder_out"].output_tokens[0]
-                cutoff = (
-                    out_tokens.ne(pad_id) &
-                    out_tokens.ne(bos_id) &
-                    out_tokens.ne(eos_id) &
-                    ~lang_state["partial_mask"][0]
-                )
-                gen_tokens = out_tokens[cutoff]
-                lang_state["final_translation"] = tokenizer.decode(gen_tokens.cpu(), skip_special_tokens=True).strip()
-                lang_state["final_tokens"] = lang_state["decoder_out"].output_tokens[0][~lang_state["partial_mask"][0]][:lang_state["canvas_len"]].tolist()
-
-            # 2. Forward Noise Addition process
-            for s in range(max_iterations + 1):
-                noise_htmls = {}
-                denoise_htmls = {}
-                for lang in TASKS:
-                    lang_state = state[lang]
-                    
-                    canvas_steps = [[mask_id] * lang_state["canvas_len"]]
-                    for step_tokens in lang_state["history"][1:]:
-                        tokens_list = step_tokens[0][~lang_state["partial_mask"][0]].tolist()[:lang_state["canvas_len"]]
-                        canvas_steps.append(tokens_list)
-                        
-                    denoise_htmls[lang] = tokens_to_html_denoise_single_line(
-                        canvas_steps,
-                        tokenizer,
-                        max_iterations,
-                        max_iterations
-                    )
-                    
-                    noise_htmls[lang] = tokens_to_html_noise_single_line(
-                        lang_state["final_tokens"],
-                        max_iterations,
-                        tokenizer,
-                        s
-                    )
-                yield (
-                    state["english"]["final_translation"],
-                    state["chinese"]["final_translation"],
-                    state["korean"]["final_translation"],
-                    denoise_htmls["english"], noise_htmls["english"],
-                    denoise_htmls["chinese"], noise_htmls["chinese"],
-                    denoise_htmls["korean"], noise_htmls["korean"]
+                    denoise_htmls["english"],
+                    denoise_htmls["chinese"],
+                    denoise_htmls["korean"]
                 )
                 if slow_mode_enabled:
                     time.sleep(0.2)
@@ -479,7 +349,7 @@ def run_speech_translation(audio_path, max_iterations, strategy, slow_mode_enabl
         import traceback
         err_msg = f"An error occurred during inference:\n{str(e)}\n\n{traceback.format_exc()}"
         print(err_msg)
-        yield err_msg, "", "", "", "", "", "", "", ""
+        yield err_msg, "", "", "", "", ""
 
 # ─── Load test sample helper ─────────────────────────────────────────────────
 def load_test_sample():
@@ -531,12 +401,6 @@ CSS = """
     animation: pulse-green 1.5s infinite;
 }
 
-.status-pulse-red {
-    background-color: #ef4444; /* Red 500 */
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
-    animation: pulse-red 1.5s infinite;
-}
-
 .status-done {
     background-color: #3b82f6; /* Blue 500 */
     box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
@@ -557,29 +421,10 @@ CSS = """
     }
 }
 
-@keyframes pulse-red {
-    0% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
-    }
-    70% {
-        transform: scale(1);
-        box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
-    }
-    100% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
-    }
-}
-
 .console-title {
     font-size: 0.9rem;
     font-weight: 600;
     color: #e2e8f0; /* Slate 200 */
-}
-
-.console-title.text-red {
-    color: #fca5a5; /* Red 300 */
 }
 
 .console-progress-container {
@@ -599,18 +444,10 @@ CSS = """
     transition: width 0.2s ease-out;
 }
 
-.console-progress-bar.noise-bar {
-    background: linear-gradient(90deg, #ef4444, #f59e0b);
-}
-
 .console-stats {
     font-size: 0.8rem;
     font-weight: 500;
     color: #94a3b8; /* Slate 400 */
-}
-
-.console-stats.text-red {
-    color: #f87171;
 }
 
 .console-line {
@@ -657,20 +494,6 @@ CSS = """
     color: #f1f5f9; /* Slate 100 */
     background-color: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.token-masked-orig {
-    color: #dc2626; /* Red 600 */
-    background-color: rgba(239, 68, 68, 0.12);
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    font-weight: 500;
-    box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
-}
-
-.token-masked-orig small {
-    margin-left: 4px;
-    font-size: 0.75rem;
-    opacity: 0.8;
 }
 """
 
@@ -729,31 +552,16 @@ def build_interface():
                 gr.Markdown("### 🔍 Step-by-Step Diffusion Process Visualization")
                 with gr.Tabs():
                     with gr.Tab("🇬🇧 English"):
-                        with gr.Row():
-                            with gr.Column():
-                                gr.Markdown("#### Reverse Process (Denoising)")
-                                en_denoise_html = gr.HTML()
-                            with gr.Column():
-                                gr.Markdown("#### Forward Process (Noise Addition)")
-                                en_noise_html = gr.HTML()
+                        gr.Markdown("#### Reverse Process (Denoising)")
+                        en_denoise_html = gr.HTML()
                                 
                     with gr.Tab("🇨🇳 Chinese"):
-                        with gr.Row():
-                            with gr.Column():
-                                gr.Markdown("#### Reverse Process (Denoising)")
-                                zh_denoise_html = gr.HTML()
-                            with gr.Column():
-                                gr.Markdown("#### Forward Process (Noise Addition)")
-                                zh_noise_html = gr.HTML()
+                        gr.Markdown("#### Reverse Process (Denoising)")
+                        zh_denoise_html = gr.HTML()
                                 
                     with gr.Tab("🇰🇷 Korean"):
-                        with gr.Row():
-                            with gr.Column():
-                                gr.Markdown("#### Reverse Process (Denoising)")
-                                ko_denoise_html = gr.HTML()
-                            with gr.Column():
-                                gr.Markdown("#### Forward Process (Noise Addition)")
-                                ko_noise_html = gr.HTML()
+                        gr.Markdown("#### Reverse Process (Denoising)")
+                        ko_denoise_html = gr.HTML()
                                 
         # Click listeners
         load_sample_btn.click(fn=load_test_sample, outputs=audio_input)
@@ -763,9 +571,9 @@ def build_interface():
             inputs=[audio_input, iterations, strategy, slow_mode],
             outputs=[
                 en_output, zh_output, ko_output,
-                en_denoise_html, en_noise_html,
-                zh_denoise_html, zh_noise_html,
-                ko_denoise_html, ko_noise_html
+                en_denoise_html,
+                zh_denoise_html,
+                ko_denoise_html
             ]
         )
         
@@ -776,7 +584,7 @@ if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
-        share=False,
+        share=True,
         theme=gr.themes.Soft(),
         css=CSS
     )

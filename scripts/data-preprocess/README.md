@@ -52,13 +52,22 @@ uv run python scripts/data-preprocess/convert_npy_to_parquet.py
 
 ---
 
-### 4. `upload_precomputed_data_robust.py`
-Dùng để tải bộ dữ liệu precomputed sau khi xử lý (đã qua chuyển đổi sang Parquet) lên Hugging Face Hub. Script hỗ trợ tính năng retry và tự động bỏ qua các file đã tải lên trước đó.
+---
+
+### 5. `extract_validation.py`
+Dùng để tách tập validation (validation split) từ dataset gốc `aiai-laboratory/vietspeech-train-translated` theo cấu hình chia tập tương tự như trong quá trình train (shuffle seed=42, test_size=0.01). Tập validation này chứa đầy đủ label cho cả 4 ngôn ngữ (Vietnamese, English, Chinese, Korean) cùng ID. Kết quả được lưu dưới dạng file Parquet và có thể tùy chọn upload trực tiếp lên Hugging Face.
 
 **Cách dùng:**
 ```bash
-uv run python scripts/data-preprocess/upload_precomputed_data_robust.py
+uv run python scripts/data-preprocess/extract_validation.py \
+    --output_path outputs/validation.parquet \
+    [--upload] \
+    [--repo_id aiai-laboratory/vietspeech-validation-translated]
 ```
+* `--output_path`: Đường dẫn lưu file validation parquet.
+* `--upload`: Bật cờ này để upload lên Hugging Face Hub sau khi tạo xong.
+* `--repo_id`: Repo dataset đích trên Hugging Face (mặc định: `aiai-laboratory/vietspeech-validation-translated`).
 
 > [!IMPORTANT]
-> Cần cấu hình `HF_TOKEN` trong môi trường để thực hiện download (đối với repo private) và upload lên Hugging Face Hub.
+> Cần cấu hình `HF_TOKEN` trong file `.env` hoặc biến môi trường để thực hiện tải dataset gốc và upload file kết quả lên Hugging Face Hub.
+

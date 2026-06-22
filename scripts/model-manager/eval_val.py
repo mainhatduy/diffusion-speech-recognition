@@ -41,7 +41,7 @@ def main():
     parser.add_argument("--dataset-id", type=str, default="aiai-laboratory/vietspeech-validation-translated", help="Dataset repo ID")
     parser.add_argument("--limit", type=int, default=100, help="Number of samples to evaluate (-1 for all)")
     parser.add_argument("--batch-size", type=int, default=16, help="Batch size for evaluation")
-    parser.add_argument("--tasks", type=str, default="vietnamese,english,chinese,korean", help="Comma-separated tasks to evaluate")
+    parser.add_argument("--tasks", type=str, default="english,chinese,korean", help="Comma-separated tasks to evaluate")
     parser.add_argument("--compile", action="store_true", help="Compile model with torch.compile")
     parser.add_argument("--device", type=str, default=None, help="Device (cuda or cpu)")
     parser.add_argument("--iterations", type=int, default=10, help="Number of diffusion iterations")
@@ -104,7 +104,6 @@ def main():
 
     # Task configuration
     all_tasks = {
-        "vietnamese": ("ASR (VI)", None, "wer"),
         "english": ("Translation (EN)", "<vi_en>", "bleu"),
         "chinese": ("Translation (ZH)", "<vi_zh>", "bleu"),
         "korean": ("Translation (KO)", "<vi_ko>", "bleu"),
@@ -194,9 +193,7 @@ def main():
                     ref_tokens = tokenizer.encode(ref_text, add_special_tokens=False)
                     canvas_len = len(ref_tokens)
                 else:
-                    if task_name == "vietnamese":
-                        canvas_len = int(audio_dur * 4.5)
-                    elif task_name == "english":
+                    if task_name == "english":
                         canvas_len = int(audio_dur * 4.0)
                     else:
                         canvas_len = int(audio_dur * 2.5)
@@ -301,27 +298,21 @@ def main():
         total_tokens = sum(lengths)
         tokens_per_sec = total_tokens / total_task_time if total_task_time > 0 else 0.0
 
-        if task_name == "vietnamese":
-            # For ASR (Vietnamese), calculate WER
-            norm_refs = [normalize_text(r) for r in refs]
-            norm_hyps = [normalize_text(h) for h in hyps]
-            wer_score = jiwer.wer(norm_refs, norm_hyps) * 100
-            metric_str = f"WER: {wer_score:.2f}%"
-            metrics_summary[task_name] = {"wer": wer_score}
-        elif task_name == "english":
-            # For English translation, calculate both BLEU and WER
-            bleu_score = sacrebleu.corpus_bleu(hyps, [refs]).score
-            norm_refs = [normalize_text(r) for r in refs]
-            norm_hyps = [normalize_text(h) for h in hyps]
-            wer_score = jiwer.wer(norm_refs, norm_hyps) * 100
-            metric_str = f"BLEU: {bleu_score:.2f} | WER: {wer_score:.2f}%"
-            metrics_summary[task_name] = {"bleu": bleu_score, "wer": wer_score}
-        else:
-            # For Chinese and Korean, calculate BLEU
-            tok = "zh" if task_name == "chinese" else "13a"
-            bleu_score = sacrebleu.corpus_bleu(hyps, [refs], tokenize=tok).score
-            metric_str = f"BLEU: {bleu_score:.2f}"
-            metrics_summary[task_name] = {"bleu": bleu_score}
+        tok = "zh" if task_name == "chinese" else "13a"
+        
+        # Calculate BLEU-1, BLEU-2, BLEU-3, BLEU-4
+        bleu_scores = {}
+        for n in [1, 2, 3, 4]:
+            bleu_score = sacrebleu.metrics.BLEU(tokenize=tok, max_ngram_order=n).corpus_score(hyps, [refs]).score
+            bleu_scores[f"bleu-{n}"] = bleu_score
+            
+        metric_str = f"BLEU-1: {bleu_scores['bleu-1']:.2f} | BLEU-2: {bleu_scores['bleu-2']:.2f} | BLEU-3: {bleu_scores['bleu-3']:.2f} | BLEU-4: {bleu_scores['bleu-4']:.2f}"
+        metrics_summary[task_name] = {
+            "bleu-1": bleu_scores["bleu-1"],
+            "bleu-2": bleu_scores["bleu-2"],
+            "bleu-3": bleu_scores["bleu-3"],
+            "bleu-4": bleu_scores["bleu-4"],
+        }
 
         metrics_summary[task_name].update({
             "avg_time_per_sample_sec": float(avg_time),

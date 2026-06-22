@@ -83,7 +83,7 @@ uv run python scripts/model-manager/load_checkpoint.py --repo_id aiai-laboratory
 ---
 
 ### 5. `eval_val.py`
-Runs validation dataset evaluation to measure the performance and accuracy of the Discrete Diffusion Speech Translation model. The script supports calculating inference speed, Real-Time Factor (RTF), BLEU scores for speech translation (EN, ZH, KO), and WER scores for speech recognition (ASR VI).
+Runs validation dataset evaluation to measure the performance and accuracy of the Discrete Diffusion Speech Translation model. The script evaluates speech translation from Vietnamese audio to three target languages (English, Chinese, Korean) using BLEU-n gram metrics (BLEU-1, BLEU-2, BLEU-3, BLEU-4) and measures inference performance (inference time per sample, Real-Time Factor).
 
 To speed up execution on large datasets, the script supports **Batching**, **Task Selection**, and GPU compilation optimization via `torch.compile`.
 
@@ -95,7 +95,7 @@ uv run python scripts/model-manager/eval_val.py [options]
 **Key Parameters:**
 * `--limit <int>` (Default: `100`): The number of samples to evaluate (`-1` to run on the entire validation set).
 * `--batch-size <int>` (Default: `16`): The batch size to run in parallel on the GPU.
-* `--tasks <str>` (Default: `vietnamese,english,chinese,korean`): Comma-separated list of tasks to evaluate. For example, `--tasks english` evaluates only English speech translation.
+* `--tasks <str>` (Default: `english,chinese,korean`): Comma-separated list of tasks to evaluate. For example, `--tasks english` evaluates only English speech translation.
 * `--compile`: Flag to activate graph compilation using `torch.compile` to optimize GPU computation speed.
 * `--iterations <int>` (Default: `10`): Number of denoising steps for the Diffusion model.
 * `--output-json <path>` (Default: `evaluation_results.json`): Path to save the results file.

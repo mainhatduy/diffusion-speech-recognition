@@ -1,0 +1,61 @@
+{
+  "model": {
+    "repo_id": "aiai-laboratory/diffusion-speech-translation-from-vi-v1",
+    "total_params": 397803416,
+    "theoretical_fp32_mb": 1517.4996032714844,
+    "theoretical_fp16_mb": 758.7498016357422
+  },
+  "system_info": {
+    "os": "Linux",
+    "cpu_model": "Intel(R) Xeon(R) CPU @ 2.20GHz",
+    "cpu_cores_logical": 8,
+    "total_ram_gb": 31.341087341308594,
+    "gpu_name": "NVIDIA L4",
+    "gpu_total_vram_gb": 22.0343017578125
+  },
+  "benchmarks": {
+    "cpu": [
+      {
+        "threads": 1,
+        "latency_sec": 10.67870260533338,
+        "tokens_per_sec": 1.2173763499610215,
+        "rtf": 3.1689895705418443,
+        "peak_ram_mb": 4139.3046875
+      },
+      {
+        "threads": 2,
+        "latency_sec": 6.393866119333325,
+        "tokens_per_sec": 2.0331986559261086,
+        "rtf": 1.8974304085861933,
+        "peak_ram_mb": 4186.5546875
+      },
+      {
+        "threads": 4,
+        "latency_sec": 5.503348333666736,
+        "tokens_per_sec": 2.362198285809476,
+        "rtf": 1.6331622030318973,
+        "peak_ram_mb": 4189.4296875
+      },
+      {
+        "threads": 8,
+        "latency_sec": 9.851091372666664,
+        "tokens_per_sec": 1.3196507379954323,
+        "rtf": 2.923389382792986,
+        "peak_ram_mb": 4193.0546875
+      }
+    ],
+    "gpu": {
+      "device_name": "NVIDIA L4",
+      "latency_sec": 0.8955655979999998,
+      "tokens_per_sec": 14.515966255327287,
+      "rtf": 0.2657661838415312,
+      "peak_vram_allocated_mb": 797.5478515625,
+      "peak_vram_reserved_mb": 960.0
+    }
+  },
+  "minimum_requirements": {
+    "cpu_cores_for_realtime": "> 8 (requires GPU or optimization for real-time)",
+    "ram_gb": 4.530570983886719,
+    "vram_gb": 1.028855323791504
+  }
+}

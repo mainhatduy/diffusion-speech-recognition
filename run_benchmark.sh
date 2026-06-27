@@ -16,11 +16,12 @@ else
 fi
 
 # Run the benchmark
-echo "[*] Launching Qualcomm AI Hub Multi-Chipset Benchmark..."
+echo "[*] Launching Qualcomm AI Hub Benchmark on a single chipset..."
 python scripts/qualcomm-job/test_inference_multi_chipset.py \
   --runtime onnx \
   --audio test/test_data/test_sample.mp3 \
-  --devices "Samsung Galaxy S24 (Family)" "Samsung Galaxy S25 (Family)" "Snapdragon X Elite CRD" "Samsung Galaxy S23 (Family)" "Snapdragon 8 Elite QRD" \
-  --output onnx/benchmark_results.json
+  --devices "Samsung Galaxy S25 (Family)" \
+  --output onnx/benchmark_results.json \
+  "$@"
 
 echo "[+] Benchmark script finished. Results saved to onnx/benchmark_results.json."

@@ -388,7 +388,7 @@ class DiscreteDiffusionModel(PreTrainedModel):
                 ext_partial_mask = partial_mask.float()
                 ext_partial_mask = torch.bmm(ext_partial_mask[:, :, None], ext_partial_mask[:, None, :]).int()
                 ext_mask = attention_mask[:, None, :].repeat(1, attention_mask.size(-1), 1)
-                ext_mask[partial_mask] = ext_partial_mask[partial_mask]
+                ext_mask = torch.where(partial_mask[:, :, None], ext_partial_mask, ext_mask)
                 
                 # Convert 3D mask using _create_attention_masks
                 attention_mask_converted, _ = self.model.roberta._create_attention_masks(
@@ -428,6 +428,8 @@ class DiscreteDiffusionModel(PreTrainedModel):
         outputs = torch.where(torch.isnan(outputs), torch.zeros_like(outputs), outputs)
         
         outputs = outputs[loss_mask] if loss_mask is not None else outputs
+        if partial_mask is not None:
+            outputs = outputs + (partial_mask.float().sum() * 0.0)
         return self.model.lm_head(outputs)
 
     def _reparam_decoding(

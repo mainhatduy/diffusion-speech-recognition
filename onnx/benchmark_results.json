@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-06-27T08:27:02.998732",
+  "audio_file": "test/test_data/test_sample.mp3",
+  "runtime": "onnx",
+  "results": [
+    {
+      "device": "Samsung Galaxy S24 (Family)",
+      "runtime": "onnx",
+      "status": "compile_failed",
+      "audio_encoder": {
+        "compile": "FAILED",
+        "inference": null,
+        "profile": null
+      },
+      "diffusion_backbone": {
+        "compile": null,
+        "inference": null,
+        "profile": null
+      },
+      "output_text": null,
+      "errors": [
+        "audio_encoder compile failed: Conversion to context binary failed with exit code 14"
+      ],
+      "total_time_s": 230.5057053565979
+    }
+  ]
+}

@@ -112,6 +112,7 @@ def prepare_backbone_inputs(
 
     return {
         "prev_output_tokens": tokens,
+        "partial_mask": partial_mask,
         "precomputed_audio_embeds": audio_embeds.astype(np.float32),
         "precomputed_audio_mask": precomputed_audio_mask,
     }
@@ -509,7 +510,6 @@ def main():
                         if "--truncate_64bit_io" in compile_options
                         else backbone_inputs["prev_output_tokens"]
                     ],
-                    "partial_mask": [backbone_inputs["partial_mask"]],
                     "precomputed_audio_embeds": [backbone_inputs["precomputed_audio_embeds"]],
                     "precomputed_audio_mask": [backbone_inputs["precomputed_audio_mask"]],
                 }

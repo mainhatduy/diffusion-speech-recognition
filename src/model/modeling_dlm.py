@@ -39,7 +39,7 @@ def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
 
 class DiscreteDiffusionModel(PreTrainedModel):
     config_class = DiscreteDiffusionConfig
-    _keys_to_ignore_on_load_missing = ["fake_layer", "length_trm", "length_predictor", "model.lm_head.decoder.weight"]
+    _keys_to_ignore_on_load_missing = ["fake_layer", "length_trm", "length_predictor", "model.lm_head.decoder.weight", "model.lm_head.decoder.bias"]
     _tied_weights_keys = {"model.lm_head.decoder.weight": "model.roberta.embeddings.word_embeddings.weight"}
 
     def __init__(self, config: DiscreteDiffusionConfig):
@@ -75,6 +75,7 @@ class DiscreteDiffusionModel(PreTrainedModel):
         self.has_audio_encoder = getattr(config, 'dataset_type', 'bilingual') in ['speech_recognition', 'speech_translation', 'speech_translation_multitask']
         if self.has_audio_encoder:
             audio_encoder_name = getattr(config, 'audio_encoder_name', 'facebook/mms-300m')
+            pretrained_audio_encoder = getattr(config, 'pretrained_audio_encoder', False)
             
             # Check if we are inside accelerate's init_empty_weights context manager.
             # If so, temporarily restore the original register_parameter method so the audio encoder
@@ -91,33 +92,41 @@ class DiscreteDiffusionModel(PreTrainedModel):
                             break
             
             with torch.device("cpu"):
+                def _init_audio_encoder():
+                    if "moonshine" in audio_encoder_name:
+                        from transformers import MoonshineStreamingModel
+                        if pretrained_audio_encoder:
+                            moonshine_model = MoonshineStreamingModel.from_pretrained(
+                                audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
+                            )
+                        else:
+                            from transformers import AutoConfig
+                            moonshine_config = AutoConfig.from_pretrained(
+                                audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
+                            )
+                            moonshine_model = MoonshineStreamingModel(moonshine_config)
+                        return moonshine_model.encoder
+                    else:
+                        if pretrained_audio_encoder:
+                            return Wav2Vec2Model.from_pretrained(
+                                audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
+                            )
+                        else:
+                            from transformers import AutoConfig
+                            wav2vec2_config = AutoConfig.from_pretrained(
+                                audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
+                            )
+                            return Wav2Vec2Model(wav2vec2_config)
+
                 if original_register is not None:
                     old_patched = nn.Module.register_parameter
                     nn.Module.register_parameter = original_register
                     try:
-                        if "moonshine" in audio_encoder_name:
-                            from transformers import MoonshineStreamingModel
-                            moonshine_model = MoonshineStreamingModel.from_pretrained(
-                                audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
-                            )
-                            self.audio_encoder = moonshine_model.encoder
-                        else:
-                            self.audio_encoder = Wav2Vec2Model.from_pretrained(
-                                audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
-                            )
+                        self.audio_encoder = _init_audio_encoder()
                     finally:
                         nn.Module.register_parameter = old_patched
                 else:
-                    if "moonshine" in audio_encoder_name:
-                        from transformers import MoonshineStreamingModel
-                        moonshine_model = MoonshineStreamingModel.from_pretrained(
-                            audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
-                        )
-                        self.audio_encoder = moonshine_model.encoder
-                    else:
-                        self.audio_encoder = Wav2Vec2Model.from_pretrained(
-                            audio_encoder_name, cache_dir=getattr(config, 'cache_dir', None)
-                        )
+                    self.audio_encoder = _init_audio_encoder()
             
             # Freeze the audio encoder
             for param in self.audio_encoder.parameters():
@@ -626,6 +635,7 @@ class DiscreteDiffusionModel(PreTrainedModel):
         non_fixed_sym_masks = (
             output_tokens.ne(self.pad_id) &
             output_tokens.ne(self.bos_id) &
+            output_tokens.ne(self.eos_id) &
             ~partial_masks  # Not source tokens
         )
         

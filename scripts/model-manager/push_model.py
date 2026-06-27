@@ -160,27 +160,119 @@ def main():
         with open("MODEL_README.md", "r", encoding="utf-8") as f:
             readme_content = f.read()
     else:
-        readme_content = f"""---
+        readme_content = """---
 language: vi
 tags:
 - diffusion
 - speech-recognition
 - speech-translation
+- audio
+- translation
 ---
-# Discrete Diffusion Model
+# Discrete Diffusion Speech Translation (Vietnamese)
 
-This is a Discrete Diffusion Model for Speech Recognition and Multi-task Speech Translation.
+This is a **Discrete Diffusion** model for Vietnamese Speech Recognition (ASR) and Multi-task Speech Translation (AST) to English (EN), Chinese (ZH), and Korean (KO).
 
-## Usage
+The model integrates a **Moonshine** audio encoder with an **XLM-RoBERTa** text model via absorbing discrete diffusion.
+
+## Quick Start Guide
+
+### 1. Install Dependencies
+Install the required packages using `pip` or `uv`:
+
+```bash
+# Using uv (recommended):
+uv pip install torch transformers librosa soundfile
+
+# Or using pip:
+pip install torch transformers librosa soundfile
+```
+
+### 2. Python Inference Code
+The code snippet below automatically downloads the model from Hugging Face Hub, preprocesses the audio input, and runs speech recognition and multi-task translation tasks.
+
 ```python
-from transformers import AutoModel, AutoTokenizer
-model = AutoModel.from_pretrained("{repo_id}", trust_remote_code=True)
-tokenizer = AutoTokenizer.from_pretrained("{repo_id}")
+import torch
+import librosa
+from transformers import AutoModel, AutoTokenizer, Wav2Vec2FeatureExtractor
+
+# 1. Load model, tokenizer, and feature extractor
+device = "cuda" if torch.cuda.is_available() else "cpu"
+repo_id = "{repo_id}"
+
+print("Loading model from Hugging Face Hub...")
+model = AutoModel.from_pretrained(repo_id, trust_remote_code=True).to(device).eval()
+tokenizer = AutoTokenizer.from_pretrained(repo_id)
+feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(model.config.audio_encoder_name)
+
+# Use bfloat16 on GPU for faster decoding
+if device == "cuda":
+    model = model.to(torch.bfloat16)
+
+# 2. Load and preprocess Vietnamese audio input (WAV, MP3, FLAC, etc.)
+audio_path = "path/to/your/vietnamese_audio.wav"  # Replace with your Vietnamese speech audio file
+waveform, sr = librosa.load(audio_path, sr=16000)
+
+audio_inputs = feature_extractor(waveform, sampling_rate=16000, return_tensors="pt")
+audio_values_raw = audio_inputs.input_values.to(device)
+
+# Pad audio features to a multiple of 80 frames (Moonshine requirement)
+audio_len = audio_values_raw.size(-1)
+padded_len = ((audio_len + 79) // 80) * 80
+audio_features = torch.zeros(1, padded_len, device=device)
+audio_features[0, :audio_len] = audio_values_raw[0]
+
+audio_attention_mask = torch.zeros(1, padded_len, dtype=torch.long, device=device)
+audio_attention_mask[0, :audio_len] = 1
+
+if device == "cuda":
+    audio_features = audio_features.to(torch.bfloat16)
+
+# 3. Define the ASR and translation tasks
+tasks = {
+    "Speech Recognition (Transcribe VI)": None,
+    "Translation to English (Translate to EN)": "<vi_en>",
+    "Translation to Chinese (Translate to ZH)": "<vi_zh>",
+    "Translation to Korean (Translate to KO)": "<vi_ko>"
+}
+
+print("\\n--- INFERENCE RESULTS ---")
+for label, task_token in tasks.items():
+    # Initialize input_ids with the target task token
+    if task_token is None:
+        input_ids = torch.tensor([[tokenizer.bos_token_id]], device=device)
+    else:
+        task_token_id = tokenizer.convert_tokens_to_ids(task_token)
+        input_ids = torch.tensor([[tokenizer.bos_token_id, task_token_id]], device=device)
+
+    # Calculate dynamic canvas length based on audio duration to prevent repetition
+    audio_duration = len(waveform) / sr
+    if task_token == "<vi_en>" or task_token is None:
+        canvas_len = int(audio_duration * 4.0)
+    else:
+        canvas_len = int(audio_duration * 2.5)
+    canvas_len = max(5, min(64, canvas_len))
+
+    # Run discrete diffusion generation (Denoising loop)
+    with torch.no_grad():
+        output_ids = model.generate(
+            input_ids=input_ids,
+            audio_features=audio_features,
+            audio_attention_mask=audio_attention_mask,
+            max_iterations=10,  # Number of denoising steps
+            max_length=canvas_len, # Dynamic sequence length
+            strategy="reparam-uncond-deterministic-cosine"
+        )
+
+    # Decode target tokens to text
+    text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+    print(label + ": " + text)
 ```
 """
     
-    # Replace @@@MODEL_ID with actual repo_id
+    # Replace @@@MODEL_ID and {repo_id} with actual repo_id
     readme_content = readme_content.replace("@@@MODEL_ID", repo_id)
+    readme_content = readme_content.replace("{repo_id}", repo_id)
     
     # Save temporarily
     temp_readme_path = "temp_README.md"

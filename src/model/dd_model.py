@@ -79,6 +79,10 @@ class DiscreteDiffusionModelArguments:
         init=False,
         metadata={"help": "pretrained audio encoder model name"}
     )
+    pretrained_audio_encoder: bool = field(
+        default=True,
+        metadata={"help": "whether to load pretrained weights for the audio encoder"}
+    )
        
     def __post_init__(self):
         if self.prefix_lm:
@@ -214,16 +218,31 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         self.has_audio_encoder = getattr(args, 'dataset_type', 'bilingual') in ['speech_recognition', 'speech_translation', 'speech_translation_multitask']
         if self.has_audio_encoder:
             audio_encoder_name = getattr(args, 'audio_encoder_name', 'facebook/mms-300m')
+            pretrained_audio_encoder = getattr(args, 'pretrained_audio_encoder', True)
             if "moonshine" in audio_encoder_name:
                 from transformers import MoonshineStreamingModel
-                moonshine_model = MoonshineStreamingModel.from_pretrained(
-                    audio_encoder_name, cache_dir=args.cache_dir
-                )
+                if pretrained_audio_encoder:
+                    moonshine_model = MoonshineStreamingModel.from_pretrained(
+                        audio_encoder_name, cache_dir=args.cache_dir
+                    )
+                else:
+                    from transformers import AutoConfig
+                    moonshine_config = AutoConfig.from_pretrained(
+                        audio_encoder_name, cache_dir=args.cache_dir
+                    )
+                    moonshine_model = MoonshineStreamingModel(moonshine_config)
                 self.audio_encoder = moonshine_model.encoder
             else:
-                self.audio_encoder = Wav2Vec2Model.from_pretrained(
-                    audio_encoder_name, cache_dir=args.cache_dir
-                )
+                if pretrained_audio_encoder:
+                    self.audio_encoder = Wav2Vec2Model.from_pretrained(
+                        audio_encoder_name, cache_dir=args.cache_dir
+                    )
+                else:
+                    from transformers import AutoConfig
+                    wav2vec2_config = AutoConfig.from_pretrained(
+                        audio_encoder_name, cache_dir=args.cache_dir
+                    )
+                    self.audio_encoder = Wav2Vec2Model(wav2vec2_config)
             # Freeze the audio encoder
             for param in self.audio_encoder.parameters():
                 param.requires_grad = False

@@ -21,6 +21,7 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         eos_token_id=None,
         pad_token_id=None,
         argmax_decoding=True,  # Default to True for deterministic inference
+        pretrained_audio_encoder=False,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -40,6 +41,7 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         self.eos_token_id = eos_token_id
         self.pad_token_id = pad_token_id
         self.argmax_decoding = argmax_decoding
+        self.pretrained_audio_encoder = pretrained_audio_encoder
 
         if backbone_config is None:
             self.backbone_config = AutoConfig.from_pretrained("FacebookAI/xlm-roberta-large").to_dict()

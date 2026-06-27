@@ -180,3 +180,8 @@ precomputed_data/*
 !/.agents/
 /.agents/*
 !/.agents/rules/
+
+*.onnx
+*.safetensors
+*.onnxruntime
+*.data

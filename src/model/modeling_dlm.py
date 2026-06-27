@@ -424,8 +424,8 @@ class DiscreteDiffusionModel(PreTrainedModel):
         if T_audio > 0:
             outputs = outputs[:, T_audio:]
         
-        if not (~torch.isnan(outputs)).all():
-            outputs.masked_fill_(outputs.isnan(), 0)
+        # Trace-friendly NaN replacement to avoid GuardOnDataDependentSymNode during ONNX export
+        outputs = torch.where(torch.isnan(outputs), torch.zeros_like(outputs), outputs)
         
         outputs = outputs[loss_mask] if loss_mask is not None else outputs
         return self.model.lm_head(outputs)

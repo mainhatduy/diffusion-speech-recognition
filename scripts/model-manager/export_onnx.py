@@ -46,10 +46,10 @@ class DiscreteDiffusionONNXWrapper(torch.nn.Module):
         super().__init__()
         self.model = model
 
-    def forward(self, prev_output_tokens, partial_mask, precomputed_audio_embeds, precomputed_audio_mask):
+    def forward(self, prev_output_tokens, precomputed_audio_embeds, precomputed_audio_mask):
         return self.model(
             prev_output_tokens=prev_output_tokens,
-            partial_mask=partial_mask,
+            partial_mask=None,
             precomputed_audio_embeds=precomputed_audio_embeds,
             precomputed_audio_mask=precomputed_audio_mask
         )
@@ -129,16 +129,15 @@ def main():
     try:
         torch.onnx.export(
             backbone_wrapper,
-            (dummy_prev_output_tokens, dummy_partial_mask, dummy_audio_embeds, dummy_audio_mask),
+            (dummy_prev_output_tokens, dummy_audio_embeds, dummy_audio_mask),
             backbone_path,
             export_params=True,
             opset_version=17,
             do_constant_folding=True,
-            input_names=["prev_output_tokens", "partial_mask", "precomputed_audio_embeds", "precomputed_audio_mask"],
+            input_names=["prev_output_tokens", "precomputed_audio_embeds", "precomputed_audio_mask"],
             output_names=["logits"],
             dynamic_axes={
                 "prev_output_tokens": {0: "batch_size", 1: "seq_len"},
-                "partial_mask": {0: "batch_size", 1: "seq_len"},
                 "precomputed_audio_embeds": {0: "batch_size", 1: "audio_len"},
                 "precomputed_audio_mask": {0: "batch_size", 1: "audio_len"},
                 "logits": {0: "batch_size", 1: "seq_len"}
@@ -199,7 +198,6 @@ def main():
             # Prepare inputs
             ort_inputs = {
                 "prev_output_tokens": dummy_prev_output_tokens.numpy(),
-                "partial_mask": dummy_partial_mask.numpy(),
                 "precomputed_audio_embeds": dummy_audio_embeds.numpy(),
                 "precomputed_audio_mask": dummy_audio_mask.numpy()
             }
@@ -213,7 +211,6 @@ def main():
             with torch.no_grad():
                 torch_outputs = backbone_wrapper(
                     dummy_prev_output_tokens,
-                    dummy_partial_mask,
                     dummy_audio_embeds,
                     dummy_audio_mask
                 )

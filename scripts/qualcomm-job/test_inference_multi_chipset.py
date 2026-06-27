@@ -112,7 +112,6 @@ def prepare_backbone_inputs(
 
     return {
         "prev_output_tokens": tokens,
-        "partial_mask": partial_mask,
         "precomputed_audio_embeds": audio_embeds.astype(np.float32),
         "precomputed_audio_mask": precomputed_audio_mask,
     }
@@ -344,7 +343,6 @@ def main():
     
     backbone_specs = {
         "prev_output_tokens": (tuple(backbone_inputs["prev_output_tokens"].shape), "int64"),
-        "partial_mask": (tuple(backbone_inputs["partial_mask"].shape), "bool"),
         "precomputed_audio_embeds": tuple(backbone_inputs["precomputed_audio_embeds"].shape),
         "precomputed_audio_mask": (tuple(backbone_inputs["precomputed_audio_mask"].shape), "int32"),
     }

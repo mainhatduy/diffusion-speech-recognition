@@ -10,6 +10,10 @@ def repackage_model(model_path, output_dir, model_name, data_name):
     
     # Save the model with external data
     target_model_path = os.path.join(output_dir, model_name)
+    target_data_path = os.path.join(output_dir, data_name)
+    if os.path.exists(target_data_path):
+        os.remove(target_data_path)
+        
     onnx.save(
         model,
         target_model_path,
@@ -17,7 +21,7 @@ def repackage_model(model_path, output_dir, model_name, data_name):
         all_tensors_to_one_file=True,
         location=data_name
     )
-    print(f"Successfully saved to {target_model_path} and {os.path.join(output_dir, data_name)}")
+    print(f"Successfully saved to {target_model_path} and {target_data_path}")
 
 def main():
     # Repackage Audio Encoder

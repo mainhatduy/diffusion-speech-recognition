@@ -20,6 +20,10 @@ def repackage_model(model_path, output_dir, model_name, data_name):
     
     # Save the model with external data
     target_model_path = os.path.join(output_dir, model_name)
+    target_data_path = os.path.join(output_dir, data_name)
+    if os.path.exists(target_data_path):
+        os.remove(target_data_path)
+        
     onnx.save(
         model,
         target_model_path,
@@ -27,7 +31,7 @@ def repackage_model(model_path, output_dir, model_name, data_name):
         all_tensors_to_one_file=True,
         location=data_name
     )
-    print(f"    -> Successfully saved to {target_model_path} and {os.path.join(output_dir, data_name)}")
+    print(f"    -> Successfully saved to {target_model_path} and {target_data_path}")
 
 def monitor_jobs(jobs, label="Jobs"):
     print(f"\n[*] Monitoring {label}...")
@@ -144,7 +148,6 @@ def main():
     print("\n--- Submitting Diffusion Backbone Compile Job ---")
     backbone_specs = {
         "prev_output_tokens": ((1, 32), "int64"),
-        "partial_mask": ((1, 32), "bool"),
         "precomputed_audio_embeds": (1, 96, 768),
         "precomputed_audio_mask": ((1, 96), "int32")
     }

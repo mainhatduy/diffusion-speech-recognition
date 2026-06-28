@@ -138,25 +138,25 @@ def main():
     
     # Step 3: Decompose Asinh in audio_encoder
     run_command(
-        ["python", "scripts/qualcomm-job/decompose_asinh.py"],
+        ["python", "scripts/qualcomm-job/patches/decompose_asinh.py"],
         "Decomposing Asinh in audio_encoder.onnx"
     )
     
     # Step 4: Decompose Sign in audio_encoder
     run_command(
-        ["python", "scripts/qualcomm-job/decompose_sign.py"],
+        ["python", "scripts/qualcomm-job/patches/decompose_sign.py"],
         "Decomposing Sign in audio_encoder.onnx"
     )
     
     # Step 5: Fix BOOL operations
     run_command(
-        ["python", "scripts/qualcomm-job/fix_bool_ops.py"],
+        ["python", "scripts/qualcomm-job/patches/fix_bool_ops.py"],
         "Fixing BOOL Pad and GatherND operations"
     )
     
     # Step 6: Repackage models
     run_command(
-        ["python", "scripts/qualcomm-job/repackage_models.py"],
+        ["python", "scripts/qualcomm-job/patches/repackage_models.py"],
         "Repackaging models to .pkg.onnx"
     )
     

@@ -13,9 +13,9 @@ To speed up the benchmarking process, it runs all operations asynchronously:
   6. Collects, decodes, and summarizes the results.
 
 Usage:
-  python scripts/qualcomm-job/test_inference_multi_chipset.py
-  python scripts/qualcomm-job/test_inference_multi_chipset.py --devices "Samsung Galaxy S24 (Family)" "Snapdragon X Elite CRD"
-  python scripts/qualcomm-job/test_inference_multi_chipset.py --runtime onnx --audio test/test_data/test_sample.mp3
+  python scripts/qualcomm-job/inference/test_inference_multi_chipset.py
+  python scripts/qualcomm-job/inference/test_inference_multi_chipset.py --devices "Samsung Galaxy S24 (Family)" "Snapdragon X Elite CRD"
+  python scripts/qualcomm-job/inference/test_inference_multi_chipset.py --runtime onnx --audio test/test_data/test_sample.mp3
 """
 
 import os
@@ -26,11 +26,20 @@ import argparse
 import traceback
 from datetime import datetime
 
-import dotenv
 import numpy as np
 
 # Add src to path for model configuration
 sys.path.insert(0, os.path.abspath("src"))
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils import (
+    AUDIO_SAMPLE_RATE,
+    MAX_SEQ_LEN,
+    setup_qualcomm_token,
+    load_audio,
+    prepare_audio_inputs,
+    prepare_backbone_inputs,
+)
 
 # ─────────────────────────────── Constants ────────────────────────────────
 DEFAULT_DEVICES = [
@@ -47,75 +56,7 @@ DEFAULT_DEVICES = [
     "Snapdragon 8 Elite QRD",
 ]
 
-AUDIO_SAMPLE_RATE = 16000
-MAX_SEQ_LEN = 32
 DIFFUSION_STEPS = 10  # Number of denoising iterations
-
-# ─────────────────────────────── Helpers ──────────────────────────────────
-
-def load_audio(audio_path: str, target_sr: int = 16000) -> np.ndarray:
-    """Load audio file and return as float32 numpy array at target sample rate."""
-    try:
-        import librosa
-        audio, sr = librosa.load(audio_path, sr=target_sr)
-        return audio.astype(np.float32)
-    except ImportError:
-        import soundfile as sf
-        audio, sr = sf.read(audio_path)
-        if sr != target_sr:
-            # Simple resampling fallback
-            import scipy.signal
-            audio = scipy.signal.resample(audio, int(len(audio) * target_sr / sr))
-        return audio.astype(np.float32)
-
-
-def prepare_audio_inputs(audio: np.ndarray, stride: int = 80) -> dict:
-    """Prepare audio inputs for the audio_encoder ONNX model."""
-    original_len = len(audio)
-    # Pad to nearest multiple of stride
-    if original_len % stride != 0:
-        padded_len = ((original_len // stride) + 1) * stride
-        audio_padded = np.zeros(padded_len, dtype=np.float32)
-        audio_padded[:original_len] = audio
-        mask = np.zeros(padded_len, dtype=np.int64)
-        mask[:original_len] = 1
-        print(f"    [pad] Audio padded from {original_len} → {padded_len} samples (multiple of {stride})")
-    else:
-        audio_padded = audio
-        mask = np.ones(original_len, dtype=np.int64)
-    
-    audio_features = audio_padded[np.newaxis, :]  # (1, audio_len)
-    audio_attention_mask = mask[np.newaxis, :]     # (1, audio_len)
-    return {
-        "audio_features": audio_features,
-        "audio_attention_mask": audio_attention_mask,
-    }
-
-
-def prepare_backbone_inputs(
-    audio_embeds: np.ndarray,
-    tokenizer,
-    mask_id: int,
-    eos_id: int,
-    pad_id: int,
-    seq_len: int = MAX_SEQ_LEN,
-) -> dict:
-    """Prepare inputs for the diffusion_backbone ONNX model."""
-    batch_size = 1
-    tokens = np.full((batch_size, seq_len), mask_id, dtype=np.int64)
-    tokens[0, -1] = eos_id  # last token is EOS
-
-    partial_mask = np.zeros((batch_size, seq_len), dtype=bool)
-
-    audio_len = audio_embeds.shape[1]
-    precomputed_audio_mask = np.ones((batch_size, audio_len), dtype=np.int32)
-
-    return {
-        "prev_output_tokens": tokens,
-        "partial_mask": partial_mask,
-        "precomputed_audio_embeds": audio_embeds.astype(np.float32),
-        "precomputed_audio_mask": precomputed_audio_mask,
-    }
 
 
 def format_duration(seconds: float) -> str:
@@ -223,12 +164,7 @@ def main():
     args = parser.parse_args()
     
     # Load environment
-    dotenv.load_dotenv()
-    token = os.getenv("QUALCOMM_TOKEN")
-    if not token:
-        print("[!] Error: QUALCOMM_TOKEN not found in .env")
-        sys.exit(1)
-    os.environ["QAI_HUB_API_TOKEN"] = token
+    setup_qualcomm_token()
     
     import qai_hub as hub
     
@@ -276,7 +212,7 @@ def main():
     for pkg in ["onnx/audio_encoder_pkg.onnx", "onnx/diffusion_backbone_pkg.onnx"]:
         if not os.path.exists(pkg):
             print(f"[!] Missing ONNX package: {pkg}")
-            print("    Run the repackaging step first: python scripts/qualcomm-job/submit_qualcomm_job.py")
+            print("    Run the repackaging step first: python scripts/qualcomm-job/patches/repackage_models.py")
             sys.exit(1)
             
     # Precompute audio embeddings locally using ONNX Runtime
@@ -314,10 +250,9 @@ def main():
     # Prepare backbone inputs
     backbone_inputs = prepare_backbone_inputs(
         audio_embeds=audio_embeds,
-        tokenizer=tokenizer,
+        audio_len=audio_embeds.shape[1],
         mask_id=config.mask_token_id,
         eos_id=config.eos_token_id,
-        pad_id=config.pad_token_id,
         seq_len=MAX_SEQ_LEN,
     )
     

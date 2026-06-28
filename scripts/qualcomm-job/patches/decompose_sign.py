@@ -10,7 +10,7 @@ This uses only: Greater, Less, Where, Cast, Constant — all supported by QNN HT
 The script auto-detects the input tensor's data type and generates constants with matching types.
 
 Usage:
-    python scripts/qualcomm-job/decompose_sign.py
+    python scripts/qualcomm-job/patches/decompose_sign.py
 """
 
 import onnx

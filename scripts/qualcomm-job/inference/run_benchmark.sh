@@ -17,7 +17,7 @@ fi
 
 # Run the benchmark
 echo "[*] Launching Qualcomm AI Hub Benchmark on a single chipset..."
-python scripts/qualcomm-job/test_inference_multi_chipset.py \
+python scripts/qualcomm-job/inference/test_inference_multi_chipset.py \
   --runtime onnx \
   --audio test/test_data/test_sample.mp3 \
   --devices "Samsung Galaxy S25 (Family)" \

@@ -31,7 +31,7 @@ Note:
     After running, always run repackage_models.py.
 
 Usage:
-    python scripts/qualcomm-job/fix_gathernd_rank.py
+    python scripts/qualcomm-job/patches/fix_gathernd_rank.py
 """
 
 import os

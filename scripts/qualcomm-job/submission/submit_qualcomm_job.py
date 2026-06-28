@@ -2,65 +2,15 @@ import os
 import sys
 import time
 import argparse
-import dotenv
-import onnx
 import qai_hub as hub
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils import setup_qualcomm_token, repackage_model, monitor_jobs
 
 def print_banner():
     print("=" * 70)
     print("      QUALCOMM AI HUB - EDGE COMPILATION & BENCHMARKING SYSTEM")
     print("=" * 70)
-
-def repackage_model(model_path, output_dir, model_name, data_name):
-    print(f"[*] Repackaging {model_path} to {output_dir}...")
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Load the model
-    model = onnx.load(model_path)
-    
-    # Save the model with external data
-    target_model_path = os.path.join(output_dir, model_name)
-    target_data_path = os.path.join(output_dir, data_name)
-    if os.path.exists(target_data_path):
-        os.remove(target_data_path)
-        
-    onnx.save(
-        model,
-        target_model_path,
-        save_as_external_data=True,
-        all_tensors_to_one_file=True,
-        location=data_name
-    )
-    print(f"    -> Successfully saved to {target_model_path} and {target_data_path}")
-
-def monitor_jobs(jobs, label="Jobs"):
-    print(f"\n[*] Monitoring {label}...")
-    completed = {name: False for name in jobs}
-    failures = {name: None for name in jobs}
-    
-    while not all(completed.values()):
-        for name, job in jobs.items():
-            if completed[name]:
-                continue
-            
-            status = job.get_status()
-            code = status.code
-            message = status.message
-            
-            if code in ["SUCCESS", "FAILED"]:
-                completed[name] = True
-                if code == "FAILED":
-                    failures[name] = message
-                    print(f"    [!] {name} failed: {message}")
-                else:
-                    print(f"    [+] {name} completed successfully!")
-            else:
-                print(f"    [-] {name} is in status: {code}")
-                
-        if not all(completed.values()):
-            time.sleep(30)
-            
-    return failures
 
 def main():
     print_banner()
@@ -72,13 +22,8 @@ def main():
     args = parser.parse_args()
     
     # Load environment variables
-    dotenv.load_dotenv()
-    token = os.getenv("QUALCOMM_TOKEN")
-    if not token:
-        print("[!] Error: QUALCOMM_TOKEN not found in .env file.")
-        sys.exit(1)
-        
-    os.environ["QAI_HUB_API_TOKEN"] = token
+    setup_qualcomm_token()
+
     
     # Initialize client
     print("[*] Initializing Qualcomm AI Hub client...")

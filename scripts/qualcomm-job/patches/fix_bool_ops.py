@@ -7,7 +7,7 @@ BOOL tensors to supported types (INT8 for Pad, INT32/INT8 for GatherND) before
 the operation, and Cast back to BOOL afterwards.
 
 Usage:
-    python scripts/qualcomm-job/fix_bool_ops.py
+    python scripts/qualcomm-job/patches/fix_bool_ops.py
 """
 
 import os

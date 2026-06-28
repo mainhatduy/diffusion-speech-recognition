@@ -2,6 +2,7 @@
 
 A speech recognition and translation project using Discrete Diffusion Models to translate spoken Vietnamese into multiple target languages (English, Chinese, and Korean).
 
+Technical Report:  [DiffusPeak Technical Teport](https://drive.google.com/file/d/1n-Iu1oxtDdeW_mhTzdTuLbpnmkkiVNK6)
 ---
 
 ## Methodology

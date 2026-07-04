@@ -1,5 +1,6 @@
 # Diffusion Speech Recognition
 
+<img width="1475" height="899" alt="image" src="https://github.com/user-attachments/assets/7a8194ed-d240-4bbc-8b7c-651a870dbce9" />
 A speech recognition and translation project using Discrete Diffusion Models to translate spoken Vietnamese into multiple target languages (English, Chinese, and Korean).
 
 Technical Report:  [DiffusPeak Technical Teport](https://drive.google.com/file/d/1n-Iu1oxtDdeW_mhTzdTuLbpnmkkiVNK6)

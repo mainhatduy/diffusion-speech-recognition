@@ -1,8 +1,9 @@
 from transformers import PretrainedConfig, AutoConfig
 
+
 class DiscreteDiffusionConfig(PretrainedConfig):
     model_type = "discrete_diffusion"
-    
+
     def __init__(
         self,
         backbone_config=None,
@@ -22,7 +23,7 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         pad_token_id=None,
         argmax_decoding=True,  # Default to True for deterministic inference
         pretrained_audio_encoder=False,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.backbone_config = backbone_config
@@ -44,16 +45,19 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         self.pretrained_audio_encoder = pretrained_audio_encoder
 
         if backbone_config is None:
-            self.backbone_config = AutoConfig.from_pretrained("FacebookAI/xlm-roberta-large").to_dict()
+            self.backbone_config = AutoConfig.from_pretrained(
+                "FacebookAI/xlm-roberta-large"
+            ).to_dict()
         elif isinstance(backbone_config, PretrainedConfig):
             self.backbone_config = backbone_config.to_dict()
         else:
             self.backbone_config = backbone_config
-            
+
         # Expose backbone attributes
         self.hidden_size = self.backbone_config.get("hidden_size", 1024)
         self.num_attention_heads = self.backbone_config.get("num_attention_heads", 16)
         self.intermediate_size = self.backbone_config.get("intermediate_size", 4096)
-        self.max_position_embeddings = self.backbone_config.get("max_position_embeddings", 514)
+        self.max_position_embeddings = self.backbone_config.get(
+            "max_position_embeddings", 514
+        )
         self.tie_word_embeddings = self.backbone_config.get("tie_word_embeddings", True)
-

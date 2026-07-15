@@ -10,6 +10,7 @@ from transformers import Wav2Vec2FeatureExtractor
 from .base import PromptDataset
 from .utils import _decode_wav_bytes, normalize_text
 
+
 class MultiTaskTranslatedSpeechDataset(PromptDataset):
     """Multi-task speech translation dataset: audio (Vietnamese) -> text in N target languages.
 
@@ -41,14 +42,14 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         raw_data,
         vietspeech_dataset,
         path_to_vs_idx: dict,
-        task_configs: list,   # list[tuple[str, int]]
+        task_configs: list,  # list[tuple[str, int]]
         tokenizer,
         feature_extractor,
     ):
         super().__init__(args, raw_data, tokenizer)
         self.vietspeech_dataset = vietspeech_dataset
         self.path_to_vs_idx = path_to_vs_idx
-        self.task_configs = task_configs   # [(field_name, token_id), ...]
+        self.task_configs = task_configs  # [(field_name, token_id), ...]
         self.feature_extractor = feature_extractor
         self.target_sample_rate = 16000
         self.n_tasks = len(task_configs)
@@ -62,7 +63,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
     def __getitem__(self, index):
         # Decompose flat index → (base sample, task)
         sample_idx = index // self.n_tasks
-        task_idx   = index % self.n_tasks
+        task_idx = index % self.n_tasks
         tgt_field, task_token_id = self.task_configs[task_idx]
 
         # ---- Fetch translated text ----
@@ -77,7 +78,9 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         else:
             vs_idx = self.path_to_vs_idx.get(wav_id)
             if vs_idx is None:
-                raise ValueError(f"WAV ID '{wav_id}' not found in NhutP/VietSpeech index.")
+                raise ValueError(
+                    f"WAV ID '{wav_id}' not found in NhutP/VietSpeech index."
+                )
 
             vs_item = self.vietspeech_dataset[vs_idx]
             audio_info = vs_item["audio"]
@@ -120,26 +123,30 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         if len(tgt) > 0 and tgt[0] == self.tokenizer.bos_token_id:
             tgt = tgt[1:]
 
-        src_length = len(src)            # 2: BOS + task_token
-        concatenated = src + tgt         # [BOS, <vi_XX>, word1, ...]
+        src_length = len(src)  # 2: BOS + task_token
+        concatenated = src + tgt  # [BOS, <vi_XX>, word1, ...]
 
         # ground-truth target tensor expected by diffusion loss
-        target_tgt = ([self.tokenizer.bos_token_id] + tgt
-                      if len(tgt) == 0 or tgt[0] != self.tokenizer.bos_token_id
-                      else tgt)
+        target_tgt = (
+            [self.tokenizer.bos_token_id] + tgt
+            if len(tgt) == 0 or tgt[0] != self.tokenizer.bos_token_id
+            else tgt
+        )
 
         return {
-            "id":           index,
-            "source":       torch.tensor(concatenated)[-self.max_length :],
-            "target":       torch.tensor(target_tgt),
-            "src_length":   src_length,
+            "id": index,
+            "source": torch.tensor(concatenated)[-self.max_length :],
+            "target": torch.tensor(target_tgt),
+            "src_length": src_length,
             "audio_values": audio_values,
         }
 
     @staticmethod
     def load_data(args, tokenizer, train=True, valid=True, test=False):
         tokenizer.model_max_length = args.max_length
-        logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
+        logging.getLogger("transformers.tokenization_utils_base").setLevel(
+            logging.ERROR
+        )
 
         hf_token = args.hf_token or os.getenv("HF_TOKEN")
         if hf_token is None:
@@ -148,18 +155,24 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             )
 
         # 1. Parse task token names and resolve their IDs from tokenizer
-        task_tokens: List[str] = getattr(args, "task_tokens", ["<vi_en>", "<vi_zh>", "<vi_ko>"])
+        task_tokens: List[str] = getattr(
+            args, "task_tokens", ["<vi_en>", "<vi_zh>", "<vi_ko>"]
+        )
         if not task_tokens:
-            raise ValueError("args.task_tokens is empty; expected e.g. ['<vi_en>', '<vi_zh>', '<vi_ko>'].")
+            raise ValueError(
+                "args.task_tokens is empty; expected e.g. ['<vi_en>', '<vi_zh>', '<vi_ko>']."
+            )
 
-        print(f"[MultiTask] Using task tokens (pre-registered in tokenizer): {task_tokens}")
+        print(
+            f"[MultiTask] Using task tokens (pre-registered in tokenizer): {task_tokens}"
+        )
 
         # 2. Build task_configs: [(field_name, token_id), ...]
         TASK_TO_FIELD = MultiTaskTranslatedSpeechDataset.TASK_TO_FIELD
         task_configs = []
         for token in task_tokens:
             field_name = TASK_TO_FIELD.get(token, token.strip("<>"))
-            token_id   = tokenizer.convert_tokens_to_ids(token)
+            token_id = tokenizer.convert_tokens_to_ids(token)
             if token_id == tokenizer.unk_token_id:
                 raise RuntimeError(
                     f"Task token '{token}' was not found in tokenizer vocab "
@@ -184,7 +197,9 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         num_proc = max(1, int(mp.cpu_count() / world_size))
 
         # 4. Load aiai-laboratory/vietspeech-train-translated
-        print("[MultiTask] Loading translated dataset from aiai-laboratory/vietspeech-train-translated")
+        print(
+            "[MultiTask] Loading translated dataset from aiai-laboratory/vietspeech-train-translated"
+        )
         try:
             translated_dataset = load_dataset(
                 "aiai-laboratory/vietspeech-train-translated",
@@ -218,7 +233,9 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             raise
 
         # Decode=False to avoid torchcodec dependency
-        vietspeech_dataset = vietspeech_dataset.cast_column("audio", Audio(decode=False))
+        vietspeech_dataset = vietspeech_dataset.cast_column(
+            "audio", Audio(decode=False)
+        )
 
         # 6. Build path → index mapping for VietSpeech
         print("[MultiTask] Building audio path→index mapping")
@@ -268,24 +285,42 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         # 9. Construct dataset objects
         train_dataset = (
             MultiTaskTranslatedSpeechDataset(
-                args, train_raw, vietspeech_dataset,
-                path_to_vs_idx, task_configs, tokenizer, feature_extractor,
+                args,
+                train_raw,
+                vietspeech_dataset,
+                path_to_vs_idx,
+                task_configs,
+                tokenizer,
+                feature_extractor,
             )
-            if train else None
+            if train
+            else None
         )
         valid_dataset = (
             MultiTaskTranslatedSpeechDataset(
-                args, valid_raw, vietspeech_dataset,
-                path_to_vs_idx, task_configs, tokenizer, feature_extractor,
+                args,
+                valid_raw,
+                vietspeech_dataset,
+                path_to_vs_idx,
+                task_configs,
+                tokenizer,
+                feature_extractor,
             )
-            if valid else None
+            if valid
+            else None
         )
         test_dataset = (
             MultiTaskTranslatedSpeechDataset(
-                args, valid_raw, vietspeech_dataset,
-                path_to_vs_idx, task_configs, tokenizer, feature_extractor,
+                args,
+                valid_raw,
+                vietspeech_dataset,
+                path_to_vs_idx,
+                task_configs,
+                tokenizer,
+                feature_extractor,
             )
-            if test else None
+            if test
+            else None
         )
 
         return train_dataset, valid_dataset, test_dataset

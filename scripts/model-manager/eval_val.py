@@ -22,33 +22,79 @@ from data.utils import normalize_text
 import sacrebleu
 import jiwer
 
+
 def load_audio_from_bytes(raw_bytes: bytes, target_sr: int = 16000) -> np.ndarray:
     """Load audio from raw bytes and resample to target_sr if needed."""
     waveform, sr = sf.read(io.BytesIO(raw_bytes), dtype="float32", always_2d=False)
     if waveform.ndim == 2:
         waveform = waveform.mean(axis=1)
-    
+
     if sr != target_sr:
         ratio = target_sr / sr
         new_length = int(len(waveform) * ratio)
         indices = np.linspace(0, len(waveform) - 1, new_length)
-        waveform = np.interp(indices, np.arange(len(waveform)), waveform).astype(np.float32)
+        waveform = np.interp(indices, np.arange(len(waveform)), waveform).astype(
+            np.float32
+        )
     return waveform
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate Diffusion Speech Translation model with batching.")
-    parser.add_argument("--repo-id", type=str, default="aiai-laboratory/diffusion-speech-translation-from-vi-v1", help="Model repo ID")
-    parser.add_argument("--dataset-id", type=str, default="aiai-laboratory/vietspeech-validation-translated", help="Dataset repo ID")
-    parser.add_argument("--limit", type=int, default=100, help="Number of samples to evaluate (-1 for all)")
-    parser.add_argument("--batch-size", type=int, default=16, help="Batch size for evaluation")
-    parser.add_argument("--tasks", type=str, default="english,chinese,korean", help="Comma-separated tasks to evaluate")
-    parser.add_argument("--compile", action="store_true", help="Compile model with torch.compile")
+    parser = argparse.ArgumentParser(
+        description="Evaluate Diffusion Speech Translation model with batching."
+    )
+    parser.add_argument(
+        "--repo-id",
+        type=str,
+        default="aiai-laboratory/diffusion-speech-translation-from-vi-v1",
+        help="Model repo ID",
+    )
+    parser.add_argument(
+        "--dataset-id",
+        type=str,
+        default="aiai-laboratory/vietspeech-validation-translated",
+        help="Dataset repo ID",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="Number of samples to evaluate (-1 for all)",
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=16, help="Batch size for evaluation"
+    )
+    parser.add_argument(
+        "--tasks",
+        type=str,
+        default="english,chinese,korean",
+        help="Comma-separated tasks to evaluate",
+    )
+    parser.add_argument(
+        "--compile", action="store_true", help="Compile model with torch.compile"
+    )
     parser.add_argument("--device", type=str, default=None, help="Device (cuda or cpu)")
-    parser.add_argument("--iterations", type=int, default=10, help="Number of diffusion iterations")
-    parser.add_argument("--max-length", type=int, default=64, help="Max length of target text")
-    parser.add_argument("--oracle-length", action="store_true", help="Use oracle target length")
-    parser.add_argument("--strategy", type=str, default="reparam-uncond-deterministic-cosine", help="Decoding strategy")
-    parser.add_argument("--output-json", type=str, default="evaluation_results.json", help="Path to save evaluation results")
+    parser.add_argument(
+        "--iterations", type=int, default=10, help="Number of diffusion iterations"
+    )
+    parser.add_argument(
+        "--max-length", type=int, default=64, help="Max length of target text"
+    )
+    parser.add_argument(
+        "--oracle-length", action="store_true", help="Use oracle target length"
+    )
+    parser.add_argument(
+        "--strategy",
+        type=str,
+        default="reparam-uncond-deterministic-cosine",
+        help="Decoding strategy",
+    )
+    parser.add_argument(
+        "--output-json",
+        type=str,
+        default="evaluation_results.json",
+        help="Path to save evaluation results",
+    )
     args = parser.parse_args()
 
     if args.device is None:
@@ -57,32 +103,47 @@ def main():
         device = args.device
 
     print(f"Loading tokenizer from {args.repo_id}...")
-    tokenizer = AutoTokenizer.from_pretrained(args.repo_id, trust_remote_code=True, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.repo_id, trust_remote_code=True, use_fast=False
+    )
 
     print(f"Loading config and model from {args.repo_id}...")
     from huggingface_hub import hf_hub_download
+
     config_path = hf_hub_download(repo_id=args.repo_id, filename="config.json")
     with open(config_path) as f:
         config_dict = json.load(f)
-    config = DiscreteDiffusionConfig(**{
-        k: v for k, v in config_dict.items()
-        if not k.startswith("_") and k != "model_type" and k != "transformers_version"
-        and k != "auto_map"
-    })
+    config = DiscreteDiffusionConfig(
+        **{
+            k: v
+            for k, v in config_dict.items()
+            if not k.startswith("_")
+            and k != "model_type"
+            and k != "transformers_version"
+            and k != "auto_map"
+        }
+    )
 
     model = DiscreteDiffusionModel(config)
 
     try:
-        weights_path = hf_hub_download(repo_id=args.repo_id, filename="model.safetensors")
+        weights_path = hf_hub_download(
+            repo_id=args.repo_id, filename="model.safetensors"
+        )
         from safetensors.torch import load_file
+
         state_dict = load_file(weights_path, device="cpu")
     except Exception:
-        weights_path = hf_hub_download(repo_id=args.repo_id, filename="pytorch_model.bin")
+        weights_path = hf_hub_download(
+            repo_id=args.repo_id, filename="pytorch_model.bin"
+        )
         state_dict = torch.load(weights_path, map_location="cpu", weights_only=True)
 
     model.load_state_dict(state_dict, strict=False)
     if config.tie_word_embeddings:
-        model.model.lm_head.decoder.weight = model.model.roberta.embeddings.word_embeddings.weight
+        model.model.lm_head.decoder.weight = (
+            model.model.roberta.embeddings.word_embeddings.weight
+        )
 
     model = model.eval().to(device)
     if device == "cuda":
@@ -94,10 +155,12 @@ def main():
         model = torch.compile(model)
 
     print(f"Loading feature extractor from {config.audio_encoder_name}...")
-    feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(config.audio_encoder_name)
+    feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
+        config.audio_encoder_name
+    )
 
     print(f"Loading dataset {args.dataset_id}...")
-    ds = load_dataset(args.dataset_id)['validation']
+    ds = load_dataset(args.dataset_id)["validation"]
     total_samples = len(ds)
     limit = args.limit if args.limit > 0 else total_samples
     print(f"Loaded {total_samples} samples. Evaluating on the first {limit} samples.")
@@ -108,8 +171,10 @@ def main():
         "chinese": ("Translation (ZH)", "<vi_zh>", "bleu"),
         "korean": ("Translation (KO)", "<vi_ko>", "bleu"),
     }
-    
-    selected_task_names = [t.strip() for t in args.tasks.split(",") if t.strip() in all_tasks]
+
+    selected_task_names = [
+        t.strip() for t in args.tasks.split(",") if t.strip() in all_tasks
+    ]
     tasks = {t: all_tasks[t] for t in selected_task_names}
     print(f"Selected tasks: {list(tasks.keys())}")
 
@@ -124,7 +189,10 @@ def main():
         if token is not None:
             task_token_ids[task_name] = tokenizer.convert_tokens_to_ids(token)
 
-    results = {task_name: {"refs": [], "hyps": [], "times": [], "lengths": []} for task_name in tasks}
+    results = {
+        task_name: {"refs": [], "hyps": [], "times": [], "lengths": []}
+        for task_name in tasks
+    }
     audio_durations = []
 
     # Batching loop
@@ -132,12 +200,12 @@ def main():
     for batch_idx in tqdm(range(0, limit, batch_size), desc="Evaluating batches"):
         actual_batch_size = min(batch_size, limit - batch_idx)
         batch_rows = [ds[batch_idx + i] for i in range(actual_batch_size)]
-        
+
         # 1. Load and process audio for the batch
         batch_waveforms = []
         batch_durations = []
         skip_indices = []
-        
+
         for idx, row in enumerate(batch_rows):
             raw_bytes = row["audio"]["bytes"]
             try:
@@ -146,32 +214,42 @@ def main():
                 duration = len(waveform) / 16000
                 batch_durations.append(duration)
             except Exception as e:
-                print(f"\nFailed to load audio for index {batch_idx + idx}: {e}. Skipping sample.")
+                print(
+                    f"\nFailed to load audio for index {batch_idx + idx}: {e}. Skipping sample."
+                )
                 skip_indices.append(idx)
-                
+
         if not batch_waveforms:
             continue
-            
+
         audio_durations.extend(batch_durations)
 
         # Pad audio inputs to the maximum audio length in the batch (rounded to multiple of 80)
         max_audio_len = max(w.shape[0] for w in batch_waveforms)
         padded_audio_len = ((max_audio_len + 79) // 80) * 80
-        
-        audio_values = torch.zeros(len(batch_waveforms), padded_audio_len, device=device)
-        audio_attention_mask = torch.zeros(len(batch_waveforms), padded_audio_len, dtype=torch.long, device=device)
-        
+
+        audio_values = torch.zeros(
+            len(batch_waveforms), padded_audio_len, device=device
+        )
+        audio_attention_mask = torch.zeros(
+            len(batch_waveforms), padded_audio_len, dtype=torch.long, device=device
+        )
+
         for idx, waveform in enumerate(batch_waveforms):
-            audio_inputs = feature_extractor(waveform, sampling_rate=16000, return_tensors="pt")
+            audio_inputs = feature_extractor(
+                waveform, sampling_rate=16000, return_tensors="pt"
+            )
             raw_val = audio_inputs.input_values.to(device)[0]
-            audio_values[idx, :raw_val.size(0)] = raw_val
-            audio_attention_mask[idx, :raw_val.size(0)] = 1
-            
+            audio_values[idx, : raw_val.size(0)] = raw_val
+            audio_attention_mask[idx, : raw_val.size(0)] = 1
+
         if device == "cuda":
             audio_values = audio_values.to(torch.bfloat16)
 
         # Filter batch rows to remove skipped ones
-        valid_batch_rows = [r for idx, r in enumerate(batch_rows) if idx not in skip_indices]
+        valid_batch_rows = [
+            r for idx, r in enumerate(batch_rows) if idx not in skip_indices
+        ]
 
         # 2. Run each task
         for task_name, (label, token, metric_name) in tasks.items():
@@ -188,7 +266,7 @@ def main():
             for idx, row in enumerate(valid_batch_rows):
                 ref_text = row[task_name].strip()
                 audio_dur = batch_durations[idx]
-                
+
                 if args.oracle_length:
                     ref_tokens = tokenizer.encode(ref_text, add_special_tokens=False)
                     canvas_len = len(ref_tokens)
@@ -198,7 +276,7 @@ def main():
                     else:
                         canvas_len = int(audio_dur * 2.5)
                     canvas_len = max(5, min(args.max_length, canvas_len))
-                    
+
                 seq = prefix + [mask_id] * canvas_len + [eos_id]
                 sequences.append(torch.tensor(seq, dtype=torch.long))
 
@@ -208,15 +286,21 @@ def main():
             ).to(device)
 
             # Create masks
-            prefix_lengths = torch.tensor([src_length] * len(valid_batch_rows), dtype=torch.long, device=device)
-            position_ids = torch.arange(canvas.size(1), device=device).unsqueeze(0).expand(canvas.size(0), -1)
+            prefix_lengths = torch.tensor(
+                [src_length] * len(valid_batch_rows), dtype=torch.long, device=device
+            )
+            position_ids = (
+                torch.arange(canvas.size(1), device=device)
+                .unsqueeze(0)
+                .expand(canvas.size(0), -1)
+            )
             partial_mask = position_ids < prefix_lengths.unsqueeze(1)
 
             non_fixed_sym_masks = (
-                canvas.ne(pad_id) &
-                canvas.ne(bos_id) &
-                canvas.ne(eos_id) &
-                ~partial_mask
+                canvas.ne(pad_id)
+                & canvas.ne(bos_id)
+                & canvas.ne(eos_id)
+                & ~partial_mask
             )
 
             output_scores = torch.zeros_like(canvas, dtype=torch.float32)
@@ -258,13 +342,15 @@ def main():
                 out_tokens = decoder_out.output_tokens[idx]
                 p_mask = partial_mask[idx]
                 cutoff = (
-                    out_tokens.ne(pad_id) &
-                    out_tokens.ne(bos_id) &
-                    out_tokens.ne(eos_id) &
-                    ~p_mask
+                    out_tokens.ne(pad_id)
+                    & out_tokens.ne(bos_id)
+                    & out_tokens.ne(eos_id)
+                    & ~p_mask
                 )
                 gen_tokens = out_tokens[cutoff]
-                pred_text = tokenizer.decode(gen_tokens.cpu(), skip_special_tokens=True).strip()
+                pred_text = tokenizer.decode(
+                    gen_tokens.cpu(), skip_special_tokens=True
+                ).strip()
 
                 results[task_name]["refs"].append(row[task_name].strip())
                 results[task_name]["hyps"].append(pred_text)
@@ -273,14 +359,14 @@ def main():
 
     # Calculate metrics
     metrics_summary = {}
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(" EVALUATION RESULTS SUMMARY")
-    print("="*60)
-    
+    print("=" * 60)
+
     total_audio_time = sum(audio_durations)
     print(f"Total audio duration: {total_audio_time:.2f}s")
     print(f"Number of samples evaluated: {len(audio_durations)}")
-    print("-"*60)
+    print("-" * 60)
 
     for task_name, (label, _, metric_type) in tasks.items():
         task_data = results[task_name]
@@ -299,13 +385,17 @@ def main():
         tokens_per_sec = total_tokens / total_task_time if total_task_time > 0 else 0.0
 
         tok = "zh" if task_name == "chinese" else "13a"
-        
+
         # Calculate BLEU-1, BLEU-2, BLEU-3, BLEU-4
         bleu_scores = {}
         for n in [1, 2, 3, 4]:
-            bleu_score = sacrebleu.metrics.BLEU(tokenize=tok, max_ngram_order=n).corpus_score(hyps, [refs]).score
+            bleu_score = (
+                sacrebleu.metrics.BLEU(tokenize=tok, max_ngram_order=n)
+                .corpus_score(hyps, [refs])
+                .score
+            )
             bleu_scores[f"bleu-{n}"] = bleu_score
-            
+
         metric_str = f"BLEU-1: {bleu_scores['bleu-1']:.2f} | BLEU-2: {bleu_scores['bleu-2']:.2f} | BLEU-3: {bleu_scores['bleu-3']:.2f} | BLEU-4: {bleu_scores['bleu-4']:.2f}"
         metrics_summary[task_name] = {
             "bleu-1": bleu_scores["bleu-1"],
@@ -314,18 +404,20 @@ def main():
             "bleu-4": bleu_scores["bleu-4"],
         }
 
-        metrics_summary[task_name].update({
-            "avg_time_per_sample_sec": float(avg_time),
-            "rtf": float(rtf),
-            "tokens_per_sec": float(tokens_per_sec)
-        })
+        metrics_summary[task_name].update(
+            {
+                "avg_time_per_sample_sec": float(avg_time),
+                "rtf": float(rtf),
+                "tokens_per_sec": float(tokens_per_sec),
+            }
+        )
 
         print(f"{label}:")
         print(f"  {metric_str}")
         print(f"  Avg inference time per sample: {avg_time:.3f}s")
         print(f"  Real-Time Factor (RTF): {rtf:.3f}")
         print(f"  Generation speed: {tokens_per_sec:.1f} tokens/sec")
-        print("-"*60)
+        print("-" * 60)
 
     # Save to json
     output_data = {
@@ -336,13 +428,15 @@ def main():
                 "refs": v["refs"],
                 "hyps": v["hyps"],
                 "times": v["times"],
-                "lengths": v["lengths"]
-            } for k, v in results.items()
-        }
+                "lengths": v["lengths"],
+            }
+            for k, v in results.items()
+        },
     }
     with open(args.output_json, "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
     print(f"Results saved to {args.output_json}")
+
 
 if __name__ == "__main__":
     main()

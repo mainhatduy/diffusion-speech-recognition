@@ -23,7 +23,9 @@ try:
     import penman
     from smatchpp import Smatchpp, solvers
     from smatchpp.formalism.generic import tools as generictools
-    from data.amr_process.postprocessing_str import postprocess_str_after_delinearization
+    from data.amr_process.postprocessing_str import (
+        postprocess_str_after_delinearization,
+    )
 except ImportError:
     penman = None
     Smatchpp = None
@@ -31,39 +33,19 @@ except ImportError:
     generictools = None
     postprocess_str_after_delinearization = None
 
+
 @dataclass
 class DiscreteDiffusionGeneratorArguments:
-    max_iterations: int = field(
-        default=10
-    )
-    mbr: int = field(
-        default=1
-    )
-    length_beam: int = field(
-        default=1
-    )
-    oracle_length: bool = field(
-        default=False
-    )
-    strategy: str = field(
-        default="reparam-uncond-deterministic-cosine"
-    )
-    argmax_decoding: bool = field(
-        default=True
-    )
-    bpe: str = field(
-        default="sentencepiece"
-    )
-    bleu_tokenize: str = field(
-        default="13a"
-    )
-    return_history: bool = field(
-        default=False
-    )
-    temperature: float = field(
-        default=0.8
-    )
-
+    max_iterations: int = field(default=10)
+    mbr: int = field(default=1)
+    length_beam: int = field(default=1)
+    oracle_length: bool = field(default=False)
+    strategy: str = field(default="reparam-uncond-deterministic-cosine")
+    argmax_decoding: bool = field(default=True)
+    bpe: str = field(default="sentencepiece")
+    bleu_tokenize: str = field(default="13a")
+    return_history: bool = field(default=False)
+    temperature: float = field(default=0.8)
 
 
 def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
@@ -80,13 +62,15 @@ def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
     else:
         _scores = scores
     sorted_index = _scores.sort(-1)[0]
-    cutoff = sorted_index.gather(dim=-1, index=cutoff_len) # + 1e-10
+    cutoff = sorted_index.gather(dim=-1, index=cutoff_len)  # + 1e-10
     # cutoff_len = k -> select k + 1 tokens
     masking = _scores < cutoff
     try:
         assert (~(cutoff_len == 0).all()) | (~masking).all()
     except:
-        import ipdb;ipdb.set_trace()
+        import ipdb
+
+        ipdb.set_trace()
     return masking
 
 
@@ -97,12 +81,14 @@ class MergeBLEU(object):
         # else:
         #     import time; time.sleep(120)
         import inspect
+
         sys_stats, ref_stats = evalpreds[0], evalpreds[1]
-        
-        sys_stats = sys_stats.reshape(-1, 5).astype('long').sum(0).tolist()
-        ref_stats = ref_stats.reshape(-1, 5).astype('long').sum(0).tolist()
+
+        sys_stats = sys_stats.reshape(-1, 5).astype("long").sum(0).tolist()
+        ref_stats = ref_stats.reshape(-1, 5).astype("long").sum(0).tolist()
         try:
             from sacrebleu.metrics import BLEU
+
             comp_bleu = BLEU.compute_bleu
         except ImportError:
             comp_bleu = sacrebleu.compute_bleu
@@ -113,13 +99,14 @@ class MergeBLEU(object):
             smooth = {"smooth": "exp"}
         return {
             "bleu": comp_bleu(
-                correct=sys_stats[:4], 
+                correct=sys_stats[:4],
                 total=ref_stats[:4],
                 sys_len=sys_stats[-1],
                 ref_len=ref_stats[-1],
-                **smooth
+                **smooth,
             ).score
         }
+
 
 class MergeRouge(object):
     def __call__(self, evalpreds):
@@ -128,42 +115,46 @@ class MergeRouge(object):
         # else:
         #     import time; time.sleep(120)
         import inspect
+
         # sys
         avg_rouge, batch_size = evalpreds[0], evalpreds[1]
-        
+
         rouge = (avg_rouge * batch_size).sum() / batch_size.sum()
-        
-        return {
-            "rouge": rouge
-        }
+
+        return {"rouge": rouge}
 
 
 class MergeSmatchPP(object):
     """Metric class for Smatch++ score computation during training."""
+
     def __call__(self, evalpreds):
         # evalpreds[0] contains metrics dict from compute_smatchpp
         # evalpreds[1] contains count (for aggregation)
         metrics_tensor = evalpreds[0]
-        
+
         # metrics_tensor has shape [N, 3] where N is number of batches
         # Each row contains [f1, precision, recall]
         if len(metrics_tensor.shape) > 1:
             # Average across all batches
-            f1_scores = metrics_tensor[:, 0].astype('float')
-            precision_scores = metrics_tensor[:, 1].astype('float')
-            recall_scores = metrics_tensor[:, 2].astype('float')
-            
+            f1_scores = metrics_tensor[:, 0].astype("float")
+            precision_scores = metrics_tensor[:, 1].astype("float")
+            recall_scores = metrics_tensor[:, 2].astype("float")
+
             return {
                 "smatchpp": float(f1_scores.mean()),
                 "smatchpp_precision": float(precision_scores.mean()),
-                "smatchpp_recall": float(recall_scores.mean())
+                "smatchpp_recall": float(recall_scores.mean()),
             }
         else:
             # Single value case
             return {
                 "smatchpp": float(metrics_tensor[0]),
-                "smatchpp_precision": float(metrics_tensor[1]) if len(metrics_tensor) > 1 else 0.0,
-                "smatchpp_recall": float(metrics_tensor[2]) if len(metrics_tensor) > 2 else 0.0
+                "smatchpp_precision": (
+                    float(metrics_tensor[1]) if len(metrics_tensor) > 1 else 0.0
+                ),
+                "smatchpp_recall": (
+                    float(metrics_tensor[2]) if len(metrics_tensor) > 2 else 0.0
+                ),
             }
 
 
@@ -196,9 +187,9 @@ class MergeWER(object):
 # Fixed number of stat slots reserved for each metric.
 # Both sys_stat and ref_stat use the same layout.
 _METRIC_SLOT_SIZES = {
-    "bleu": 5,    # [c1, c2, c3, c4, sys/ref_len]
-    "wer":  1,    # [edit_dist / ref_word_count]
-    "rouge": 1,   # [weighted_sum / batch_count]
+    "bleu": 5,  # [c1, c2, c3, c4, sys/ref_len]
+    "wer": 1,  # [edit_dist / ref_word_count]
+    "rouge": 1,  # [weighted_sum / batch_count]
 }
 
 
@@ -220,7 +211,9 @@ class MultiMetric:
         # Validate & compute slot layout
         for m in metrics:
             if m not in _METRIC_SLOT_SIZES:
-                raise ValueError(f"Unknown metric '{m}'. Supported: {list(_METRIC_SLOT_SIZES)}")
+                raise ValueError(
+                    f"Unknown metric '{m}'. Supported: {list(_METRIC_SLOT_SIZES)}"
+                )
         self._delegates = {
             "bleu": MergeBLEU(),
             "wer": MergeWER(),
@@ -233,8 +226,8 @@ class MultiMetric:
         offset = 0
         for metric in self.metrics:
             size = _METRIC_SLOT_SIZES[metric]
-            sys_slice = sys_stats[..., offset:offset + size]
-            ref_slice = ref_stats[..., offset:offset + size]
+            sys_slice = sys_stats[..., offset : offset + size]
+            ref_slice = ref_stats[..., offset : offset + size]
             results.update(self._delegates[metric]((sys_slice, ref_slice)))
             offset += size
         return results
@@ -242,16 +235,16 @@ class MultiMetric:
 
 class DiscreteDiffusionGenerator:
     def __init__(self, args, dictionary=None, tokenizer=None) -> None:
-        self.args = args 
+        self.args = args
         self.dictionary = dictionary
         self.tokenizer = tokenizer
         self.write_prediction = None
-    
+
         assert (dictionary is not None) or (tokenizer is not None)
         assert (dictionary is None) ^ (tokenizer is None)
-        
+
         self.retain_history = args.return_history
-        
+
         if dictionary is not None:
             self.pad_id = dictionary.pad()
             self.bos_id = dictionary.bos()
@@ -262,27 +255,27 @@ class DiscreteDiffusionGenerator:
             self.bos_id = tokenizer.bos_token_id
             self.eos_id = tokenizer.eos_token_id
             self.mask_id = tokenizer.mask_token_id
-    
+
         self.rouge = Rouge(["rouge-l"])
-    
+
     def set_write_to(self, path):
         self.write_prediction = path
-    
+
     def _reparam_decoding(
-        self, 
-        output_tokens, 
-        output_scores, 
+        self,
+        output_tokens,
+        output_scores,
         cur_tokens,
         cur_scores,
         decoding_strategy,
-        xt_neq_x0, 
-        non_special_sym_mask, 
+        xt_neq_x0,
+        non_special_sym_mask,
         t,
         max_step,
-        noise
+        noise,
     ):
         """
-            This function is used to perform reparameterized decoding.
+        This function is used to perform reparameterized decoding.
         """
         # output_tokens: [B, N]
         # output_scores: [B, N]
@@ -291,7 +284,7 @@ class DiscreteDiffusionGenerator:
         # xt_neq_x0: equivalent to not_b_t [B, N]
         # non_special_sym_mask: [B, N]
         # noise: either [B, N] or scalar (if using the mask noise)
-        
+
         # decoding_strategy needs to take the form of "reparam-<conditioning>-<topk_mode>-<schedule>"
         _, condition, topk_mode, schedule = decoding_strategy.split("-")
 
@@ -306,42 +299,48 @@ class DiscreteDiffusionGenerator:
         # compute the cutoff length for denoising top-k positions
         cutoff_len = (
             non_special_sym_mask.sum(1, keepdim=True).type_as(output_scores) * rate
-            ).long()
+        ).long()
         # set the scores of special symbols to a large value so that they will never be selected
         _scores_for_topk = cur_scores.masked_fill(~non_special_sym_mask, 1000.0)
-        
+
         # the top-k selection can be done in two ways: stochastic by injecting Gumbel noise or deterministic
         if topk_mode.startswith("stochastic"):
             noise_scale = float(topk_mode.replace("stochastic", ""))
-            lowest_k_mask = topk_masking(_scores_for_topk, cutoff_len, stochastic=True, temp=noise_scale * rate)
+            lowest_k_mask = topk_masking(
+                _scores_for_topk, cutoff_len, stochastic=True, temp=noise_scale * rate
+            )
         elif topk_mode == "deterministic":
             lowest_k_mask = topk_masking(_scores_for_topk, cutoff_len, stochastic=False)
         else:
             raise NotImplementedError
-        
+
         # Various choices to generate v_t := [v1_t, v2_t].
-        # Note that 
+        # Note that
         #   v1_t governs the outcomes of tokens where b_t = 1,
         #   v2_t governs the outcomes of tokens where b_t = 0.
-        
+
         # #### the `uncond` mode ####
-        # In our reparameterized decoding, 
+        # In our reparameterized decoding,
         # both v1_t and v2_t can be fully determined by the current token scores .
-        
+
         # #### the `cond` mode ####
         # However, we can also impose some conditional constraints on v1_t so that
         # the decoding can be performed in a more conservative manner.
-        # For example, we can set v1_t = 0 only when 
+        # For example, we can set v1_t = 0 only when
         # (the newly output tokens are the same as previous denoised results, AND
         # the current token score becomes lower, AND
         # the current token score is not in the top-k share among all tokens).
         if condition == "cond":
-            not_v1_t = (cur_tokens == output_tokens) & (cur_scores < output_scores) & lowest_k_mask
+            not_v1_t = (
+                (cur_tokens == output_tokens)
+                & (cur_scores < output_scores)
+                & lowest_k_mask
+            )
         elif condition == "uncond":
             not_v1_t = lowest_k_mask
         else:
             raise NotImplementedError
-        
+
         # for b_t = 0, the token is set to noise if it is in the lowest k scores.
         not_v2_t = lowest_k_mask
 
@@ -362,13 +361,20 @@ class DiscreteDiffusionGenerator:
         # NOT_b_{t} = (NOT_b_{t+1} | not_v1_t) & not_v2_t
         new_xt_neq_x0 = (xt_neq_x0 | not_v1_t) & not_v2_t
         return new_xt_neq_x0
-    
-    def denoise_step(self, model, decoder_out, partial_masks,
-                     audio_features=None, audio_attention_mask=None,
-                     precomputed_audio_embeds=None, precomputed_audio_mask=None):
+
+    def denoise_step(
+        self,
+        model,
+        decoder_out,
+        partial_masks,
+        audio_features=None,
+        audio_attention_mask=None,
+        precomputed_audio_embeds=None,
+        precomputed_audio_mask=None,
+    ):
         output_tokens = decoder_out.output_tokens
         output_scores = decoder_out.output_scores
-        prev_step, cur_step = decoder_out.step, decoder_out.step + 1 
+        prev_step, cur_step = decoder_out.step, decoder_out.step + 1
         max_step = decoder_out.max_step
         temperature = self.args.temperature
         # temperature = (
@@ -376,18 +382,22 @@ class DiscreteDiffusionGenerator:
         #     if self.temperature_annealing
         #     else self.temperature
         # )
-        
+
         # t = torch.LongTensor(
         #     [(max_step - prev_step) * (model.num_diffusion_timesteps // max_step)] * output_tokens.size(0)
         # ).to(output_tokens)
-        logits = model(output_tokens, partial_masks,
-                       audio_features=audio_features, audio_attention_mask=audio_attention_mask,
-                       precomputed_audio_embeds=precomputed_audio_embeds, precomputed_audio_mask=precomputed_audio_mask)
-        
+        logits = model(
+            output_tokens,
+            partial_masks,
+            audio_features=audio_features,
+            audio_attention_mask=audio_attention_mask,
+            precomputed_audio_embeds=precomputed_audio_embeds,
+            precomputed_audio_mask=precomputed_audio_mask,
+        )
+
         logits[..., self.mask_id] = -math.inf
         scores = torch.log_softmax(logits, dim=-1)
-        
-        
+
         if self.args.strategy == "cmlm":
             # get the mask
             # <bos>, <eos> are ignored in this case since
@@ -395,7 +405,10 @@ class DiscreteDiffusionGenerator:
             output_masks = output_tokens.eq(self.mask_id)
             unmask_prob = 1 / (max_step - prev_step)
             # where to unmask
-            changes = torch.rand(output_tokens.shape, device=output_tokens.device) < unmask_prob
+            changes = (
+                torch.rand(output_tokens.shape, device=output_tokens.device)
+                < unmask_prob
+            )
             # don't unmask somewhere already unmasked
             changes = torch.bitwise_and(changes, output_masks)
 
@@ -403,27 +416,43 @@ class DiscreteDiffusionGenerator:
                 output_scores, new_tokens = scores.max(-1)
             else:
                 new_tokens = dists.Categorical(logits=scores / temperature).sample()
-                output_scores = torch.gather(scores, -1, new_tokens.unsqueeze(-1)).squeeze(-1)
+                output_scores = torch.gather(
+                    scores, -1, new_tokens.unsqueeze(-1)
+                ).squeeze(-1)
             output_tokens[changes] = new_tokens[changes]
         elif self.args.strategy == "ar":
             output_masks = output_tokens.eq(self.mask_id)
-            unmask_indices = (output_tokens.ne(self.mask_id) & output_tokens.ne(self.eos_id) & output_tokens.ne(self.pad_id)).sum(dim=-1)
-            indices = torch.arange(output_tokens.size(-1)).expand(output_tokens.shape).to(output_masks.device)
+            unmask_indices = (
+                output_tokens.ne(self.mask_id)
+                & output_tokens.ne(self.eos_id)
+                & output_tokens.ne(self.pad_id)
+            ).sum(dim=-1)
+            indices = (
+                torch.arange(output_tokens.size(-1))
+                .expand(output_tokens.shape)
+                .to(output_masks.device)
+            )
             if self.args.argmax_decoding:
                 output_scores, new_tokens = scores.max(-1)
             else:
                 new_tokens = dists.Categorical(logits=scores / temperature).sample()
-                output_scores = torch.gather(scores, -1, new_tokens.unsqueeze(-1)).squeeze(-1)
-            output_tokens[unmask_indices[:, None]==indices] = new_tokens[unmask_indices[:, None]==indices]
+                output_scores = torch.gather(
+                    scores, -1, new_tokens.unsqueeze(-1)
+                ).squeeze(-1)
+            output_tokens[unmask_indices[:, None] == indices] = new_tokens[
+                unmask_indices[:, None] == indices
+            ]
             # output_tokens[changes] = new_tokens[changes]
         else:
             if self.args.argmax_decoding:
                 cur_scores, cur_tokens = scores.max(-1)
             else:
                 cur_tokens = dists.Categorical(logits=scores / temperature).sample()
-                cur_scores = torch.gather(scores, -1, cur_tokens.unsqueeze(-1)).squeeze(-1)
+                cur_scores = torch.gather(scores, -1, cur_tokens.unsqueeze(-1)).squeeze(
+                    -1
+                )
             cur_scores = cur_scores.to(output_scores)
-            
+
             output_masks = self._reparam_decoding(
                 output_tokens=output_tokens,
                 output_scores=output_scores,
@@ -434,16 +463,18 @@ class DiscreteDiffusionGenerator:
                 non_special_sym_mask=decoder_out.non_fixed_sym_masks,
                 t=cur_step,
                 max_step=max_step,
-                noise=self.mask_id
+                noise=self.mask_id,
             )
         if self.retain_history:
-            history = ([] if decoder_out.history is None else decoder_out.history) + [output_tokens.clone()]
+            history = ([] if decoder_out.history is None else decoder_out.history) + [
+                output_tokens.clone()
+            ]
         else:
             history = None
         # history = (
         #     decoder_out.history + [output_tokens.clone()]
         #     if self.retain_history
-        #     else None 
+        #     else None
         # )
         return decoder_out._replace(
             step=cur_step,
@@ -453,33 +484,34 @@ class DiscreteDiffusionGenerator:
             history=history,
         )
 
-    
     def decode(self, seqs_tensors, preserve_special=False):
         seqs_tensors[seqs_tensors < 0] = self.pad_id
         if self.dictionary is not None:
             seqs = [
                 self.dictionary.string(seq, self.args.bpe).strip()
                 for seq in seqs_tensors
-            ] 
+            ]
             if not preserve_special:
-                seqs = [seq.replace(self.dictionary.pad_word, '') for seq in seqs]
+                seqs = [seq.replace(self.dictionary.pad_word, "") for seq in seqs]
         else:
-            seqs = self.tokenizer.batch_decode(seqs_tensors, skip_special_tokens=(not preserve_special))
+            seqs = self.tokenizer.batch_decode(
+                seqs_tensors, skip_special_tokens=(not preserve_special)
+            )
         return [seq.lower() for seq in seqs]
-    
+
     def compute_bleu(self, hyps, refs):
         if isinstance(hyps, torch.Tensor):
             hyps = self.decode(hyps)
         if isinstance(refs, torch.Tensor):
             refs = self.decode(refs)
         return sacrebleu.corpus_bleu(hyps, [refs], tokenize=self.args.bleu_tokenize)
-   
+
     def compute_rouge(self, hyps, refs):
         if isinstance(hyps, torch.Tensor):
             hyps = self.decode(hyps)
         if isinstance(refs, torch.Tensor):
-            refs = self.decode(refs) 
-        return self.rouge.get_scores(hyps, [[ref] for ref in refs])['rouge-l']['f']
+            refs = self.decode(refs)
+        return self.rouge.get_scores(hyps, [[ref] for ref in refs])["rouge-l"]["f"]
 
     def compute_wer(self, hyps, refs):
         """Return (total_edit_distance, total_ref_word_count) for the batch.
@@ -522,17 +554,18 @@ class DiscreteDiffusionGenerator:
 
         return total_edit, total_ref_words
 
-
     def compute_penman(self, hyps, refs):
         """Compute percentage of valid Penman AMR graphs."""
         if isinstance(hyps, torch.Tensor):
             hyps = self.decode(hyps)
         if isinstance(refs, torch.Tensor):
             refs = self.decode(refs)
-        
+
         if penman is None:
-            raise ImportError("penman library is required. Install with: pip install penman")
-        
+            raise ImportError(
+                "penman library is required. Install with: pip install penman"
+            )
+
         valid_count = 0
         for hyp in hyps:
             try:
@@ -542,33 +575,35 @@ class DiscreteDiffusionGenerator:
             except:
                 # Invalid Penman notation
                 pass
-        
+
         return valid_count
-    
+
     def compute_smatchpp(self, hyps, refs):
         """Compute Smatch++ F1 score for AMR graphs."""
         if isinstance(hyps, torch.Tensor):
             hyps = self.decode(hyps)
         if isinstance(refs, torch.Tensor):
             refs = self.decode(refs)
-        
+
         if Smatchpp is None or solvers is None or generictools is None:
-            raise ImportError("smatchpp library is required. Install with: pip install smatchpp")
-        
+            raise ImportError(
+                "smatchpp library is required. Install with: pip install smatchpp"
+            )
+
         if postprocess_str_after_delinearization is None:
             raise ImportError("postprocessing_str module is required")
-        
+
         try:
             # Delinearize AMR strings to convert from linear format to standard AMR format
             delinearized_hyps = []
             delinearized_refs = []
-            
+
             for hyp, ref in zip(hyps, refs):
                 try:
                     # Apply delinearization postprocessing
                     delinearized_hyp = postprocess_str_after_delinearization(hyp)
                     delinearized_ref = postprocess_str_after_delinearization(ref)
-                    
+
                     delinearized_hyps.append(delinearized_hyp)
                     delinearized_refs.append(delinearized_ref)
                 except Exception as e:
@@ -576,30 +611,34 @@ class DiscreteDiffusionGenerator:
                     print(f"Delinearization failed for a sample: {e}")
                     delinearized_hyps.append(hyp)
                     delinearized_refs.append(ref)
-            
+
             # Setup Smatch++ with graph standardizer and ILP solver
             graph_standardizer = generictools.GenericStandardizer()
             ilp = solvers.ILP()
-            measure = Smatchpp(alignmentsolver=ilp, graph_standardizer=graph_standardizer)
-            
+            measure = Smatchpp(
+                alignmentsolver=ilp, graph_standardizer=graph_standardizer
+            )
+
             # Compute score for the corpus
-            score, optimization_status = measure.score_corpus(delinearized_hyps, delinearized_refs)
-            
+            score, optimization_status = measure.score_corpus(
+                delinearized_hyps, delinearized_refs
+            )
+
             # Extract all metrics from result
-            f1_score = score['main']['F1']['result']
-            precision_score = score['main']['Precision']['result']
-            recall_score = score['main']['Recall']['result']
-            
+            f1_score = score["main"]["F1"]["result"]
+            precision_score = score["main"]["Precision"]["result"]
+            recall_score = score["main"]["Recall"]["result"]
+
             return {
-                'f1': f1_score,
-                'precision': precision_score,
-                'recall': recall_score
+                "f1": f1_score,
+                "precision": precision_score,
+                "recall": recall_score,
             }
         except Exception as e:
             # Return 0 if computation fails
             print(f"Smatch++ computation failed: {e}")
-            return {'f1': 0.0, 'precision': 0.0, 'recall': 0.0}
-    
+            return {"f1": 0.0, "precision": 0.0, "recall": 0.0}
+
     def stepwise_generate(self, model, inputs):
         src_tokens = inputs["net_input"]["src_tokens"]
         partial_masks = inputs["net_input"]["partial_masks"]
@@ -611,26 +650,39 @@ class DiscreteDiffusionGenerator:
             prefix_masks = inputs["net_input"]["prefix_masks"]
         else:
             prefix_masks = partial_masks
-        
+
         # Extract audio features if present
         audio_features = inputs["net_input"].get("audio_features", None)
         audio_attention_mask = inputs["net_input"].get("audio_attention_mask", None)
-        precomputed_audio_embeds = inputs["net_input"].get("precomputed_audio_embeds", None)
+        precomputed_audio_embeds = inputs["net_input"].get(
+            "precomputed_audio_embeds", None
+        )
         precomputed_audio_mask = inputs["net_input"].get("precomputed_audio_mask", None)
-        
+
         # TODO: FIXME: to support general blockwise generation.
         partial_masks, prev_decoder_out = raw_model.initialize_decode_samples(
-            src_tokens, partial_masks, prefix_masks, oracle_length=self.args.oracle_length, length_beam=self.args.length_beam, mbr=self.args.mbr
+            src_tokens,
+            partial_masks,
+            prefix_masks,
+            oracle_length=self.args.oracle_length,
+            length_beam=self.args.length_beam,
+            mbr=self.args.mbr,
         )
         prev_decoder_out = prev_decoder_out._replace(
             step=0, max_step=self.args.max_iterations
         )
         for step in range(self.args.max_iterations):
-            prev_decoder_out = self.denoise_step(model, prev_decoder_out, partial_masks,
-                                                 audio_features=audio_features, audio_attention_mask=audio_attention_mask,
-                                                 precomputed_audio_embeds=precomputed_audio_embeds, precomputed_audio_mask=precomputed_audio_mask)
+            prev_decoder_out = self.denoise_step(
+                model,
+                prev_decoder_out,
+                partial_masks,
+                audio_features=audio_features,
+                audio_attention_mask=audio_attention_mask,
+                precomputed_audio_embeds=precomputed_audio_embeds,
+                precomputed_audio_mask=precomputed_audio_mask,
+            )
             yield prev_decoder_out
-            
+
     @torch.no_grad()
     def generate(self, model, inputs):
         src_tokens = inputs["net_input"]["src_tokens"]
@@ -643,31 +695,44 @@ class DiscreteDiffusionGenerator:
             prefix_masks = inputs["net_input"]["prefix_masks"]
         else:
             prefix_masks = partial_masks
-        
+
         # Extract audio features if present
         audio_features = inputs["net_input"].get("audio_features", None)
         audio_attention_mask = inputs["net_input"].get("audio_attention_mask", None)
-        precomputed_audio_embeds = inputs["net_input"].get("precomputed_audio_embeds", None)
+        precomputed_audio_embeds = inputs["net_input"].get(
+            "precomputed_audio_embeds", None
+        )
         precomputed_audio_mask = inputs["net_input"].get("precomputed_audio_mask", None)
-        
+
         partial_masks, prev_decoder_out = model.initialize_decode_samples(
-            src_tokens, partial_masks, prefix_masks, oracle_length=self.args.oracle_length, length_beam=self.args.length_beam, mbr=self.args.mbr
+            src_tokens,
+            partial_masks,
+            prefix_masks,
+            oracle_length=self.args.oracle_length,
+            length_beam=self.args.length_beam,
+            mbr=self.args.mbr,
         )
         prev_decoder_out = prev_decoder_out._replace(
             step=0, max_step=self.args.max_iterations
         )
-        
+
         for step in range(self.args.max_iterations):
-            prev_decoder_out = self.denoise_step(model, prev_decoder_out, partial_masks,
-                                                 audio_features=audio_features, audio_attention_mask=audio_attention_mask,
-                                                 precomputed_audio_embeds=precomputed_audio_embeds, precomputed_audio_mask=precomputed_audio_mask)            
-            
+            prev_decoder_out = self.denoise_step(
+                model,
+                prev_decoder_out,
+                partial_masks,
+                audio_features=audio_features,
+                audio_attention_mask=audio_attention_mask,
+                precomputed_audio_embeds=precomputed_audio_embeds,
+                precomputed_audio_mask=precomputed_audio_mask,
+            )
+
         def finalized_hypos(tokens, scores, partial_mask, history=None):
             cutoff = (
-                tokens.ne(self.pad_id) & 
-                tokens.ne(self.bos_id) & 
-                tokens.ne(self.eos_id) & 
-                (~partial_mask)
+                tokens.ne(self.pad_id)
+                & tokens.ne(self.bos_id)
+                & tokens.ne(self.eos_id)
+                & (~partial_mask)
             )
             tokens = tokens[cutoff]
             if scores is None:
@@ -679,7 +744,7 @@ class DiscreteDiffusionGenerator:
                 "tokens": tokens,
                 "positional_scores": scores,
                 "score": score,
-                "alignment": None
+                "alignment": None,
             }
             if history is not None:
                 ret_dict["history"] = [
@@ -687,24 +752,38 @@ class DiscreteDiffusionGenerator:
                     for history_tokens in history
                 ]
             return ret_dict
-        
+
         def mbr_select(hyps):
-            index = np.argmax(np.array(
-                [self.rouge.get_scores([hyps[i]], [[hyps[j]]])['rouge-l']['f']
-                 for j in range(len(hyps)) if i != j]
-            ).mean() for i in range(len(hyps)))
+            index = np.argmax(
+                np.array(
+                    [
+                        self.rouge.get_scores([hyps[i]], [[hyps[j]]])["rouge-l"]["f"]
+                        for j in range(len(hyps))
+                        if i != j
+                    ]
+                ).mean()
+                for i in range(len(hyps))
+            )
             return hyps[index]
-        
+
         def score_select(hyps):
             index = np.argmax([hyp["score"] for hyp in hyps])
             return hyps[index]
-        
-        output_tokens, output_scores = prev_decoder_out.output_tokens, prev_decoder_out.output_scores
+
+        output_tokens, output_scores = (
+            prev_decoder_out.output_tokens,
+            prev_decoder_out.output_scores,
+        )
         if self.retain_history:
-            full_history = prev_decoder_out.history 
-            histories = [[full_history[j][i] for j in range(self.args.max_iterations)] for i in range(output_tokens.size(0))]
+            full_history = prev_decoder_out.history
+            histories = [
+                [full_history[j][i] for j in range(self.args.max_iterations)]
+                for i in range(output_tokens.size(0))
+            ]
             hyps = []
-            for tokens, scores, partial_mask, history in zip(output_tokens, output_scores, partial_masks, histories):
+            for tokens, scores, partial_mask, history in zip(
+                output_tokens, output_scores, partial_masks, histories
+            ):
                 hyps.append(finalized_hypos(tokens, scores, partial_mask, history))
             # hyps = [
             #     finalized_hypos(tokens, scores, partial_mask, history)
@@ -712,14 +791,25 @@ class DiscreteDiffusionGenerator:
             # ]
         else:
             hyps = [
-                finalized_hypos(tokens, scores, partial_mask, None) 
-                for tokens, scores, partial_mask in zip(output_tokens, output_scores, partial_masks)
+                finalized_hypos(tokens, scores, partial_mask, None)
+                for tokens, scores, partial_mask in zip(
+                    output_tokens, output_scores, partial_masks
+                )
             ]
         repeatition = self.args.mbr * self.args.length_beam
         if repeatition > 1:
-            hyps = [score_select(hyps[i:i+repeatition])for i in range(0, len(hyps), repeatition)]
+            hyps = [
+                score_select(hyps[i : i + repeatition])
+                for i in range(0, len(hyps), repeatition)
+            ]
             # hyps = [mbr_select(hyps[i:i+repeatition])for i in range(0, len(hyps), repeatition)]
-            
-        finalized = pad_sequence([h["tokens"] for h in hyps ], batch_first=True, padding_value=self.pad_id)
-        history = [[item["tokens"] for item in h["history"]] for h in hyps] if self.retain_history else None
+
+        finalized = pad_sequence(
+            [h["tokens"] for h in hyps], batch_first=True, padding_value=self.pad_id
+        )
+        history = (
+            [[item["tokens"] for item in h["history"]] for h in hyps]
+            if self.retain_history
+            else None
+        )
         return finalized, history

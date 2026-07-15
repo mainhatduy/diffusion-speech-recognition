@@ -18,84 +18,71 @@ import warnings
 
 decoder_out_t = namedtuple(
     "decoder_out_t",
-    ["output_tokens", "output_scores", "output_masks", "non_fixed_sym_masks", "attn", "step", "max_step", "history"],
+    [
+        "output_tokens",
+        "output_scores",
+        "output_masks",
+        "non_fixed_sym_masks",
+        "attn",
+        "step",
+        "max_step",
+        "history",
+    ],
 )
+
 
 @dataclass
 class DiscreteDiffusionModelArguments:
     num_diffusion_timesteps: int = field(
         default=50,
-        metadata={"help": "number of total timesteps for this diffusion model"}
+        metadata={"help": "number of total timesteps for this diffusion model"},
     )
     diffusion_type: str = field(
-        default="absorbing",
-        metadata={"help": "diffusion type"}
+        default="absorbing", metadata={"help": "diffusion type"}
     )
-    pretrained: str = field(
-        default=None
-    )
-    cache_dir: str = field(
-        default="/mnt/bn/research/cache"
-    )
-    config: str = field(
-        default=None
-    )
-    prefix_lm: bool = field(
-        default=False,
-        metadata={"help": "deprecated"}
-    )
-    attention_strategy: str = field(
-        default="full"
-    )
-    vocab_pad_to_multiple: int = field(
-        default=1 # 64
-    )
-    lora: bool = field(
-        default=False,
-        metadata={"help": "whether to traing with lora"}
-    )
-    lora_target_modules: List[str] = field(
-        default_factory=lambda: ["query", "value"]
-    )
-    lora_alpha: float = field(
-        default=16
-    )
-    lora_rank: int = field(
-        default=16
-    )
-    lora_bias: str = field(
-        default="none"
-    )
-    lora_dropout: float = field(
-        default=0
-    )
+    pretrained: str = field(default=None)
+    cache_dir: str = field(default="/mnt/bn/research/cache")
+    config: str = field(default=None)
+    prefix_lm: bool = field(default=False, metadata={"help": "deprecated"})
+    attention_strategy: str = field(default="full")
+    vocab_pad_to_multiple: int = field(default=1)  # 64
+    lora: bool = field(default=False, metadata={"help": "whether to traing with lora"})
+    lora_target_modules: List[str] = field(default_factory=lambda: ["query", "value"])
+    lora_alpha: float = field(default=16)
+    lora_rank: int = field(default=16)
+    lora_bias: str = field(default="none")
+    lora_dropout: float = field(default=0)
     dataset_type: str = field(
         default="bilingual",
         init=False,
-        metadata={"help": "dataset type: bilingual, speech_recognition, amr_parsing, etc."}
+        metadata={
+            "help": "dataset type: bilingual, speech_recognition, amr_parsing, etc."
+        },
     )
     audio_encoder_name: str = field(
         default="UsefulSensors/moonshine-streaming-medium",
         init=False,
-        metadata={"help": "pretrained audio encoder model name"}
+        metadata={"help": "pretrained audio encoder model name"},
     )
     pretrained_audio_encoder: bool = field(
         default=True,
-        metadata={"help": "whether to load pretrained weights for the audio encoder"}
+        metadata={"help": "whether to load pretrained weights for the audio encoder"},
     )
-       
+
     def __post_init__(self):
         if self.prefix_lm:
-            Warning("option prefix_lm is deprecated, use attention_strategy=\"prefix_lm\" instead.")
+            Warning(
+                'option prefix_lm is deprecated, use attention_strategy="prefix_lm" instead.'
+            )
             self.attention_strategy = "prefix_lm"
 
 
-class DiscreteDiffusionBase(nn.Module):    
+class DiscreteDiffusionBase(nn.Module):
     def __init__(self, args, tokenizer) -> None:
         super().__init__()
         self.args = args
-        
-        self.tokenizer = tokenizer 
+
+        self.tokenizer = tokenizer
         self.mask_id = tokenizer.mask_token_id
         assert self.mask_id is not None, "mask token not found in tokenizer"
         self.bos_id = tokenizer.bos_token_id
@@ -104,51 +91,73 @@ class DiscreteDiffusionBase(nn.Module):
         assert self.eos_id is not None, "eos token not found in tokenizer"
         self.pad_id = tokenizer.pad_token_id
         assert self.pad_id is not None, "pad token not found in tokenizer"
-        self.line_splitter_id = tokenizer.encode('\n', add_special_tokens=True)[-1]
-    
+        self.line_splitter_id = tokenizer.encode("\n", add_special_tokens=True)[-1]
+
     def gradient_checkpointing_enable(self):
         assert hasattr(self, "model"), "self.model is not set"
         self.model.gradient_checkpointing_enable()
-        
-    def num_parameters(self, only_trainable: bool = False, exclude_shared: bool = False) -> int:
+
+    def num_parameters(
+        self, only_trainable: bool = False, exclude_shared: bool = False
+    ) -> int:
         """
         Get number of (optionally, trainable or non-shared) parameters in the module.
         """
-        return sum(p.numel() for p in self.parameters() if not only_trainable or p.requires_grad)
-    
+        return sum(
+            p.numel()
+            for p in self.parameters()
+            if not only_trainable or p.requires_grad
+        )
+
     def add_fake_layer(self):
-        assert hasattr(self, "config"), "could not infer embedding dimension because self.config is not found."
-        self.fake_layer = nn.Parameter(torch.zeros((self.config.hidden_size, )))
-        
+        assert hasattr(
+            self, "config"
+        ), "could not infer embedding dimension because self.config is not found."
+        self.fake_layer = nn.Parameter(torch.zeros((self.config.hidden_size,)))
+
     def q_sample_coupled(self, x_0, t1, t2, maskable_mask):
-        assert self.args.diffusion_type == "absorbing", "we only support absorbing diffusion temporarily"
+        assert (
+            self.args.diffusion_type == "absorbing"
+        ), "we only support absorbing diffusion temporarily"
         # partial mask: True for the part should not be mask
-        t1_eq_t2_mask = (t1 == t2)
+        t1_eq_t2_mask = t1 == t2
         t1, t2 = torch.maximum(t1, t2).float(), torch.minimum(t1, t2).float()
-        
+
         # sample t1
         u = torch.rand_like(x_0, dtype=torch.float)
-        t1_mask = (u < (t1 / self.args.num_diffusion_timesteps)[:, None]) & maskable_mask
+        t1_mask = (
+            u < (t1 / self.args.num_diffusion_timesteps)[:, None]
+        ) & maskable_mask
         x_t1 = x_0.masked_fill(t1_mask, self.mask_id)
-        
+
         # sample t2
         u = torch.rand_like(x_0, dtype=torch.float)
         t2_mask = t1_mask & (u > ((t1 - t2) / t1)[:, None])
-        u = torch.rand_like(x_0[t1_eq_t2_mask], dtype=torch.float) 
-        t2_mask[t1_eq_t2_mask] = (u < (t1[t1_eq_t2_mask] / self.args.num_diffusion_timesteps)[:, None]) & (maskable_mask[t1_eq_t2_mask])
+        u = torch.rand_like(x_0[t1_eq_t2_mask], dtype=torch.float)
+        t2_mask[t1_eq_t2_mask] = (
+            u < (t1[t1_eq_t2_mask] / self.args.num_diffusion_timesteps)[:, None]
+        ) & (maskable_mask[t1_eq_t2_mask])
         x_t2 = x_0.masked_fill(t2_mask, self.mask_id)
-        
+
         return {
             "x_t": torch.cat([x_t1, x_t2], dim=0),
             "t": torch.cat([t1, t2]),
-            "mask_mask": torch.cat([t1_mask, t2_mask], dim=0)
+            "mask_mask": torch.cat([t1_mask, t2_mask], dim=0),
         }
-    
-    # FIXME: to design a more flexible interface for canvas initialization! 
+
+    # FIXME: to design a more flexible interface for canvas initialization!
     # The flexible version should only require source tokens and prompt formats!
-    def initialize_decode_samples(self, tokens, partial_masks, prefix_masks, oracle_length=False, length_beam=1, mbr=1):
+    def initialize_decode_samples(
+        self,
+        tokens,
+        partial_masks,
+        prefix_masks,
+        oracle_length=False,
+        length_beam=1,
+        mbr=1,
+    ):
         # if tokens is None, set the length of prediction as maximum length
-        # if tokens is not None, set the length of prediction as oracle length temporarily. 
+        # if tokens is not None, set the length of prediction as oracle length temporarily.
         # TODO: Handle length predition
         if tokens is None:
             raise NotImplementedError
@@ -156,40 +165,59 @@ class DiscreteDiffusionBase(nn.Module):
             if not oracle_length:
                 inputs_tokens = tokens.masked_fill(~prefix_masks, self.pad_id)
                 src_length = inputs_tokens.ne(self.pad_id).sum(dim=-1)
-                inputs_tokens = inputs_tokens[:, :src_length.max()]
+                inputs_tokens = inputs_tokens[:, : src_length.max()]
                 length_logits = self.forward_length(inputs_tokens)
-                length = (
-                    torch.min(
-                        length_logits.topk(length_beam, dim=-1).indices + 1, # at least one token
-                        self.config.max_position_embeddings - 2 - src_length[:, None] - 1    # max_length - src_length - eos
-                    )
+                length = torch.min(
+                    length_logits.topk(length_beam, dim=-1).indices
+                    + 1,  # at least one token
+                    self.config.max_position_embeddings
+                    - 2
+                    - src_length[:, None]
+                    - 1,  # max_length - src_length - eos
                 )
                 output_tokens = []
                 for i, token in enumerate(inputs_tokens):
                     for b in range(length_beam):
                         for m in range(mbr):
                             output_tokens.append(
-                                torch.cat([
-                                    token[:src_length[i]], 
-                                    torch.tensor([self.mask_id] * length[i][b] + [self.eos_id]).to(token)
-                                ])
+                                torch.cat(
+                                    [
+                                        token[: src_length[i]],
+                                        torch.tensor(
+                                            [self.mask_id] * length[i][b]
+                                            + [self.eos_id]
+                                        ).to(token),
+                                    ]
+                                )
                             )
-                output_tokens = pad_sequence(output_tokens, batch_first=True, padding_value=self.pad_id)
+                output_tokens = pad_sequence(
+                    output_tokens, batch_first=True, padding_value=self.pad_id
+                )
                 output_mask = output_tokens.eq(self.mask_id)
-                partial_masks = output_tokens.ne(self.mask_id) & output_tokens.ne(self.eos_id) & output_tokens.ne(self.pad_id)
+                partial_masks = (
+                    output_tokens.ne(self.mask_id)
+                    & output_tokens.ne(self.eos_id)
+                    & output_tokens.ne(self.pad_id)
+                )
             else:
-                output_tokens = torch.stack([token for token in tokens for m in range(mbr)])
-                partial_masks = torch.stack([mask for mask in partial_masks for m in range(mbr)])
-                prefix_masks = torch.stack([mask for mask in prefix_masks for m in range(mbr)])
+                output_tokens = torch.stack(
+                    [token for token in tokens for m in range(mbr)]
+                )
+                partial_masks = torch.stack(
+                    [mask for mask in partial_masks for m in range(mbr)]
+                )
+                prefix_masks = torch.stack(
+                    [mask for mask in prefix_masks for m in range(mbr)]
+                )
                 output_mask = (
-                    output_tokens.ne(self.pad_id) &
-                    output_tokens.ne(self.bos_id) &
-                    output_tokens.ne(self.eos_id) &
-                    ~prefix_masks
+                    output_tokens.ne(self.pad_id)
+                    & output_tokens.ne(self.bos_id)
+                    & output_tokens.ne(self.eos_id)
+                    & ~prefix_masks
                 )
                 output_tokens = output_tokens.masked_fill(output_mask, self.mask_id)
             output_scores = torch.zeros_like(output_tokens, dtype=torch.float)
-            
+
             return partial_masks, decoder_out_t(
                 output_tokens=output_tokens,
                 output_scores=output_scores,
@@ -198,35 +226,45 @@ class DiscreteDiffusionBase(nn.Module):
                 attn=None,
                 step=0,
                 max_step=math.inf,
-                history=None
+                history=None,
             )
-            
-  
+
+
 class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
     _is_tokenizer_index_correct = True
-    
+
     def __init__(self, args, tokenizer, model) -> None:
         super().__init__(args, tokenizer)
         if model.config.tie_word_embeddings:
-            model.lm_head.decoder.weight  = model.roberta.embeddings.word_embeddings.weight
+            model.lm_head.decoder.weight = (
+                model.roberta.embeddings.word_embeddings.weight
+            )
         self.model = model
         self.config = model.config
         if args.lora:
-            self.add_fake_layer() 
-        
+            self.add_fake_layer()
+
         # Audio encoder (for speech_recognition, speech_translation and speech_translation_multitask dataset_type)
-        self.has_audio_encoder = getattr(args, 'dataset_type', 'bilingual') in ['speech_recognition', 'speech_translation', 'speech_translation_multitask']
+        self.has_audio_encoder = getattr(args, "dataset_type", "bilingual") in [
+            "speech_recognition",
+            "speech_translation",
+            "speech_translation_multitask",
+        ]
         if self.has_audio_encoder:
-            audio_encoder_name = getattr(args, 'audio_encoder_name', 'facebook/mms-300m')
-            pretrained_audio_encoder = getattr(args, 'pretrained_audio_encoder', True)
+            audio_encoder_name = getattr(
+                args, "audio_encoder_name", "facebook/mms-300m"
+            )
+            pretrained_audio_encoder = getattr(args, "pretrained_audio_encoder", True)
             if "moonshine" in audio_encoder_name:
                 from transformers import MoonshineStreamingModel
+
                 if pretrained_audio_encoder:
                     moonshine_model = MoonshineStreamingModel.from_pretrained(
                         audio_encoder_name, cache_dir=args.cache_dir
                     )
                 else:
                     from transformers import AutoConfig
+
                     moonshine_config = AutoConfig.from_pretrained(
                         audio_encoder_name, cache_dir=args.cache_dir
                     )
@@ -239,6 +277,7 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                     )
                 else:
                     from transformers import AutoConfig
+
                     wav2vec2_config = AutoConfig.from_pretrained(
                         audio_encoder_name, cache_dir=args.cache_dir
                     )
@@ -247,43 +286,47 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             for param in self.audio_encoder.parameters():
                 param.requires_grad = False
             self.audio_encoder.eval()
-            
-            audio_hidden_size = self.audio_encoder.config.hidden_size  # 1024 for mms-300m
+
+            audio_hidden_size = (
+                self.audio_encoder.config.hidden_size
+            )  # 1024 for mms-300m
             self.audio_projector = nn.Linear(audio_hidden_size, self.config.hidden_size)
-            
+
             # Cross-attention layer
             self.cross_attn = nn.MultiheadAttention(
                 embed_dim=self.config.hidden_size,
                 num_heads=self.config.num_attention_heads,
                 dropout=0.1,
-                batch_first=True
+                batch_first=True,
             )
             self.cross_attn_ln = nn.LayerNorm(self.config.hidden_size)
-        
+
         # length predictor
         self.length_trm = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
-                d_model=self.config.hidden_size, 
+                d_model=self.config.hidden_size,
                 nhead=self.config.num_attention_heads,
                 dim_feedforward=self.config.intermediate_size,
-                batch_first=True
+                batch_first=True,
             ),
             num_layers=1,
         )
         self.length_predictor = nn.Sequential(
-            nn.Linear(self.config.hidden_size , self.config.intermediate_size),
+            nn.Linear(self.config.hidden_size, self.config.intermediate_size),
             nn.Tanh(),
-            nn.Linear(self.config.intermediate_size, self.config.max_position_embeddings)
+            nn.Linear(
+                self.config.intermediate_size, self.config.max_position_embeddings
+            ),
         )
-    
+
     def resize_token_embeddings(self, new_num_tokens):
         """Resize token embeddings in the underlying model."""
         return self.model.resize_token_embeddings(new_num_tokens)
-    
+
     def remove_redundant_embeddings(self, dictionary):
         assert self._is_tokenizer_index_correct
         self._is_tokenizer_index_correct = False
-        
+
         tokenizer = self.tokenizer
         vocab = tokenizer.get_vocab()
         vocab[dictionary.bos_word] = tokenizer.bos_token_id
@@ -294,70 +337,89 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         for i in range(len(dictionary)):
             token = dictionary[i]
             subdict2modeldict[i] = (
-                vocab[token] 
-                if token in vocab
-                else tokenizer.unk_token_id
+                vocab[token] if token in vocab else tokenizer.unk_token_id
             )
         ori_embedding_weight = self.model.roberta.embeddings.word_embeddings.weight
         ori_out_linaer_weight = self.model.lm_head.decoder.weight
         ori_out_linear_bias = self.model.lm_head.decoder.bias
         new_embedding = torch.stack(
             [
-                ori_embedding_weight[subdict2modeldict[i]] 
+                ori_embedding_weight[subdict2modeldict[i]]
                 for i in range(len(subdict2modeldict))
-            ], dim=0
+            ],
+            dim=0,
         )
         new_out_linear_weight = torch.stack(
             [
-                ori_out_linaer_weight[subdict2modeldict[i]] 
+                ori_out_linaer_weight[subdict2modeldict[i]]
                 for i in range(len(subdict2modeldict))
-            ], dim=0
+            ],
+            dim=0,
         )
         new_out_linear_bias = torch.stack(
             [
-                ori_out_linear_bias[subdict2modeldict[i]] 
+                ori_out_linear_bias[subdict2modeldict[i]]
                 for i in range(len(subdict2modeldict))
-            ], dim=0
+            ],
+            dim=0,
         )
         self.model.roberta.embeddings.word_embeddings = nn.Embedding.from_pretrained(
             new_embedding, freeze=False, padding_idx=dictionary.pad()
         )
-        new_out_linear = nn.Linear(new_out_linear_weight.size(0), new_out_linear_weight.size(1))
+        new_out_linear = nn.Linear(
+            new_out_linear_weight.size(0), new_out_linear_weight.size(1)
+        )
         new_out_linear.weight.data = new_out_linear_weight
         new_out_linear.bias.data = new_out_linear_bias
         self.model.lm_head.decoder = new_out_linear
-        
+
         self.mask_id = dictionary.mask_index
         self.bos_id = dictionary.bos()
         self.eos_id = dictionary.eos()
         self.pad_id = dictionary.pad()
-        self.line_splitter_id = dictionary.index('\n')
-    
+        self.line_splitter_id = dictionary.index("\n")
+
     def forward_lm_head(self, features):
         features = self.model.lm_head.dense(features)
         features = self.model.lm_head.layer_norm(gelu(features))
         return self.model.lm_head.decoder(features)
-   
+
     def forward_length(self, input_ids):
         attention_mask = input_ids.ne(self.pad_id).int()
         with torch.no_grad():
             _feature = self.model.roberta(input_ids, attention_mask=attention_mask)[0]
-        feature = self.length_trm(_feature, src_key_padding_mask=(1-attention_mask).bool())
+        feature = self.length_trm(
+            _feature, src_key_padding_mask=(1 - attention_mask).bool()
+        )
         if not (~feature.isnan()).all():
-            import ipdb; ipdb.set_trace()
+            import ipdb
+
+            ipdb.set_trace()
         length = attention_mask.sum(dim=-1)
-        pooled_feature = feature.masked_fill((attention_mask==0)[:, :, None], 0).float().sum(1) / length[:, None]
+        pooled_feature = (
+            feature.masked_fill((attention_mask == 0)[:, :, None], 0).float().sum(1)
+            / length[:, None]
+        )
         # assert len(feature.size()) == 2
         length_logits = self.length_predictor(pooled_feature.to(feature))
         return length_logits
-    
-    def forward(self, prev_output_tokens, partial_mask, attention_mask=None, loss_mask=None, cache=None,
-                audio_features=None, audio_attention_mask=None, precomputed_audio_embeds=None,
-                precomputed_audio_mask=None):
+
+    def forward(
+        self,
+        prev_output_tokens,
+        partial_mask,
+        attention_mask=None,
+        loss_mask=None,
+        cache=None,
+        audio_features=None,
+        audio_attention_mask=None,
+        precomputed_audio_embeds=None,
+        precomputed_audio_mask=None,
+    ):
         input_ids = prev_output_tokens
         if attention_mask is None:
-            attention_mask = prev_output_tokens.ne(self.pad_id).int()        
-        
+            attention_mask = prev_output_tokens.ne(self.pad_id).int()
+
         # Build full embeddings first (word + position + token type + LayerNorm + dropout)
         embeddings = self.model.roberta.embeddings(
             input_ids=input_ids,
@@ -366,80 +428,108 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             inputs_embeds=None,
             past_key_values_length=0,
         )
-        
-        # a trick to avoid the confliction between peft's LoRA implemention and gradient checkpointing 
+
+        # a trick to avoid the confliction between peft's LoRA implemention and gradient checkpointing
         if hasattr(self, "fake_layer") and self.training:
             self.fake_layer.requires_grad = True
-            embeddings = embeddings + self.fake_layer * 0   # trick to support lora + gradient checkpointing
-        
+            embeddings = (
+                embeddings + self.fake_layer * 0
+            )  # trick to support lora + gradient checkpointing
+
         # Audio fusion via Prefix Conditioning (Sequence Concatenation)
         if self.has_audio_encoder and precomputed_audio_embeds is not None:
             # Fast path: use pre-computed encoder output, only apply trainable projector
-            audio_embeds = self.audio_projector(precomputed_audio_embeds)  # (B, T_audio, hidden_size)
+            audio_embeds = self.audio_projector(
+                precomputed_audio_embeds
+            )  # (B, T_audio, hidden_size)
             T_audio = audio_embeds.size(1)
-            
+
             if precomputed_audio_mask is not None:
                 audio_attn = precomputed_audio_mask.int()
             else:
-                audio_attn = torch.ones(audio_embeds.size(0), T_audio, dtype=torch.int, device=audio_embeds.device)
-            
+                audio_attn = torch.ones(
+                    audio_embeds.size(0),
+                    T_audio,
+                    dtype=torch.int,
+                    device=audio_embeds.device,
+                )
+
             embeddings = torch.cat([audio_embeds, embeddings], dim=1)
             combined_attention_mask = torch.cat([audio_attn, attention_mask], dim=1)
         elif self.has_audio_encoder and audio_features is not None:
             with torch.no_grad():
                 audio_outputs = self.audio_encoder(
-                    audio_features, 
-                    attention_mask=audio_attention_mask
+                    audio_features, attention_mask=audio_attention_mask
                 )
                 audio_embeds = audio_outputs.last_hidden_state  # (B, T_audio, D_audio)
-            audio_embeds = self.audio_projector(audio_embeds)    # (B, T_audio, hidden_size)
+            audio_embeds = self.audio_projector(
+                audio_embeds
+            )  # (B, T_audio, hidden_size)
             T_audio = audio_embeds.size(1)
-            
+
             # Create audio attention mask
             if audio_attention_mask is not None:
-                if hasattr(audio_outputs, "attention_mask") and audio_outputs.attention_mask is not None:
+                if (
+                    hasattr(audio_outputs, "attention_mask")
+                    and audio_outputs.attention_mask is not None
+                ):
                     audio_attn = audio_outputs.attention_mask.int()
                 else:
                     audio_attn = self.audio_encoder._get_feature_vector_attention_mask(
                         T_audio, audio_attention_mask
                     ).int()
             else:
-                audio_attn = torch.ones(audio_embeds.size(0), T_audio, dtype=torch.int, device=audio_embeds.device)
-            
+                audio_attn = torch.ones(
+                    audio_embeds.size(0),
+                    T_audio,
+                    dtype=torch.int,
+                    device=audio_embeds.device,
+                )
+
             # Concatenate audio features and text embeddings along sequence dimension
             embeddings = torch.cat([audio_embeds, embeddings], dim=1)
             combined_attention_mask = torch.cat([audio_attn, attention_mask], dim=1)
         else:
             combined_attention_mask = attention_mask
             T_audio = 0
-        
+
         if self.args.prefix_lm:
             # prefix_lm is only supported without audio or needs custom mapping.
             # If there is audio, warn and fall back to full attention.
             if T_audio > 0:
                 if not hasattr(self, "_warned_prefix_lm"):
-                    print("Warning: prefix_lm attention strategy is not fully supported with audio input. Falling back to full attention.")
+                    print(
+                        "Warning: prefix_lm attention strategy is not fully supported with audio input. Falling back to full attention."
+                    )
                     self._warned_prefix_lm = True
-                attention_mask_converted, _ = self.model.roberta._create_attention_masks(
-                    attention_mask=combined_attention_mask,
-                    encoder_attention_mask=None,
-                    embedding_output=embeddings,
-                    encoder_hidden_states=None,
-                    past_key_values=None,
+                attention_mask_converted, _ = (
+                    self.model.roberta._create_attention_masks(
+                        attention_mask=combined_attention_mask,
+                        encoder_attention_mask=None,
+                        embedding_output=embeddings,
+                        encoder_hidden_states=None,
+                        past_key_values=None,
+                    )
                 )
             else:
                 ext_partial_mask = partial_mask.float()
-                ext_partial_mask = torch.bmm(ext_partial_mask[:, :, None], ext_partial_mask[:, None, :]).int()  # B, T, T
-                ext_mask = attention_mask[:, None, :].repeat(1, attention_mask.size(-1), 1)
+                ext_partial_mask = torch.bmm(
+                    ext_partial_mask[:, :, None], ext_partial_mask[:, None, :]
+                ).int()  # B, T, T
+                ext_mask = attention_mask[:, None, :].repeat(
+                    1, attention_mask.size(-1), 1
+                )
                 ext_mask[partial_mask] = ext_partial_mask[partial_mask]
-                
+
                 # Convert 3D mask using _create_attention_masks
-                attention_mask_converted, _ = self.model.roberta._create_attention_masks(
-                    attention_mask=ext_mask,
-                    encoder_attention_mask=None,
-                    embedding_output=embeddings,
-                    encoder_hidden_states=None,
-                    past_key_values=None,
+                attention_mask_converted, _ = (
+                    self.model.roberta._create_attention_masks(
+                        attention_mask=ext_mask,
+                        encoder_attention_mask=None,
+                        embedding_output=embeddings,
+                        encoder_hidden_states=None,
+                        past_key_values=None,
+                    )
                 )
         else:
             # Convert 2D mask using _create_attention_masks
@@ -450,7 +540,7 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                 encoder_hidden_states=None,
                 past_key_values=None,
             )
-            
+
         # Call the encoder directly, bypassing self.model.roberta's embedding layer (which would double-embed)
         encoder_outputs = self.model.roberta.encoder(
             embeddings,
@@ -462,14 +552,14 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             position_ids=None,
         )
         outputs = encoder_outputs.last_hidden_state
-        
+
         # Extract the text portion of the encoder outputs
         if T_audio > 0:
             outputs = outputs[:, T_audio:]
-        
+
         if not (~torch.isnan(outputs)).all():
             outputs.masked_fill_(outputs.isnan(), 0)
             print("nan bug!")
-        
+
         outputs = outputs[loss_mask] if loss_mask is not None else outputs
         return self.model.lm_head(outputs)

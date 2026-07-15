@@ -15,7 +15,9 @@ from huggingface_hub import snapshot_download
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Download precomputed speech dataset from Hugging Face.")
+    parser = argparse.ArgumentParser(
+        description="Download precomputed speech dataset from Hugging Face."
+    )
     parser.add_argument(
         "--repo_id",
         type=str,
@@ -44,12 +46,14 @@ def parse_args():
 def main():
     args = parse_args()
     load_dotenv()
-    
+
     token = os.getenv("HF_TOKEN")
     if not token:
-        print("Warning: HF_TOKEN not found in environment or .env file. "
-              "If the dataset is private, the download might fail.")
-    
+        print(
+            "Warning: HF_TOKEN not found in environment or .env file. "
+            "If the dataset is private, the download might fail."
+        )
+
     print("=============================================================")
     print("  Downloading Precomputed Dataset from Hugging Face Hub")
     print(f"  Repository  : {args.repo_id}")
@@ -62,8 +66,12 @@ def main():
         # Check if we have files in target_dir
         files = os.listdir(args.target_dir)
         if len(files) > 0:
-            print(f"Target directory '{args.target_dir}' already exists and is not empty.")
-            print("Use --force to overwrite, or delete the directory if you want a clean download.")
+            print(
+                f"Target directory '{args.target_dir}' already exists and is not empty."
+            )
+            print(
+                "Use --force to overwrite, or delete the directory if you want a clean download."
+            )
             return
 
     # Define allowed patterns if in test mode
@@ -75,7 +83,9 @@ def main():
             "token_ids/*.json",
             "audio_embeds/shard_00000.parquet",
         ]
-        print("Filtering download to metadata and the first data shard (shard_00000.parquet) only...")
+        print(
+            "Filtering download to metadata and the first data shard (shard_00000.parquet) only..."
+        )
 
     try:
         snapshot_download(

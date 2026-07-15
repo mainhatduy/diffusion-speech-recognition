@@ -94,18 +94,20 @@ def print_results_table(results: list):
     print("\n" + "=" * 95)
     print("                        MULTI-CHIPSET BENCHMARK RESULTS")
     print("=" * 95)
-    
+
     # Header
-    print(f"{'Device':<35} {'Status':<15} {'Encoder':<12} {'Backbone':<12} {'Output':<20}")
+    print(
+        f"{'Device':<35} {'Status':<15} {'Encoder':<12} {'Backbone':<12} {'Output':<20}"
+    )
     print(f"{'':─<35} {'':─<15} {'':─<12} {'':─<12} {'':─<20}")
-    
+
     for r in results:
         device = r["device"][:33]
         status = r["status"]
         enc_lat = extract_latency(r["audio_encoder"].get("profile"))
         bb_lat = extract_latency(r["diffusion_backbone"].get("profile"))
         output = (r.get("output_text") or "")[:18]
-        
+
         # Status emoji
         if status == "success":
             status_str = "✅ Success"
@@ -117,9 +119,11 @@ def print_results_table(results: list):
             status_str = "🔍 Not Found"
         else:
             status_str = f"❓ {status}"
-        
-        print(f"  {device:<33} {status_str:<15} {enc_lat:<12} {bb_lat:<12} {output:<20}")
-    
+
+        print(
+            f"  {device:<33} {status_str:<15} {enc_lat:<12} {bb_lat:<12} {output:<20}"
+        )
+
     # Errors section
     errors_found = False
     for r in results:
@@ -131,43 +135,52 @@ def print_results_table(results: list):
             print(f"\n  {r['device']}:")
             for err in r["errors"]:
                 print(f"    • {err[:120]}")
-    
+
     print("\n" + "=" * 95)
 
 
 def main():
     print_banner()
-    
+
     parser = argparse.ArgumentParser(
         description="Test speech translation inference on multiple Qualcomm chipsets"
     )
     parser.add_argument(
-        "--devices", nargs="+", default=None,
-        help="List of device names to test. If not specified, uses default selection."
+        "--devices",
+        nargs="+",
+        default=None,
+        help="List of device names to test. If not specified, uses default selection.",
     )
     parser.add_argument(
-        "--runtime", choices=["qnn", "onnx"], default="onnx",
-        help="Target runtime. 'onnx' recommended for broader compatibility (default: onnx)"
+        "--runtime",
+        choices=["qnn", "onnx"],
+        default="onnx",
+        help="Target runtime. 'onnx' recommended for broader compatibility (default: onnx)",
     )
     parser.add_argument(
-        "--audio", type=str, default="test/test_data/test_sample.mp3",
-        help="Path to test audio file"
+        "--audio",
+        type=str,
+        default="test/test_data/test_sample.mp3",
+        help="Path to test audio file",
     )
     parser.add_argument(
-        "--list-devices", action="store_true",
-        help="Just list all available devices and exit"
+        "--list-devices",
+        action="store_true",
+        help="Just list all available devices and exit",
     )
     parser.add_argument(
-        "--output", type=str, default="onnx/benchmark_results.json",
-        help="Path to save JSON results"
+        "--output",
+        type=str,
+        default="onnx/benchmark_results.json",
+        help="Path to save JSON results",
     )
     args = parser.parse_args()
-    
+
     # Load environment
     setup_qualcomm_token()
-    
+
     import qai_hub as hub
-    
+
     # List devices mode
     if args.list_devices:
         print("\n[*] Available Qualcomm AI Hub Devices:")
@@ -177,29 +190,31 @@ def main():
             print(f"  {i:3d}. {d.name}")
         print(f"\nTotal: {len(devices)} devices")
         return
-    
+
     # Load tokenizer and config for decoding
     print("\n[*] Loading tokenizer and config from HuggingFace Hub...")
     from transformers import AutoTokenizer
     from model.configuration_dlm import DiscreteDiffusionConfig
-    
+
     repo_id = "aiai-laboratory/diffusion-speech-translation-from-vi-v1"
     tokenizer = AutoTokenizer.from_pretrained(repo_id, trust_remote_code=True)
     config = DiscreteDiffusionConfig.from_pretrained(repo_id)
     print(f"    Tokenizer vocab size: {len(tokenizer)}")
-    print(f"    mask_token_id: {config.mask_token_id}, eos_token_id: {config.eos_token_id}")
-    
+    print(
+        f"    mask_token_id: {config.mask_token_id}, eos_token_id: {config.eos_token_id}"
+    )
+
     # Load and preprocess audio
     print(f"\n[*] Loading audio: {args.audio}")
     if not os.path.exists(args.audio):
         print(f"[!] Audio file not found: {args.audio}")
         sys.exit(1)
-    
+
     audio = load_audio(args.audio, target_sr=AUDIO_SAMPLE_RATE)
     audio_inputs = prepare_audio_inputs(audio)
     print(f"    Audio duration: {len(audio)/AUDIO_SAMPLE_RATE:.2f}s")
     print(f"    Audio shape: {audio_inputs['audio_features'].shape}")
-    
+
     # Load ground truth if available
     gt_path = args.audio.replace(".mp3", ".json").replace(".wav", ".json")
     if os.path.exists(gt_path):
@@ -207,46 +222,49 @@ def main():
             gt = json.load(f)
         print(f"    Ground truth (vi): {gt.get('text', 'N/A')}")
         print(f"    Ground truth (en): {gt.get('english', 'N/A')}")
-    
+
     # Check ONNX packages exist
     for pkg in ["onnx/audio_encoder_pkg.onnx", "onnx/diffusion_backbone_pkg.onnx"]:
         if not os.path.exists(pkg):
             print(f"[!] Missing ONNX package: {pkg}")
-            print("    Run the repackaging step first: python scripts/qualcomm-job/patches/repackage_models.py")
+            print(
+                "    Run the repackaging step first: python scripts/qualcomm-job/patches/repackage_models.py"
+            )
             sys.exit(1)
-            
+
     # Precompute audio embeddings locally using ONNX Runtime
     print("\n[*] Precomputing audio embeddings locally using ONNX Runtime...")
     encoder_path = None
     possible_paths = [
         "onnx/audio_encoder_pkg.onnx/audio_encoder.onnx",
-        "onnx/audio_encoder.onnx"
+        "onnx/audio_encoder.onnx",
     ]
     for path in possible_paths:
         if os.path.exists(path):
             encoder_path = path
             break
-            
+
     if not encoder_path:
         print("[!] Error: Could not find audio encoder ONNX model.")
         sys.exit(1)
-        
+
     print(f"    Loading ONNX model from: {encoder_path}")
     import onnxruntime as ort
+
     session_options = ort.SessionOptions()
     session_options.log_severity_level = 3
     ort_session = ort.InferenceSession(encoder_path, session_options)
-    
+
     ort_outputs = ort_session.run(
         ["last_hidden_state"],
         {
             "audio_features": audio_inputs["audio_features"],
-            "audio_attention_mask": audio_inputs["audio_attention_mask"]
-        }
+            "audio_attention_mask": audio_inputs["audio_attention_mask"],
+        },
     )
     audio_embeds = ort_outputs[0]
     print(f"    [+] Precomputed audio embeddings shape: {audio_embeds.shape}")
-    
+
     # Prepare backbone inputs
     backbone_inputs = prepare_backbone_inputs(
         audio_embeds=audio_embeds,
@@ -255,15 +273,15 @@ def main():
         eos_id=config.eos_token_id,
         seq_len=MAX_SEQ_LEN,
     )
-    
+
     # Determine devices
     device_names = args.devices if args.devices else DEFAULT_DEVICES
     print(f"\n[*] Testing {len(device_names)} devices:")
     for d in device_names:
         print(f"    • {d}")
-        
+
     t_start = time.time()
-    
+
     # Compilation options
     runtime = args.runtime
     if runtime == "qnn":
@@ -271,31 +289,42 @@ def main():
     else:
         target_runtime = "precompiled_qnn_onnx"
     compile_options = f"--target_runtime {target_runtime} --truncate_64bit_io"
-    
+
     audio_encoder_specs = {
         "audio_features": tuple(audio_inputs["audio_features"].shape),
-        "audio_attention_mask": (tuple(audio_inputs["audio_attention_mask"].shape), "int64"),
+        "audio_attention_mask": (
+            tuple(audio_inputs["audio_attention_mask"].shape),
+            "int64",
+        ),
     }
-    
+
     backbone_specs = {
-        "prev_output_tokens": (tuple(backbone_inputs["prev_output_tokens"].shape), "int64"),
-        "precomputed_audio_embeds": tuple(backbone_inputs["precomputed_audio_embeds"].shape),
-        "precomputed_audio_mask": (tuple(backbone_inputs["precomputed_audio_mask"].shape), "int32"),
+        "prev_output_tokens": (
+            tuple(backbone_inputs["prev_output_tokens"].shape),
+            "int64",
+        ),
+        "precomputed_audio_embeds": tuple(
+            backbone_inputs["precomputed_audio_embeds"].shape
+        ),
+        "precomputed_audio_mask": (
+            tuple(backbone_inputs["precomputed_audio_mask"].shape),
+            "int32",
+        ),
     }
-    
+
     # ──── 1. Submit Compilation Jobs ────
     print(f"\n[*] Submitting compile jobs to Qualcomm AI Hub (runtime: {runtime})...")
     compile_jobs = {}
-    
+
     for device_name in device_names:
         try:
             device = hub.Device(device_name)
         except Exception as e:
             print(f"    [!] Device '{device_name}' not found, skipping.")
             continue
-            
+
         print(f"    • Submitting compilation for {device_name}...")
-        
+
         # Audio Encoder Compile Job
         audio_job = None
         try:
@@ -309,7 +338,7 @@ def main():
             print(f"      - audio_encoder job: {audio_job.url}")
         except Exception as e:
             print(f"      [!] audio_encoder submission failed: {e}")
-            
+
         # Backbone Compile Job
         backbone_job = None
         try:
@@ -323,13 +352,13 @@ def main():
             print(f"      - diffusion_backbone job: {backbone_job.url}")
         except Exception as e:
             print(f"      [!] diffusion_backbone submission failed: {e}")
-            
+
         compile_jobs[device_name] = {
             "device_obj": device,
             "audio": audio_job,
-            "backbone": backbone_job
+            "backbone": backbone_job,
         }
-        
+
     # ──── 2. Monitor Compilation Jobs ────
     print("\n[*] Monitoring compilation jobs...")
     pending_compiles = {}
@@ -338,7 +367,7 @@ def main():
             pending_compiles[f"{dev_name} (audio)"] = jobs["audio"]
         if jobs["backbone"]:
             pending_compiles[f"{dev_name} (backbone)"] = jobs["backbone"]
-            
+
     while pending_compiles:
         done_keys = []
         for name, job in list(pending_compiles.items()):
@@ -356,16 +385,16 @@ def main():
             del pending_compiles[k]
         if pending_compiles:
             time.sleep(15)
-            
+
     # ──── 3. Submit Inference and Profiling Jobs ────
     print("\n[*] Submitting inference and profiling jobs...")
     eval_jobs = {}
-    
+
     for device_name, jobs in compile_jobs.items():
         device = jobs["device_obj"]
         audio_job = jobs["audio"]
         backbone_job = jobs["backbone"]
-        
+
         audio_success = False
         audio_target_model = None
         if audio_job:
@@ -376,7 +405,7 @@ def main():
                     audio_target_model = audio_job.get_target_model()
             except Exception:
                 pass
-                
+
         backbone_success = False
         backbone_target_model = None
         if backbone_job:
@@ -387,7 +416,7 @@ def main():
                     backbone_target_model = backbone_job.get_target_model()
             except Exception:
                 pass
-                
+
         eval_jobs[device_name] = {
             "audio_success": audio_success,
             "backbone_success": backbone_success,
@@ -395,24 +424,28 @@ def main():
             "backbone_inf": None,
             "audio_prof": None,
             "backbone_prof": None,
-            "errors": []
+            "errors": [],
         }
-        
+
         if not audio_success and not backbone_success:
-            print(f"    [!] Skipping evaluation for {device_name} (both compilation jobs failed).")
+            print(
+                f"    [!] Skipping evaluation for {device_name} (both compilation jobs failed)."
+            )
             continue
-            
+
         print(f"    • Submitting evaluation for {device_name}...")
-        
+
         if audio_success:
             try:
                 # Audio Encoder Inference
                 inf_inputs = {
                     "audio_features": [audio_inputs["audio_features"]],
                     "audio_attention_mask": [
-                        audio_inputs["audio_attention_mask"].astype(np.int32)
-                        if "--truncate_64bit_io" in compile_options
-                        else audio_inputs["audio_attention_mask"]
+                        (
+                            audio_inputs["audio_attention_mask"].astype(np.int32)
+                            if "--truncate_64bit_io" in compile_options
+                            else audio_inputs["audio_attention_mask"]
+                        )
                     ],
                 }
                 eval_jobs[device_name]["audio_inf"] = hub.submit_inference_job(
@@ -422,9 +455,11 @@ def main():
                     name=f"audio_inf_{device_name[:20]}",
                 )
             except Exception as e:
-                eval_jobs[device_name]["errors"].append(f"Audio inference submission failed: {e}")
+                eval_jobs[device_name]["errors"].append(
+                    f"Audio inference submission failed: {e}"
+                )
                 print(f"      [!] Audio inference submission failed: {e}")
-                
+
             try:
                 # Audio Encoder Profiling
                 eval_jobs[device_name]["audio_prof"] = hub.submit_profile_job(
@@ -433,20 +468,28 @@ def main():
                     name=f"audio_prof_{device_name[:20]}",
                 )
             except Exception as e:
-                eval_jobs[device_name]["errors"].append(f"Audio profiling submission failed: {e}")
+                eval_jobs[device_name]["errors"].append(
+                    f"Audio profiling submission failed: {e}"
+                )
                 print(f"      [!] Audio profiling submission failed: {e}")
-                
+
         if backbone_success:
             try:
                 # Backbone Inference
                 backbone_inf_inputs = {
                     "prev_output_tokens": [
-                        backbone_inputs["prev_output_tokens"].astype(np.int32)
-                        if "--truncate_64bit_io" in compile_options
-                        else backbone_inputs["prev_output_tokens"]
+                        (
+                            backbone_inputs["prev_output_tokens"].astype(np.int32)
+                            if "--truncate_64bit_io" in compile_options
+                            else backbone_inputs["prev_output_tokens"]
+                        )
                     ],
-                    "precomputed_audio_embeds": [backbone_inputs["precomputed_audio_embeds"]],
-                    "precomputed_audio_mask": [backbone_inputs["precomputed_audio_mask"]],
+                    "precomputed_audio_embeds": [
+                        backbone_inputs["precomputed_audio_embeds"]
+                    ],
+                    "precomputed_audio_mask": [
+                        backbone_inputs["precomputed_audio_mask"]
+                    ],
                 }
                 eval_jobs[device_name]["backbone_inf"] = hub.submit_inference_job(
                     model=backbone_target_model,
@@ -455,9 +498,11 @@ def main():
                     name=f"backbone_inf_{device_name[:20]}",
                 )
             except Exception as e:
-                eval_jobs[device_name]["errors"].append(f"Backbone inference submission failed: {e}")
+                eval_jobs[device_name]["errors"].append(
+                    f"Backbone inference submission failed: {e}"
+                )
                 print(f"      [!] Backbone inference submission failed: {e}")
-                
+
             try:
                 # Backbone Profiling
                 eval_jobs[device_name]["backbone_prof"] = hub.submit_profile_job(
@@ -466,9 +511,11 @@ def main():
                     name=f"backbone_prof_{device_name[:20]}",
                 )
             except Exception as e:
-                eval_jobs[device_name]["errors"].append(f"Backbone profiling submission failed: {e}")
+                eval_jobs[device_name]["errors"].append(
+                    f"Backbone profiling submission failed: {e}"
+                )
                 print(f"      [!] Backbone profiling submission failed: {e}")
-                
+
     # ──── 4. Monitor Inference and Profiling Jobs ────
     print("\n[*] Monitoring inference and profiling jobs...")
     pending_evals = {}
@@ -477,7 +524,7 @@ def main():
             job = jobs[job_type]
             if job:
                 pending_evals[f"{dev_name} ({job_type})"] = job
-                
+
     while pending_evals:
         done_keys = []
         for name, job in list(pending_evals.items()):
@@ -495,11 +542,11 @@ def main():
             del pending_evals[k]
         if pending_evals:
             time.sleep(15)
-            
+
     # ──── 5. Collect and Process Results ────
     print("\n[*] Processing results...")
     results = []
-    
+
     for device_name, info in eval_jobs.items():
         result = {
             "device": device_name,
@@ -508,18 +555,18 @@ def main():
             "audio_encoder": {
                 "compile": "SUCCESS" if info["audio_success"] else "FAILED",
                 "inference": None,
-                "profile": None
+                "profile": None,
             },
             "diffusion_backbone": {
                 "compile": "SUCCESS" if info["backbone_success"] else "FAILED",
                 "inference": None,
-                "profile": None
+                "profile": None,
             },
             "output_text": None,
             "errors": list(info["errors"]),
             "total_time_s": 0,
         }
-        
+
         # Audio Inference
         if info["audio_inf"]:
             try:
@@ -528,14 +575,16 @@ def main():
                     result["audio_encoder"]["inference"] = "SUCCESS"
                 else:
                     result["audio_encoder"]["inference"] = "FAILED"
-                    result["errors"].append(f"audio_encoder inference failed: {status.message}")
+                    result["errors"].append(
+                        f"audio_encoder inference failed: {status.message}"
+                    )
             except Exception as e:
                 result["audio_encoder"]["inference"] = "ERROR"
                 result["errors"].append(f"audio_encoder inference error: {e}")
         else:
             if info["audio_success"]:
                 result["audio_encoder"]["inference"] = "SKIPPED"
-                
+
         # Backbone Inference and decoding
         if info["backbone_inf"]:
             try:
@@ -549,20 +598,24 @@ def main():
                             logits = logits[0]
                     else:
                         logits = backbone_output
-                        
+
                     predicted_ids = np.argmax(logits, axis=-1)
-                    output_text = tokenizer.decode(predicted_ids[0], skip_special_tokens=True)
+                    output_text = tokenizer.decode(
+                        predicted_ids[0], skip_special_tokens=True
+                    )
                     result["output_text"] = output_text
                 else:
                     result["diffusion_backbone"]["inference"] = "FAILED"
-                    result["errors"].append(f"diffusion_backbone inference failed: {status.message}")
+                    result["errors"].append(
+                        f"diffusion_backbone inference failed: {status.message}"
+                    )
             except Exception as e:
                 result["diffusion_backbone"]["inference"] = "ERROR"
                 result["errors"].append(f"diffusion_backbone inference error: {e}")
         else:
             if info["backbone_success"]:
                 result["diffusion_backbone"]["inference"] = "SKIPPED"
-                
+
         # Audio Profile
         if info["audio_prof"]:
             try:
@@ -574,7 +627,7 @@ def main():
                     result["audio_encoder"]["profile"] = f"FAILED: {status.message}"
             except Exception as e:
                 result["audio_encoder"]["profile"] = f"ERROR: {e}"
-                
+
         # Backbone Profile
         if info["backbone_prof"]:
             try:
@@ -583,27 +636,31 @@ def main():
                     profile_data = info["backbone_prof"].download_profile()
                     result["diffusion_backbone"]["profile"] = profile_data
                 else:
-                    result["diffusion_backbone"]["profile"] = f"FAILED: {status.message}"
+                    result["diffusion_backbone"][
+                        "profile"
+                    ] = f"FAILED: {status.message}"
             except Exception as e:
                 result["diffusion_backbone"]["profile"] = f"ERROR: {e}"
-                
+
         # Final Status
         if not info["audio_success"] or not info["backbone_success"]:
             result["status"] = "compile_failed"
-        elif (result["audio_encoder"]["inference"] == "SUCCESS" and 
-              result["diffusion_backbone"]["inference"] == "SUCCESS"):
+        elif (
+            result["audio_encoder"]["inference"] == "SUCCESS"
+            and result["diffusion_backbone"]["inference"] == "SUCCESS"
+        ):
             result["status"] = "success"
         else:
             result["status"] = "inference_failed"
-            
+
         results.append(result)
-        
+
     total_duration = time.time() - t_start
     print(f"\n✓ All devices completed in {format_duration(total_duration)}")
-    
+
     # Print comparison table
     print_results_table(results)
-    
+
     # Save results to JSON
     def sanitize_for_json(obj):
         if isinstance(obj, dict):
@@ -619,19 +676,27 @@ def main():
         elif isinstance(obj, bytes):
             return "<binary>"
         return obj
-        
+
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     with open(args.output, "w") as f:
-        json.dump({
-            "timestamp": datetime.now().isoformat(),
-            "audio_file": args.audio,
-            "runtime": args.runtime,
-            "results": sanitize_for_json(results),
-        }, f, indent=2, ensure_ascii=False, default=str)
+        json.dump(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "audio_file": args.audio,
+                "runtime": args.runtime,
+                "results": sanitize_for_json(results),
+            },
+            f,
+            indent=2,
+            ensure_ascii=False,
+            default=str,
+        )
     print(f"\n[+] Results saved to: {args.output}")
-    
+
     success_count = sum(1 for r in results if r["status"] == "success")
-    print(f"\n[*] Summary: {success_count}/{len(results)} devices completed successfully")
+    print(
+        f"\n[*] Summary: {success_count}/{len(results)} devices completed successfully"
+    )
     print("=" * 75)
 
 

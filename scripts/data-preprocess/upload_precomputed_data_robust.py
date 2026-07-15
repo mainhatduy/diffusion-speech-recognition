@@ -4,6 +4,7 @@ import time
 from dotenv import load_dotenv
 from huggingface_hub import HfApi
 
+
 def main():
     load_dotenv()
     token = os.getenv("HF_TOKEN")
@@ -16,7 +17,7 @@ def main():
 
     print("=== Robust Uploading Precomputed Data to Hugging Face ===")
     print(f"Repository: {repo_id} (dataset)")
-    
+
     # 1. Ensure repository exists
     try:
         api.create_repo(repo_id=repo_id, repo_type="dataset", exist_ok=True)
@@ -42,12 +43,12 @@ def main():
         # Exclude audio_embeds_npy directory
         if "audio_embeds_npy" in root:
             continue
-        
+
         for file in files:
             local_path = os.path.join(root, file)
             # Get relative path inside precomputed_data folder
             rel_path = os.path.relpath(local_path, local_dir)
-            
+
             # Skip if already uploaded
             if rel_path in existing_files:
                 print(f"[Skip] {rel_path} already exists on Hub.")
@@ -61,13 +62,15 @@ def main():
         return
 
     # Sort files to upload metadata and index first
-    files_to_upload.sort(key=lambda x: (not x[1].endswith('.json'), x[1]))
+    files_to_upload.sort(key=lambda x: (not x[1].endswith(".json"), x[1]))
 
     # 4. Upload files one by one
     for idx, (local_path, rel_path) in enumerate(files_to_upload, 1):
         file_size_gb = os.path.getsize(local_path) / (1024 * 1024 * 1024)
-        print(f"\n[{idx}/{total_files}] Uploading {rel_path} ({file_size_gb:.3f} GB)...")
-        
+        print(
+            f"\n[{idx}/{total_files}] Uploading {rel_path} ({file_size_gb:.3f} GB)..."
+        )
+
         # Retry logic
         max_retries = 5
         for attempt in range(1, max_retries + 1):
@@ -78,13 +81,15 @@ def main():
                     path_in_repo=rel_path,
                     repo_id=repo_id,
                     repo_type="dataset",
-                    commit_message=f"Upload {rel_path}"
+                    commit_message=f"Upload {rel_path}",
                 )
                 elapsed = time.time() - start_time
                 print(f"Successfully uploaded {rel_path} in {elapsed:.1f}s.")
                 break
             except Exception as e:
-                print(f"Attempt {attempt}/{max_retries} failed to upload {rel_path}: {e}")
+                print(
+                    f"Attempt {attempt}/{max_retries} failed to upload {rel_path}: {e}"
+                )
                 if attempt < max_retries:
                     time.sleep(10)
                 else:
@@ -92,6 +97,7 @@ def main():
                     sys.exit(1)
 
     print("\nAll remaining files uploaded successfully!")
+
 
 if __name__ == "__main__":
     main()

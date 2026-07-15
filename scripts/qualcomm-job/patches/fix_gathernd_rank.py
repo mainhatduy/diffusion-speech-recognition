@@ -100,9 +100,9 @@ def fix_gathernd_in_model(model_path):
         #
         # We want to find the ORIGINAL inputs (squeeze_1, val_174) and the FINAL output (val_175)
 
-        data_patched    = gnd_node.input[0]   # fixed_gathernd_87_in_float
-        indices_patched = gnd_node.input[1]   # fixed_gathernd_87_indices_dynamic
-        gnd_out         = gnd_node.output[0]  # fixed_gathernd_87_out_float
+        data_patched = gnd_node.input[0]  # fixed_gathernd_87_in_float
+        indices_patched = gnd_node.input[1]  # fixed_gathernd_87_indices_dynamic
+        gnd_out = gnd_node.output[0]  # fixed_gathernd_87_out_float
 
         # Trace Cast to find original data
         orig_data = data_patched
@@ -126,7 +126,9 @@ def fix_gathernd_in_model(model_path):
                 final_out = node.output[0]  # val_175
                 break
 
-        print(f"  orig_data='{orig_data}', orig_indices='{orig_indices}', final_output='{final_out}'")
+        print(
+            f"  orig_data='{orig_data}', orig_indices='{orig_indices}', final_output='{final_out}'"
+        )
 
         # Collect all nodes to delete
         def collect_ancestors(name, stop_at, visited=None):
@@ -142,13 +144,13 @@ def fix_gathernd_in_model(model_path):
             return visited
 
         del_names = set()
-        del_names.add(gnd_node.name)                          # GatherND itself
+        del_names.add(gnd_node.name)  # GatherND itself
         if cast_out_node is not None:
-            del_names.add(cast_out_node.name)                 # Cast after GatherND
+            del_names.add(cast_out_node.name)  # Cast after GatherND
         if data_patched != orig_data:
             cast_in = out_map.get(data_patched)
             if cast_in:
-                del_names.add(cast_in.name)                   # Cast before GatherND (data)
+                del_names.add(cast_in.name)  # Cast before GatherND (data)
         if indices_patched != orig_indices:
             collect_ancestors(indices_patched, orig_indices)  # dynamic index helpers
 
@@ -157,27 +159,85 @@ def fix_gathernd_in_model(model_path):
         # Build replacement subgraph
         p = f"gnd_fix_{node_idx}"
 
-        c0 = helper.make_node("Constant", [], [f"{p}_c0"],
-                              value=helper.make_tensor(f"{p}_c0", TensorProto.INT64, [], [0]),
-                              name=f"{p}_const0")
-        c1 = helper.make_node("Constant", [], [f"{p}_c1"],
-                              value=helper.make_tensor(f"{p}_c1", TensorProto.INT64, [], [1]),
-                              name=f"{p}_const1")
-        row = helper.make_node("Gather", [orig_indices, f"{p}_c0"], [f"{p}_row"], axis=-1, name=f"{p}_row")
-        col = helper.make_node("Gather", [orig_indices, f"{p}_c1"], [f"{p}_col"], axis=-1, name=f"{p}_col")
-        dshape = helper.make_node("Shape", [orig_data], [f"{p}_dshape"], name=f"{p}_dshape")
-        T = helper.make_node("Gather", [f"{p}_dshape", f"{p}_c1"], [f"{p}_T"], axis=0, name=f"{p}_T")
-        mul = helper.make_node("Mul", [f"{p}_row", f"{p}_T"], [f"{p}_mul"], name=f"{p}_mul")
-        lin = helper.make_node("Add", [f"{p}_mul", f"{p}_col"], [f"{p}_lin"], name=f"{p}_lin")
-        cast_data = helper.make_node("Cast", [orig_data], [f"{p}_dataf"], to=TensorProto.FLOAT, name=f"{p}_cast_data")
-        flat_shape = helper.make_node("Constant", [], [f"{p}_fs"],
-                                      value=helper.make_tensor(f"{p}_fs", TensorProto.INT64, [1], [-1]),
-                                      name=f"{p}_fs")
-        flat = helper.make_node("Reshape", [f"{p}_dataf", f"{p}_fs"], [f"{p}_flat"], name=f"{p}_flat")
-        gather = helper.make_node("Gather", [f"{p}_flat", f"{p}_lin"], [f"{p}_outf"], axis=0, name=f"{p}_gather")
-        cast_back = helper.make_node("Cast", [f"{p}_outf"], [final_out], to=TensorProto.BOOL, name=f"{p}_cast_back")
+        c0 = helper.make_node(
+            "Constant",
+            [],
+            [f"{p}_c0"],
+            value=helper.make_tensor(f"{p}_c0", TensorProto.INT64, [], [0]),
+            name=f"{p}_const0",
+        )
+        c1 = helper.make_node(
+            "Constant",
+            [],
+            [f"{p}_c1"],
+            value=helper.make_tensor(f"{p}_c1", TensorProto.INT64, [], [1]),
+            name=f"{p}_const1",
+        )
+        row = helper.make_node(
+            "Gather", [orig_indices, f"{p}_c0"], [f"{p}_row"], axis=-1, name=f"{p}_row"
+        )
+        col = helper.make_node(
+            "Gather", [orig_indices, f"{p}_c1"], [f"{p}_col"], axis=-1, name=f"{p}_col"
+        )
+        dshape = helper.make_node(
+            "Shape", [orig_data], [f"{p}_dshape"], name=f"{p}_dshape"
+        )
+        T = helper.make_node(
+            "Gather", [f"{p}_dshape", f"{p}_c1"], [f"{p}_T"], axis=0, name=f"{p}_T"
+        )
+        mul = helper.make_node(
+            "Mul", [f"{p}_row", f"{p}_T"], [f"{p}_mul"], name=f"{p}_mul"
+        )
+        lin = helper.make_node(
+            "Add", [f"{p}_mul", f"{p}_col"], [f"{p}_lin"], name=f"{p}_lin"
+        )
+        cast_data = helper.make_node(
+            "Cast",
+            [orig_data],
+            [f"{p}_dataf"],
+            to=TensorProto.FLOAT,
+            name=f"{p}_cast_data",
+        )
+        flat_shape = helper.make_node(
+            "Constant",
+            [],
+            [f"{p}_fs"],
+            value=helper.make_tensor(f"{p}_fs", TensorProto.INT64, [1], [-1]),
+            name=f"{p}_fs",
+        )
+        flat = helper.make_node(
+            "Reshape", [f"{p}_dataf", f"{p}_fs"], [f"{p}_flat"], name=f"{p}_flat"
+        )
+        gather = helper.make_node(
+            "Gather",
+            [f"{p}_flat", f"{p}_lin"],
+            [f"{p}_outf"],
+            axis=0,
+            name=f"{p}_gather",
+        )
+        cast_back = helper.make_node(
+            "Cast",
+            [f"{p}_outf"],
+            [final_out],
+            to=TensorProto.BOOL,
+            name=f"{p}_cast_back",
+        )
 
-        new_nodes = [c0, c1, row, col, dshape, T, mul, lin, cast_data, flat_shape, flat, gather, cast_back]
+        new_nodes = [
+            c0,
+            c1,
+            row,
+            col,
+            dshape,
+            T,
+            mul,
+            lin,
+            cast_data,
+            flat_shape,
+            flat,
+            gather,
+            cast_back,
+        ]
 
         # Rebuild graph: remove deleted, insert new nodes at GatherND position
         old_nodes = list(graph.node)
@@ -200,7 +260,9 @@ def fix_gathernd_in_model(model_path):
         print(f"  Inserted {len(new_nodes)} replacement nodes.")
 
     # Quick validation: check no undefined inputs
-    all_produced = set(i.name for i in graph.initializer) | set(i.name for i in graph.input)
+    all_produced = set(i.name for i in graph.initializer) | set(
+        i.name for i in graph.input
+    )
     bad = []
     for n in graph.node:
         for inp in n.input:
@@ -233,8 +295,8 @@ def main():
         onnx.save(model, tmp)
         sess = ort.InferenceSession(tmp)
         audio = np.random.randn(1, 2400).astype(np.float32)
-        mask  = np.ones((1, 2400), dtype=np.int64)
-        out   = sess.run(None, {"audio_features": audio, "audio_attention_mask": mask})
+        mask = np.ones((1, 2400), dtype=np.int64)
+        out = sess.run(None, {"audio_features": audio, "audio_attention_mask": mask})
         print(f"[+] OnnxRuntime OK. Output shape: {out[0].shape}")
     except Exception as e:
         print(f"[!] OnnxRuntime verification FAILED: {e}")
@@ -247,16 +309,19 @@ def main():
     print("[+] Saved: onnx/audio_encoder.onnx")
 
     # Repackage to pkg dir
-    out_dir  = "onnx/audio_encoder_pkg.onnx"
+    out_dir = "onnx/audio_encoder_pkg.onnx"
     out_onnx = os.path.join(out_dir, "audio_encoder.onnx")
     out_data = os.path.join(out_dir, "audio_encoder.data")
     os.makedirs(out_dir, exist_ok=True)
     if os.path.exists(out_data):
         os.remove(out_data)
-    onnx.save(model, out_onnx,
-              save_as_external_data=True,
-              all_tensors_to_one_file=True,
-              location="audio_encoder.data")
+    onnx.save(
+        model,
+        out_onnx,
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location="audio_encoder.data",
+    )
     print(f"[+] Saved: {out_onnx}")
     print("[+] Done! Run repackage_models.py is NOT needed — already repackaged.")
 

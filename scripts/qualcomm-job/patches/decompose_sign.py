@@ -17,7 +17,6 @@ import onnx
 from onnx import helper, TensorProto, numpy_helper
 import numpy as np
 
-
 # Map ONNX elem_type to numpy dtype
 ELEM_TYPE_TO_NP = {
     TensorProto.FLOAT: np.float32,
@@ -52,16 +51,16 @@ def infer_input_type(graph, input_name: str) -> int:
 
 def decompose_sign_nodes(graph):
     """Find and decompose all Sign nodes in the graph.
-    
+
     For integer types (like INT64), we need a special approach since
     Greater/Less comparisons require matching types:
-    
+
     For integer input x:
         1. Cast x to float32
         2. Create float32 constants (0.0, 1.0, -1.0)
         3. Apply Greater/Less/Where on float32
         4. Cast result back to original integer type
-    
+
     For float input x:
         Directly use matching-type constants.
     """
@@ -75,24 +74,34 @@ def decompose_sign_nodes(graph):
         input_var = node.input[0]
         output_var = node.output[0]
         prefix = f"decomposed_sign_{idx}"
-        
+
         elem_type = infer_input_type(graph, input_var)
         np_dtype = ELEM_TYPE_TO_NP.get(elem_type, np.float32)
-        is_integer = elem_type in (TensorProto.INT64, TensorProto.INT32, TensorProto.INT16, TensorProto.INT8, TensorProto.UINT8)
-        
+        is_integer = elem_type in (
+            TensorProto.INT64,
+            TensorProto.INT32,
+            TensorProto.INT16,
+            TensorProto.INT8,
+            TensorProto.UINT8,
+        )
+
         print(f"[*] Found Sign node: {node.name} at index {idx}")
-        print(f"    Input: {input_var} (elem_type={elem_type}, dtype={np_dtype.__name__}, is_int={is_integer})")
+        print(
+            f"    Input: {input_var} (elem_type={elem_type}, dtype={np_dtype.__name__}, is_int={is_integer})"
+        )
         print(f"    Output: {output_var}")
 
         new_nodes = []
-        
+
         if is_integer:
             # For integer types: cast to float32, do comparison, cast back
             cast_input_name = f"{prefix}_input_f32"
             cast_to_float = helper.make_node(
-                "Cast", [input_var], [cast_input_name],
+                "Cast",
+                [input_var],
+                [cast_input_name],
                 to=TensorProto.FLOAT,
-                name=f"{prefix}_cast_to_float"
+                name=f"{prefix}_cast_to_float",
             )
             new_nodes.append(cast_to_float)
             comparison_input = cast_input_name
@@ -102,7 +111,7 @@ def decompose_sign_nodes(graph):
             comparison_input = input_var
             const_onnx_type = elem_type
             const_np_type = np_dtype
-        
+
         # Constants in the comparison type
         zero_tensor = numpy_helper.from_array(
             np.array(0.0, dtype=const_np_type), name=f"{prefix}_zero_val"
@@ -115,13 +124,25 @@ def decompose_sign_nodes(graph):
         )
 
         const_zero = helper.make_node(
-            "Constant", [], [f"{prefix}_zero"], value=zero_tensor, name=f"{prefix}_const_zero"
+            "Constant",
+            [],
+            [f"{prefix}_zero"],
+            value=zero_tensor,
+            name=f"{prefix}_const_zero",
         )
         const_one = helper.make_node(
-            "Constant", [], [f"{prefix}_one"], value=one_tensor, name=f"{prefix}_const_one"
+            "Constant",
+            [],
+            [f"{prefix}_one"],
+            value=one_tensor,
+            name=f"{prefix}_const_one",
         )
         const_neg_one = helper.make_node(
-            "Constant", [], [f"{prefix}_neg_one"], value=neg_one_tensor, name=f"{prefix}_const_neg_one"
+            "Constant",
+            [],
+            [f"{prefix}_neg_one"],
+            value=neg_one_tensor,
+            name=f"{prefix}_const_neg_one",
         )
         new_nodes.extend([const_zero, const_one, const_neg_one])
 
@@ -157,24 +178,34 @@ def decompose_sign_nodes(graph):
             float_result_name = f"{prefix}_result_f32"
             outer_where = helper.make_node(
                 "Where",
-                inputs=[f"{prefix}_is_positive", f"{prefix}_one", f"{prefix}_neg_or_zero"],
+                inputs=[
+                    f"{prefix}_is_positive",
+                    f"{prefix}_one",
+                    f"{prefix}_neg_or_zero",
+                ],
                 outputs=[float_result_name],
                 name=f"{prefix}_outer_where",
             )
             new_nodes.append(outer_where)
-            
+
             # Cast back to original integer type
             cast_back = helper.make_node(
-                "Cast", [float_result_name], [output_var],
+                "Cast",
+                [float_result_name],
+                [output_var],
                 to=elem_type,
-                name=f"{prefix}_cast_to_int"
+                name=f"{prefix}_cast_to_int",
             )
             new_nodes.append(cast_back)
         else:
             # Direct output for float types
             outer_where = helper.make_node(
                 "Where",
-                inputs=[f"{prefix}_is_positive", f"{prefix}_one", f"{prefix}_neg_or_zero"],
+                inputs=[
+                    f"{prefix}_is_positive",
+                    f"{prefix}_one",
+                    f"{prefix}_neg_or_zero",
+                ],
                 outputs=[output_var],
                 name=f"{prefix}_outer_where",
             )

@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 
 # ─── Audio loading helpers ────────────────────────────────────────────────────
 
+
 def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
     """Load an audio file and return a float32 numpy array at target_sr Hz."""
     waveform = None
@@ -29,6 +30,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
     # 1. Try soundfile (wav, flac, ogg, aiff — NOT mp3 without libsndfile mp3 plugin)
     try:
         import soundfile as sf
+
         waveform, sr = sf.read(path, dtype="float32", always_2d=False)
         if waveform.ndim == 2:
             waveform = waveform.mean(axis=1)
@@ -39,6 +41,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
     if waveform is None:
         try:
             import librosa
+
             waveform, sr = librosa.load(path, sr=None, mono=True, dtype=np.float32)
         except Exception:
             pass
@@ -47,6 +50,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
     if waveform is None:
         try:
             from pydub import AudioSegment
+
             audio = AudioSegment.from_file(path)
             audio = audio.set_channels(1).set_frame_rate(target_sr)
             samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
@@ -59,6 +63,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
     if waveform is None:
         try:
             import torchaudio
+
             waveform_t, sr = torchaudio.load(path)
             waveform = waveform_t.mean(dim=0).numpy().astype(np.float32)
         except Exception:
@@ -75,12 +80,15 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
         ratio = target_sr / sr
         new_length = int(len(waveform) * ratio)
         indices = np.linspace(0, len(waveform) - 1, new_length)
-        waveform = np.interp(indices, np.arange(len(waveform)), waveform).astype(np.float32)
+        waveform = np.interp(indices, np.arange(len(waveform)), waveform).astype(
+            np.float32
+        )
 
     return waveform
 
 
 # ─── Main inference function ──────────────────────────────────────────────────
+
 
 def translate(
     audio_path: str,
@@ -115,7 +123,9 @@ def translate(
 
     # ── 1. Load tokenizer & model ─────────────────────────────────────────────
     print(f"[inference] Loading tokenizer from {repo_id} ...")
-    tokenizer = AutoTokenizer.from_pretrained(repo_id, trust_remote_code=True, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(
+        repo_id, trust_remote_code=True, use_fast=False
+    )
 
     print(f"[inference] Loading model from {repo_id} ...")
     # Use local source classes directly to avoid meta-device issues with nested from_pretrained calls
@@ -128,11 +138,16 @@ def translate(
     config_path = hf_hub_download(repo_id=repo_id, filename="config.json")
     with open(config_path) as f:
         config_dict = json.load(f)
-    config = DiscreteDiffusionConfig(**{
-        k: v for k, v in config_dict.items()
-        if not k.startswith("_") and k != "model_type" and k != "transformers_version"
-        and k != "auto_map"
-    })
+    config = DiscreteDiffusionConfig(
+        **{
+            k: v
+            for k, v in config_dict.items()
+            if not k.startswith("_")
+            and k != "model_type"
+            and k != "transformers_version"
+            and k != "auto_map"
+        }
+    )
 
     # Build the model from config then load weights from Hub
     model = DiscreteDiffusionModel(config)
@@ -141,6 +156,7 @@ def translate(
     try:
         weights_path = hf_hub_download(repo_id=repo_id, filename="model.safetensors")
         from safetensors.torch import load_file
+
         state_dict = load_file(weights_path, device="cpu")
     except Exception:
         weights_path = hf_hub_download(repo_id=repo_id, filename="pytorch_model.bin")
@@ -149,12 +165,18 @@ def translate(
     missing, unexpected = model.load_state_dict(state_dict, strict=False)
     # lm_head.decoder.weight is a tied weight (omitted from safetensors) — re-tie explicitly
     if config.tie_word_embeddings:
-        model.model.lm_head.decoder.weight = model.model.roberta.embeddings.word_embeddings.weight
+        model.model.lm_head.decoder.weight = (
+            model.model.roberta.embeddings.word_embeddings.weight
+        )
     missing = [k for k in (missing or []) if "lm_head.decoder.weight" not in k]
     if missing:
-        print(f"  [WARN] Missing keys: {missing[:5]}{'...' if len(missing) > 5 else ''}")
+        print(
+            f"  [WARN] Missing keys: {missing[:5]}{'...' if len(missing) > 5 else ''}"
+        )
     if unexpected:
-        print(f"  [WARN] Unexpected keys: {unexpected[:5]}{'...' if len(unexpected) > 5 else ''}")
+        print(
+            f"  [WARN] Unexpected keys: {unexpected[:5]}{'...' if len(unexpected) > 5 else ''}"
+        )
 
     model = model.eval().to(device)
 
@@ -167,7 +189,7 @@ def translate(
     TASKS = {
         "english": "<vi_en>",
         "chinese": "<vi_zh>",
-        "korean":  "<vi_ko>",
+        "korean": "<vi_ko>",
     }
     task_token_ids = {}
     for lang, token in TASKS.items():
@@ -194,13 +216,13 @@ def translate(
     # Process and pad features to a multiple of 80 frames (Moonshine requirement)
     audio_inputs = feature_extractor(waveform, sampling_rate=16000, return_tensors="pt")
     audio_values_raw = audio_inputs.input_values.to(device)
-    
+
     audio_len = audio_values_raw.size(-1)
     padded_len = ((audio_len + 79) // 80) * 80
     padded_audio = torch.zeros(1, padded_len, device=device)
     padded_audio[0, :audio_len] = audio_values_raw[0]
     audio_values = padded_audio
-    
+
     padded_mask = torch.zeros(1, padded_len, dtype=torch.long, device=device)
     padded_mask[0, :audio_len] = 1
     audio_attention_mask = padded_mask
@@ -208,13 +230,12 @@ def translate(
     if device == "cuda":
         audio_values = audio_values.to(torch.bfloat16)
 
-
     # ── 4. Run translation for each target language ───────────────────────────
     results = {}
-    bos_id  = tokenizer.bos_token_id
-    eos_id  = tokenizer.eos_token_id
+    bos_id = tokenizer.bos_token_id
+    eos_id = tokenizer.eos_token_id
     mask_id = tokenizer.mask_token_id
-    pad_id  = tokenizer.pad_token_id
+    pad_id = tokenizer.pad_token_id
 
     print("\n[inference] Translating ...")
     with torch.no_grad():
@@ -242,11 +263,16 @@ def translate(
             src_length = src_tokens.size(1)
 
             # Canvas: [BOS, <vi_XX>, MASK...MASK, EOS]
-            canvas = torch.cat([
-                src_tokens,
-                torch.full((1, canvas_len), mask_id, dtype=torch.long, device=device),
-                torch.tensor([[eos_id]], dtype=torch.long, device=device),
-            ], dim=1)  # (1, 2 + canvas_len + 1)
+            canvas = torch.cat(
+                [
+                    src_tokens,
+                    torch.full(
+                        (1, canvas_len), mask_id, dtype=torch.long, device=device
+                    ),
+                    torch.tensor([[eos_id]], dtype=torch.long, device=device),
+                ],
+                dim=1,
+            )  # (1, 2 + canvas_len + 1)
 
             # partial_mask: True for fixed source prefix, False for generated part
             partial_mask = torch.zeros_like(canvas, dtype=torch.bool)
@@ -254,17 +280,18 @@ def translate(
 
             # non_fixed_sym_masks: positions the model is allowed to fill (exclude BOS, EOS, task tokens)
             non_fixed_sym_masks = (
-                canvas.ne(pad_id) &
-                canvas.ne(bos_id) &
-                canvas.ne(eos_id) &
-                ~partial_mask
+                canvas.ne(pad_id)
+                & canvas.ne(bos_id)
+                & canvas.ne(eos_id)
+                & ~partial_mask
             )
 
             output_scores = torch.zeros_like(canvas, dtype=torch.float32)
-            output_mask   = canvas.eq(mask_id)
+            output_mask = canvas.eq(mask_id)
 
             # Run diffusion denoising loop
             from model.modeling_dlm import decoder_out_t
+
             decoder_out = decoder_out_t(
                 output_tokens=canvas.clone(),
                 output_scores=output_scores,
@@ -289,10 +316,10 @@ def translate(
             # Extract generated tokens (exclude source prefix, EOS, PAD)
             out_tokens = decoder_out.output_tokens[0]  # (seq_len,)
             cutoff = (
-                out_tokens.ne(pad_id) &
-                out_tokens.ne(bos_id) &
-                out_tokens.ne(eos_id) &
-                ~partial_mask[0]
+                out_tokens.ne(pad_id)
+                & out_tokens.ne(bos_id)
+                & out_tokens.ne(eos_id)
+                & ~partial_mask[0]
             )
             gen_tokens = out_tokens[cutoff]
 
@@ -304,6 +331,7 @@ def translate(
 
 
 # ─── CLI entry point ──────────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -319,7 +347,8 @@ def main():
         help="HuggingFace model repository ID.",
     )
     parser.add_argument(
-        "--iterations", "-n",
+        "--iterations",
+        "-n",
         type=int,
         default=10,
         help="Number of diffusion denoising steps (default: 10).",

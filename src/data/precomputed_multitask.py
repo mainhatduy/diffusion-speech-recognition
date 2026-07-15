@@ -18,13 +18,24 @@ class PrecomputedMultiTaskDataset(PromptDataset):
 
     TASK_TO_FIELD = {"<vi_en>": "english", "<vi_zh>": "chinese", "<vi_ko>": "korean"}
 
-    def __init__(self, args, index, token_ids_map, task_configs, tokenizer,
-                 embed_dir, save_dtype, is_train=True, embed_dataset=None, embed_file_to_row=None):
+    def __init__(
+        self,
+        args,
+        index,
+        token_ids_map,
+        task_configs,
+        tokenizer,
+        embed_dir,
+        save_dtype,
+        is_train=True,
+        embed_dataset=None,
+        embed_file_to_row=None,
+    ):
         # PromptDataset expects raw_data; pass index as raw_data
         super().__init__(args, index, tokenizer)
-        self.index = index           # list of {"idx", "wav_id", "embed_file"}
+        self.index = index  # list of {"idx", "wav_id", "embed_file"}
         self.token_ids_map = token_ids_map  # {field_name: list[list[int]]}
-        self.task_configs = task_configs     # [(field_name, token_id), ...]
+        self.task_configs = task_configs  # [(field_name, token_id), ...]
         self.embed_dir = embed_dir
         self.n_tasks = len(task_configs)
         self.save_dtype = np.float16 if save_dtype == "float16" else np.float32
@@ -48,7 +59,7 @@ class PrecomputedMultiTaskDataset(PromptDataset):
             # Load from parquet dataset (memory-mapped arrow)
             row_idx = self.embed_file_to_row[entry["embed_file"]]
             row = self.embed_dataset[row_idx]
-            
+
             shape = row.get("shape", None)
             embedding_bytes = row["embedding_bytes"]
             audio_embeds = np.frombuffer(embedding_bytes, dtype=self.save_dtype)
@@ -66,7 +77,7 @@ class PrecomputedMultiTaskDataset(PromptDataset):
         # ── Load pre-tokenized text target ──
         tgt = list(self.token_ids_map[tgt_field][data_idx])
         if len(tgt) > self.max_length:
-            tgt = tgt[:self.max_length]
+            tgt = tgt[: self.max_length]
 
         # ── Build source prefix with task token ──
         src = [self.tokenizer.bos_token_id, task_token_id]
@@ -78,13 +89,15 @@ class PrecomputedMultiTaskDataset(PromptDataset):
         src_length = len(src)
         concatenated = src + tgt
 
-        target_tgt = ([self.tokenizer.bos_token_id] + tgt
-                      if len(tgt) == 0 or tgt[0] != self.tokenizer.bos_token_id
-                      else tgt)
+        target_tgt = (
+            [self.tokenizer.bos_token_id] + tgt
+            if len(tgt) == 0 or tgt[0] != self.tokenizer.bos_token_id
+            else tgt
+        )
 
         return {
             "id": flat_index,
-            "source": torch.tensor(concatenated)[-self.max_length:],
+            "source": torch.tensor(concatenated)[-self.max_length :],
             "target": torch.tensor(target_tgt),
             "src_length": src_length,
             "precomputed_audio_embeds": audio_embeds,  # (T_frames, D_audio)
@@ -94,7 +107,9 @@ class PrecomputedMultiTaskDataset(PromptDataset):
     def load_data(args, tokenizer, train=True, valid=True, test=False):
         """Load pre-computed dataset from disk."""
         tokenizer.model_max_length = args.max_length
-        logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
+        logging.getLogger("transformers.tokenization_utils_base").setLevel(
+            logging.ERROR
+        )
 
         precomputed_dir = args.precomputed_data_dir
         if not os.path.exists(precomputed_dir):
@@ -111,25 +126,39 @@ class PrecomputedMultiTaskDataset(PromptDataset):
         save_dtype = metadata.get("save_dtype", "float16")
 
         print(f"[PrecomputedMultiTask] Loading from {precomputed_dir}")
-        print(f"[PrecomputedMultiTask] Encoder: {metadata['audio_encoder_name']}, "
-              f"hidden_size: {metadata['audio_hidden_size']}, dtype: {save_dtype}")
+        print(
+            f"[PrecomputedMultiTask] Encoder: {metadata['audio_encoder_name']}, "
+            f"hidden_size: {metadata['audio_hidden_size']}, dtype: {save_dtype}"
+        )
 
         # Check if parquet sharded files exist in embed_dir
         import glob
+
         parquet_files = sorted(glob.glob(os.path.join(embed_dir, "*.parquet")))
         if parquet_files:
-            print(f"[PrecomputedMultiTask] Found {len(parquet_files)} parquet files. Using Parquet loading.")
+            print(
+                f"[PrecomputedMultiTask] Found {len(parquet_files)} parquet files. Using Parquet loading."
+            )
             from datasets import load_dataset
+
             num_cores = os.cpu_count() or 1
             num_proc = max(1, int(num_cores * 0.5))
-            print(f"[PrecomputedMultiTask] Loading parquet with {num_proc} CPU processes (50% of {num_cores} cores)...")
-            embed_dataset = load_dataset("parquet", data_files=parquet_files, num_proc=num_proc)["train"]
+            print(
+                f"[PrecomputedMultiTask] Loading parquet with {num_proc} CPU processes (50% of {num_cores} cores)..."
+            )
+            embed_dataset = load_dataset(
+                "parquet", data_files=parquet_files, num_proc=num_proc
+            )["train"]
             print("[PrecomputedMultiTask] Building embed_file index map...")
             embed_file_col = embed_dataset["embed_file"]
             embed_file_to_row = {name: i for i, name in enumerate(embed_file_col)}
-            print(f"[PrecomputedMultiTask] Built map for {len(embed_file_to_row)} unique embedding files.")
+            print(
+                f"[PrecomputedMultiTask] Built map for {len(embed_file_to_row)} unique embedding files."
+            )
         else:
-            print("[PrecomputedMultiTask] No parquet files found. Using standard numpy loading.")
+            print(
+                "[PrecomputedMultiTask] No parquet files found. Using standard numpy loading."
+            )
             embed_dataset = None
             embed_file_to_row = None
 
@@ -159,8 +188,10 @@ class PrecomputedMultiTaskDataset(PromptDataset):
                 raise FileNotFoundError(f"Token file {tok_path} not found.")
             with open(tok_path) as f:
                 token_ids_map[field_name] = json.load(f)
-            print(f"[PrecomputedMultiTask] Loaded {len(token_ids_map[field_name])} "
-                  f"token sequences for '{field_name}'")
+            print(
+                f"[PrecomputedMultiTask] Loaded {len(token_ids_map[field_name])} "
+                f"token sequences for '{field_name}'"
+            )
 
         # Filter: check that all tasks have non-empty text and fit in max_length
         valid_indices = []
@@ -175,7 +206,7 @@ class PrecomputedMultiTaskDataset(PromptDataset):
                 if (2 + len(tids)) > args.max_length:
                     ok = False
                     break
-            
+
             # Check embed file exists
             if ok:
                 if embed_file_to_row is not None:
@@ -184,14 +215,17 @@ class PrecomputedMultiTaskDataset(PromptDataset):
                 else:
                     if not os.path.exists(os.path.join(embed_dir, entry["embed_file"])):
                         ok = False
-            
+
             if ok:
                 valid_indices.append(entry)
 
-        print(f"[PrecomputedMultiTask] After filtering: {len(valid_indices)}/{len(full_index)} valid")
+        print(
+            f"[PrecomputedMultiTask] After filtering: {len(valid_indices)}/{len(full_index)} valid"
+        )
 
         # Split train/val (same seed as original)
         import random
+
         rng = random.Random(42)
         shuffled = list(valid_indices)
         rng.shuffle(shuffled)
@@ -200,26 +234,63 @@ class PrecomputedMultiTaskDataset(PromptDataset):
         val_index = shuffled[split_point:]
 
         n_tasks = len(task_configs)
-        print(f"[PrecomputedMultiTask] Split: {len(train_index)} train / {len(val_index)} val")
-        print(f"[PrecomputedMultiTask] Effective (×{n_tasks}): "
-              f"{len(train_index)*n_tasks} train / {len(val_index)*n_tasks} val")
+        print(
+            f"[PrecomputedMultiTask] Split: {len(train_index)} train / {len(val_index)} val"
+        )
+        print(
+            f"[PrecomputedMultiTask] Effective (×{n_tasks}): "
+            f"{len(train_index)*n_tasks} train / {len(val_index)*n_tasks} val"
+        )
 
-        train_ds = PrecomputedMultiTaskDataset(
-            args, train_index, token_ids_map, task_configs, tokenizer,
-            embed_dir, save_dtype, is_train=True,
-            embed_dataset=embed_dataset, embed_file_to_row=embed_file_to_row
-        ) if train else None
+        train_ds = (
+            PrecomputedMultiTaskDataset(
+                args,
+                train_index,
+                token_ids_map,
+                task_configs,
+                tokenizer,
+                embed_dir,
+                save_dtype,
+                is_train=True,
+                embed_dataset=embed_dataset,
+                embed_file_to_row=embed_file_to_row,
+            )
+            if train
+            else None
+        )
 
-        val_ds = PrecomputedMultiTaskDataset(
-            args, val_index, token_ids_map, task_configs, tokenizer,
-            embed_dir, save_dtype, is_train=False,
-            embed_dataset=embed_dataset, embed_file_to_row=embed_file_to_row
-        ) if valid else None
+        val_ds = (
+            PrecomputedMultiTaskDataset(
+                args,
+                val_index,
+                token_ids_map,
+                task_configs,
+                tokenizer,
+                embed_dir,
+                save_dtype,
+                is_train=False,
+                embed_dataset=embed_dataset,
+                embed_file_to_row=embed_file_to_row,
+            )
+            if valid
+            else None
+        )
 
-        test_ds = PrecomputedMultiTaskDataset(
-            args, val_index, token_ids_map, task_configs, tokenizer,
-            embed_dir, save_dtype, is_train=False,
-            embed_dataset=embed_dataset, embed_file_to_row=embed_file_to_row
-        ) if test else None
+        test_ds = (
+            PrecomputedMultiTaskDataset(
+                args,
+                val_index,
+                token_ids_map,
+                task_configs,
+                tokenizer,
+                embed_dir,
+                save_dtype,
+                is_train=False,
+                embed_dataset=embed_dataset,
+                embed_file_to_row=embed_file_to_row,
+            )
+            if test
+            else None
+        )
 
         return train_ds, val_ds, test_ds

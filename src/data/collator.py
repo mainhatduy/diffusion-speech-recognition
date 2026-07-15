@@ -1,12 +1,13 @@
 import torch
 from dataclasses import dataclass
 
+
 @dataclass
 class DiscreteDiffusionDataCollator(object):
     bos_id: int
     eos_id: int
     pad_id: int
-    
+
     def __call__(self, samples):
         # Filter out None samples
         samples = [s for s in samples if s is not None]
@@ -33,10 +34,10 @@ class DiscreteDiffusionDataCollator(object):
         # Create partial_masks to mark source vs target positions
         batch_size, seq_len = source_padded.size()
         src_lengths_tensor = torch.tensor(src_lengths, dtype=torch.long)
-        
+
         # Create position indices [0, 1, 2, ..., seq_len-1] for each sample
         position_ids = torch.arange(seq_len).unsqueeze(0).expand(batch_size, -1)
-        
+
         # partial_masks[i, j] = True if j < src_length[i]
         partial_masks = position_ids < src_lengths_tensor.unsqueeze(1)
 
@@ -44,9 +45,9 @@ class DiscreteDiffusionDataCollator(object):
         net_input = {
             "src_tokens": source_padded,
             "src_lengths": torch.tensor([len(s) for s in sources]),
-            "partial_masks": partial_masks
+            "partial_masks": partial_masks,
         }
-        
+
         # Handle audio features if present (for speech_recognition)
         has_audio = "audio_values" in samples[0]
         has_precomputed = "precomputed_audio_embeds" in samples[0]
@@ -69,7 +70,9 @@ class DiscreteDiffusionDataCollator(object):
             max_audio_len = max(av.size(-1) for av in audio_values_list)
             max_audio_len = ((max_audio_len + 79) // 80) * 80
             padded_audio = torch.zeros(batch_size, max_audio_len)
-            audio_attention_mask = torch.zeros(batch_size, max_audio_len, dtype=torch.long)
+            audio_attention_mask = torch.zeros(
+                batch_size, max_audio_len, dtype=torch.long
+            )
             for i, av in enumerate(audio_values_list):
                 length = av.size(-1)
                 padded_audio[i, :length] = av
@@ -84,5 +87,5 @@ class DiscreteDiffusionDataCollator(object):
             "nsentences": len(samples),
             "ntokens": sum(len(s) for s in targets),
         }
-        
+
         return batch

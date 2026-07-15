@@ -6,27 +6,33 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def main():
     repo_id = "aiai-laboratory/onnx-diffusion-speech-translation-from-vi-v1"
     token = os.getenv("HF_TOKEN")
-    
+
     if not token:
-        print("HF_TOKEN environment variable is not set. Please set it in your .env file.")
+        print(
+            "HF_TOKEN environment variable is not set. Please set it in your .env file."
+        )
         sys.exit(1)
-        
+
     api = HfApi(token=token)
-    
+
     print(f"Creating repository (if it doesn't exist): {repo_id}")
     try:
         create_repo(repo_id=repo_id, repo_type="model", token=token, exist_ok=True)
         print("Repository ready.")
     except Exception as e:
         print(f"Error creating/verifying repository: {e}")
-        
+
     # 1. Upload Tokenizer
     print("Uploading tokenizer...")
     try:
-        tokenizer = AutoTokenizer.from_pretrained("aiai-laboratory/diffusion-speech-translation-from-vi-v1", trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(
+            "aiai-laboratory/diffusion-speech-translation-from-vi-v1",
+            trust_remote_code=True,
+        )
         tokenizer.push_to_hub(repo_id, token=token)
         print("Tokenizer uploaded successfully.")
     except Exception as e:
@@ -39,7 +45,7 @@ def main():
         ("onnx/diffusion_backbone.onnx", "diffusion_backbone.onnx"),
         ("onnx/diffusion_backbone.onnx.data", "diffusion_backbone.onnx.data"),
     ]
-    
+
     print("Uploading ONNX model files...")
     for local_path, repo_path in onnx_files:
         if os.path.exists(local_path):
@@ -50,7 +56,7 @@ def main():
                     path_in_repo=repo_path,
                     repo_id=repo_id,
                     repo_type="model",
-                    commit_message=f"Upload {repo_path}"
+                    commit_message=f"Upload {repo_path}",
                 )
                 print(f"Successfully uploaded {repo_path}")
             except Exception as e:
@@ -73,7 +79,7 @@ def main():
                     path_in_repo=repo_path,
                     repo_id=repo_id,
                     repo_type="model",
-                    commit_message=f"Upload {repo_path} helper"
+                    commit_message=f"Upload {repo_path} helper",
                 )
                 print(f"Successfully uploaded {repo_path}")
             except Exception as e:
@@ -232,27 +238,28 @@ for label, task_token in tasks.items():
     print(f"{{label}}: {{text}}")
 ```
 """
-    
+
     temp_readme = "temp_onnx_README.md"
     with open(temp_readme, "w", encoding="utf-8") as f:
         f.write(readme_content)
-        
+
     try:
         api.upload_file(
             path_or_fileobj=temp_readme,
             path_in_repo="README.md",
             repo_id=repo_id,
             repo_type="model",
-            commit_message="Add ONNX model README"
+            commit_message="Add ONNX model README",
         )
         print("README.md uploaded successfully.")
     except Exception as e:
         print(f"Failed to upload README.md: {e}")
-        
+
     if os.path.exists(temp_readme):
         os.remove(temp_readme)
-        
+
     print(f"\nAll tasks complete! View model at: https://huggingface.co/{repo_id}")
+
 
 if __name__ == "__main__":
     main()

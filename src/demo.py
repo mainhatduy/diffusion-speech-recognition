@@ -1,6 +1,5 @@
 import streamlit as st
 from interactive import InteractiveDiffusion
-import pandas as pd
 
 st.title("Diffusion LLM demo")
 
@@ -46,7 +45,6 @@ strategy = st.sidebar.selectbox(
 
 
 def show_results(prompt):
-    outputs = []
     for i, output in enumerate(
         st.session_state.engine.sample(
             prompt,

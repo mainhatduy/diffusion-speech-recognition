@@ -1,13 +1,9 @@
-import transformers
 from transformers import Trainer
 from transformers.utils import logging
 from transformers.trainer_utils import (
     EvalPrediction,
-    EvalLoopOutput,
     seed_worker,
-    has_length,
 )
-from transformers.trainer_pt_utils import find_batch_size
 from transformers.trainer_callback import TrainerCallback
 from transformers.modeling_utils import PreTrainedModel
 from transformers.data.data_collator import DataCollator
@@ -25,9 +21,8 @@ from data.sampler import TokenSizeDistributedLengthGroupSampler
 from dd_generator import DiscreteDiffusionGenerator
 
 from dataclasses import dataclass, field
-from typing import Optional
 
-from utils import mean_ds, is_master
+from utils import is_master
 
 from tqdm import tqdm
 
@@ -37,9 +32,7 @@ import os
 
 from transformers import TrainingArguments
 
-from dataclasses import dataclass, field
 
-from typing import List
 
 
 @dataclass
@@ -594,8 +587,8 @@ class DiscreteDiffusionTrainer(Trainer):
                             hyp_str = self.generator.decode(test_hyps)[0]
 
                             print(f"--- Language: {tgt_field} ---")
-                            print(f"TARGET:", ref_str)
-                            print(f"PRED:", hyp_str)
+                            print("TARGET:", ref_str)
+                            print("PRED:", hyp_str)
                         print("=" * 80 + "\n")
                         self.has_printed_sample = True
                     else:
@@ -654,8 +647,8 @@ class DiscreteDiffusionTrainer(Trainer):
                             f"VALIDATION SAMPLE PREDICTION (Fixed Audio Sample from {mp3_path})"
                         )
                         print(f"INPUT: [Audio File: {mp3_path}]")
-                        print(f"TARGET:", ref_str)
-                        print(f"PRED:", hyp_str)
+                        print("TARGET:", ref_str)
+                        print("PRED:", hyp_str)
                         print("=" * 80 + "\n")
 
                         self.has_printed_sample = True
@@ -782,8 +775,8 @@ class DiscreteDiffusionTrainer(Trainer):
                             hyp_str = self.generator.decode(test_hyps)[0]
 
                             print(f"--- Language: {tgt_field} ---")
-                            print(f"TARGET:", ref_str)
-                            print(f"PRED:", hyp_str)
+                            print("TARGET:", ref_str)
+                            print("PRED:", hyp_str)
                         print("=" * 80 + "\n")
                         self.has_printed_sample = True
                     else:
@@ -806,9 +799,9 @@ class DiscreteDiffusionTrainer(Trainer):
                         print(
                             f"VALIDATION SAMPLE PREDICTION (Random sample {random_idx} from batch of {batch_size})"
                         )
-                        print(f"INPUT:", src_str)
-                        print(f"TARGET:", ref_str)
-                        print(f"PRED:", hyp_str)
+                        print("INPUT:", src_str)
+                        print("TARGET:", ref_str)
+                        print("PRED:", hyp_str)
                         print("=" * 80 + "\n")
 
                         self.has_printed_sample = True
@@ -937,8 +930,8 @@ class DiscreteDiffusionTrainer(Trainer):
                             hyp_str = self.generator.decode(test_hyps)[0]
 
                             print(f"--- Language: {tgt_field} ---")
-                            print(f"TARGET:", ref_str)
-                            print(f"PRED:", hyp_str)
+                            print("TARGET:", ref_str)
+                            print("PRED:", hyp_str)
                         print("=" * 80 + "\n")
                         self.has_printed_sample = True
                     else:
@@ -961,9 +954,9 @@ class DiscreteDiffusionTrainer(Trainer):
                         print(
                             f"VALIDATION SAMPLE PREDICTION (Fallback Random sample {random_idx} from batch of {batch_size})"
                         )
-                        print(f"INPUT:", src_str)
-                        print(f"TARGET:", ref_str)
-                        print(f"PRED:", hyp_str)
+                        print("INPUT:", src_str)
+                        print("TARGET:", ref_str)
+                        print("PRED:", hyp_str)
                         print("=" * 80 + "\n")
                         self.has_printed_sample = True
                 except Exception as e2:
@@ -1054,25 +1047,6 @@ class DiscreteDiffusionTrainer(Trainer):
                                 torch.tensor(
                                     [float(len(hyps_seqs))], dtype=torch.float32
                                 ).to(loss)
-                            )
-                        elif metric == "smatchpp":
-                            smatchpp_scores = self.generator.compute_smatchpp(
-                                hyps_seqs, refs_seqs
-                            )
-                            sys_parts.append(
-                                torch.tensor(
-                                    [
-                                        smatchpp_scores["f1"],
-                                        smatchpp_scores["precision"],
-                                        smatchpp_scores["recall"],
-                                    ],
-                                    dtype=torch.float32,
-                                ).to(loss)
-                            )
-                            ref_parts.append(
-                                torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32).to(
-                                    loss
-                                )
                             )
 
                     sys_stat = torch.cat(sys_parts).unsqueeze(0)

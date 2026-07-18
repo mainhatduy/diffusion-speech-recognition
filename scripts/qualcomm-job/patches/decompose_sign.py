@@ -105,11 +105,9 @@ def decompose_sign_nodes(graph):
             )
             new_nodes.append(cast_to_float)
             comparison_input = cast_input_name
-            const_onnx_type = TensorProto.FLOAT
             const_np_type = np.float32
         else:
             comparison_input = input_var
-            const_onnx_type = elem_type
             const_np_type = np_dtype
 
         # Constants in the comparison type

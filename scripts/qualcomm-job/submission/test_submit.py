@@ -13,7 +13,7 @@ def main():
     os.environ["QAI_HUB_API_TOKEN"] = token
 
     print("Initializing qai_hub client...")
-    client = hub.Client()
+    hub.Client()
 
     device = hub.Device("Samsung Galaxy S25 (Family)")
     print(f"Target device: {device.name}")

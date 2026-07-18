@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 import argparse
 import qai_hub as hub
 
@@ -43,7 +42,7 @@ def main():
 
     # Initialize client
     print("[*] Initializing Qualcomm AI Hub client...")
-    client = hub.Client()
+    hub.Client()
 
     try:
         device = hub.Device(args.device)

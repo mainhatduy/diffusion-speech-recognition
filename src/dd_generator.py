@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Optional
 
 import torch
 import torch.distributions as dists
@@ -18,20 +17,6 @@ try:
     import jiwer
 except ImportError:
     jiwer = None
-
-try:
-    import penman
-    from smatchpp import Smatchpp, solvers
-    from smatchpp.formalism.generic import tools as generictools
-    from data.amr_process.postprocessing_str import (
-        postprocess_str_after_delinearization,
-    )
-except ImportError:
-    penman = None
-    Smatchpp = None
-    solvers = None
-    generictools = None
-    postprocess_str_after_delinearization = None
 
 
 @dataclass
@@ -67,7 +52,7 @@ def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
     masking = _scores < cutoff
     try:
         assert (~(cutoff_len == 0).all()) | (~masking).all()
-    except:
+    except AssertionError:
         import ipdb
 
         ipdb.set_trace()
@@ -114,7 +99,6 @@ class MergeRouge(object):
         #     import ipdb; ipdb.set_trace()
         # else:
         #     import time; time.sleep(120)
-        import inspect
 
         # sys
         avg_rouge, batch_size = evalpreds[0], evalpreds[1]
@@ -122,40 +106,6 @@ class MergeRouge(object):
         rouge = (avg_rouge * batch_size).sum() / batch_size.sum()
 
         return {"rouge": rouge}
-
-
-class MergeSmatchPP(object):
-    """Metric class for Smatch++ score computation during training."""
-
-    def __call__(self, evalpreds):
-        # evalpreds[0] contains metrics dict from compute_smatchpp
-        # evalpreds[1] contains count (for aggregation)
-        metrics_tensor = evalpreds[0]
-
-        # metrics_tensor has shape [N, 3] where N is number of batches
-        # Each row contains [f1, precision, recall]
-        if len(metrics_tensor.shape) > 1:
-            # Average across all batches
-            f1_scores = metrics_tensor[:, 0].astype("float")
-            precision_scores = metrics_tensor[:, 1].astype("float")
-            recall_scores = metrics_tensor[:, 2].astype("float")
-
-            return {
-                "smatchpp": float(f1_scores.mean()),
-                "smatchpp_precision": float(precision_scores.mean()),
-                "smatchpp_recall": float(recall_scores.mean()),
-            }
-        else:
-            # Single value case
-            return {
-                "smatchpp": float(metrics_tensor[0]),
-                "smatchpp_precision": (
-                    float(metrics_tensor[1]) if len(metrics_tensor) > 1 else 0.0
-                ),
-                "smatchpp_recall": (
-                    float(metrics_tensor[2]) if len(metrics_tensor) > 2 else 0.0
-                ),
-            }
 
 
 class MergeWER(object):
@@ -553,91 +503,6 @@ class DiscreteDiffusionGenerator:
                 total_edit += dp[n]
 
         return total_edit, total_ref_words
-
-    def compute_penman(self, hyps, refs):
-        """Compute percentage of valid Penman AMR graphs."""
-        if isinstance(hyps, torch.Tensor):
-            hyps = self.decode(hyps)
-        if isinstance(refs, torch.Tensor):
-            refs = self.decode(refs)
-
-        if penman is None:
-            raise ImportError(
-                "penman library is required. Install with: pip install penman"
-            )
-
-        valid_count = 0
-        for hyp in hyps:
-            try:
-                # Try to parse the AMR graph
-                penman.decode(hyp)
-                valid_count += 1
-            except:
-                # Invalid Penman notation
-                pass
-
-        return valid_count
-
-    def compute_smatchpp(self, hyps, refs):
-        """Compute Smatch++ F1 score for AMR graphs."""
-        if isinstance(hyps, torch.Tensor):
-            hyps = self.decode(hyps)
-        if isinstance(refs, torch.Tensor):
-            refs = self.decode(refs)
-
-        if Smatchpp is None or solvers is None or generictools is None:
-            raise ImportError(
-                "smatchpp library is required. Install with: pip install smatchpp"
-            )
-
-        if postprocess_str_after_delinearization is None:
-            raise ImportError("postprocessing_str module is required")
-
-        try:
-            # Delinearize AMR strings to convert from linear format to standard AMR format
-            delinearized_hyps = []
-            delinearized_refs = []
-
-            for hyp, ref in zip(hyps, refs):
-                try:
-                    # Apply delinearization postprocessing
-                    delinearized_hyp = postprocess_str_after_delinearization(hyp)
-                    delinearized_ref = postprocess_str_after_delinearization(ref)
-
-                    delinearized_hyps.append(delinearized_hyp)
-                    delinearized_refs.append(delinearized_ref)
-                except Exception as e:
-                    # If delinearization fails, use original strings
-                    print(f"Delinearization failed for a sample: {e}")
-                    delinearized_hyps.append(hyp)
-                    delinearized_refs.append(ref)
-
-            # Setup Smatch++ with graph standardizer and ILP solver
-            graph_standardizer = generictools.GenericStandardizer()
-            ilp = solvers.ILP()
-            measure = Smatchpp(
-                alignmentsolver=ilp, graph_standardizer=graph_standardizer
-            )
-
-            # Compute score for the corpus
-            score, optimization_status = measure.score_corpus(
-                delinearized_hyps, delinearized_refs
-            )
-
-            # Extract all metrics from result
-            f1_score = score["main"]["F1"]["result"]
-            precision_score = score["main"]["Precision"]["result"]
-            recall_score = score["main"]["Recall"]["result"]
-
-            return {
-                "f1": f1_score,
-                "precision": precision_score,
-                "recall": recall_score,
-            }
-        except Exception as e:
-            # Return 0 if computation fails
-            print(f"Smatch++ computation failed: {e}")
-            return {"f1": 0.0, "precision": 0.0, "recall": 0.0}
 
     def stepwise_generate(self, model, inputs):
         src_tokens = inputs["net_input"]["src_tokens"]

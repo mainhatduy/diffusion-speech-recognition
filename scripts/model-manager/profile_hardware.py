@@ -4,7 +4,6 @@ import time
 import json
 import resource
 import platform
-import subprocess
 import torch
 import numpy as np
 from transformers import AutoTokenizer, Wav2Vec2FeatureExtractor
@@ -16,7 +15,6 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 
 from model.configuration_dlm import DiscreteDiffusionConfig
 from model.modeling_dlm import DiscreteDiffusionModel, decoder_out_t
-from data.utils import normalize_text
 
 
 def get_current_rss():
@@ -423,7 +421,7 @@ def main():
 
         for i in range(3):
             # Reset peak RSS reading
-            start_mem = get_current_rss()
+            get_current_rss()
             res = run_inference_single(
                 model=model,
                 tokenizer=tokenizer,

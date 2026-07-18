@@ -7,11 +7,9 @@ import json
 from model.dd_model import DiscreteDiffusionModelArguments
 from data.dd_data import (
     DiscreteDiffusionDataArguments,
-    DiscreteDiffusionDataCollator,
     load_data,
 )
 from trainer.dd_trainer import (
-    DiscreteDiffusionArguments,
     DiscreteDiffusionTrainingArguments,
     DiscreteDiffusionTrainer,
 )
@@ -21,7 +19,6 @@ from dd_generator import (
     MergeBLEU,
     MergeWER,
     MergeRouge,
-    MergeSmatchPP,
     MultiMetric,
 )
 
@@ -80,8 +77,6 @@ def main():
         metric = MergeBLEU()
     elif train_args.eval_metric == "rouge":
         metric = MergeRouge()
-    elif train_args.eval_metric == "smatchpp":
-        metric = MergeSmatchPP()
     elif train_args.eval_metric == "wer":
         metric = MergeWER()
 
@@ -95,9 +90,9 @@ def main():
             # For multitask, evaluate each language task separately to get individual metrics
             task_tokens = data_args.task_tokens or ["<vi_en>", "<vi_zh>", "<vi_ko>"]
             for task_token in task_tokens:
-                print(f"\n============================================================")
+                print("\n============================================================")
                 print(f"Evaluating task: {task_token} for dataset: {data_path}")
-                print(f"============================================================")
+                print("============================================================")
 
                 data_item_args_dict = deepcopy(data_args.__dict__)
                 data_item_args_dict["data_path"] = data_path

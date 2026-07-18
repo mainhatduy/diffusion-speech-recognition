@@ -1,6 +1,5 @@
 import json
 
-import deepspeed
 
 import torch
 
@@ -9,7 +8,6 @@ from utils import load_model_tokenizer, load_ckpt
 from dd_generator import (
     DiscreteDiffusionGeneratorArguments,
     DiscreteDiffusionGenerator,
-    MergeBLEU,
 )
 
 from transformers.utils import logging

@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 # Let's simulate what Hugging Face Trainer does when prediction_step returns 1D vs 2D tensors.
 

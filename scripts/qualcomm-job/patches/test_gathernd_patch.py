@@ -26,7 +26,7 @@ def test_patch():
             dynamic_input_name = dynamic_input.name
             dynamic_input_type = dynamic_input.type.tensor_type.elem_type
 
-            reduce_node = helper.make_node(
+            helper.make_node(
                 "ReduceMin",
                 inputs=[dynamic_input_name],
                 outputs=[f"{prefix}_reduced"],
@@ -45,7 +45,7 @@ def test_patch():
                     else [0]
                 ),
             )
-            zero_const_node = helper.make_node(
+            helper.make_node(
                 "Constant",
                 inputs=[],
                 outputs=[f"{prefix}_const_zero"],
@@ -53,7 +53,7 @@ def test_patch():
                 name=f"{prefix}_zero_const",
             )
 
-            mul_node = helper.make_node(
+            helper.make_node(
                 "Mul",
                 inputs=[f"{prefix}_reduced", f"{prefix}_const_zero"],
                 outputs=[f"{prefix}_dummy_zero"],
@@ -61,7 +61,7 @@ def test_patch():
             )
 
             # For testing, assume indices_type is INT64
-            cast_zero_node = helper.make_node(
+            helper.make_node(
                 "Cast",
                 inputs=[f"{prefix}_dummy_zero"],
                 outputs=[f"{prefix}_dummy_zero_cast"],
@@ -69,7 +69,7 @@ def test_patch():
                 name=f"{prefix}_cast_zero",
             )
 
-            add_node = helper.make_node(
+            helper.make_node(
                 "Add",
                 inputs=[indices_input_name, f"{prefix}_dummy_zero_cast"],
                 outputs=[f"{prefix}_indices_dynamic"],

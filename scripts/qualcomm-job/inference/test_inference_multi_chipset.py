@@ -23,7 +23,6 @@ import sys
 import time
 import json
 import argparse
-import traceback
 from datetime import datetime
 
 import numpy as np
@@ -319,7 +318,7 @@ def main():
     for device_name in device_names:
         try:
             device = hub.Device(device_name)
-        except Exception as e:
+        except Exception:
             print(f"    [!] Device '{device_name}' not found, skipping.")
             continue
 

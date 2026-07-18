@@ -49,7 +49,6 @@ def main():
             metadata = json.load(f)
             save_dtype_str = metadata.get("save_dtype", "float16")
 
-    save_dtype = np.float16 if save_dtype_str == "float16" else np.float32
     print(f"Detected save dtype: {save_dtype_str}")
 
     # 3. Define shard parameters

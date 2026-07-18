@@ -18,9 +18,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 from model.configuration_dlm import DiscreteDiffusionConfig
 from model.modeling_dlm import DiscreteDiffusionModel
 from model.modeling_dlm import decoder_out_t
-from data.utils import normalize_text
 import sacrebleu
-import jiwer
 
 
 def load_audio_from_bytes(raw_bytes: bytes, target_sr: int = 16000) -> np.ndarray:

@@ -3,7 +3,7 @@ import torch.distributed as dist
 
 from peft import PeftModel, LoraConfig, TaskType, get_peft_model
 
-from model.dd_model import DiscreteDiffusionModelArguments, DiscreteDiffusionXLMRModel
+from model.dd_model import DiscreteDiffusionXLMRModel
 
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 from transformers.utils import logging
@@ -60,7 +60,7 @@ def argument_filter(arguments):
     elif isinstance(arguments, Dict):
         arg_dict = {}
         for key, value in arguments.items():
-            assert type(key) == str
+            assert isinstance(key, str)
             if isinstance(value, get_args(Union[int, float, str])):
                 arg_dict[key] = value
             elif isinstance(value, get_args(Union[Dict, List])):

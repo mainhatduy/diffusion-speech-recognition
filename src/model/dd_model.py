@@ -2,19 +2,17 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 
-from transformers import PreTrainedModel, Wav2Vec2Model
+from transformers import Wav2Vec2Model
 
-import dataclasses
 from dataclasses import dataclass, field
 
 from collections import namedtuple
 
 import math
 
-from typing import List, Optional
+from typing import List
 
 
-import warnings
 
 decoder_out_t = namedtuple(
     "decoder_out_t",
@@ -381,7 +379,7 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
 
     def forward_lm_head(self, features):
         features = self.model.lm_head.dense(features)
-        features = self.model.lm_head.layer_norm(gelu(features))
+        features = self.model.lm_head.layer_norm(torch.nn.functional.gelu(features))
         return self.model.lm_head.decoder(features)
 
     def forward_length(self, input_ids):

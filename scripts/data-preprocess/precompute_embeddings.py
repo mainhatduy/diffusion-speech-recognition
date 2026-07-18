@@ -9,7 +9,12 @@ Usage:
         --batch_size 32 --max_length 128 [--resume]
 """
 
-import argparse, json, os, sys, time, hashlib
+import argparse
+import json
+import os
+import sys
+import time
+import hashlib
 from pathlib import Path
 import numpy as np
 import torch

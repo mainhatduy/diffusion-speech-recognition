@@ -4,10 +4,8 @@ warnings.filterwarnings(
     "ignore", category=UserWarning, message=".*pkg_resources is deprecated.*"
 )
 
-import torch
 
 import transformers
-from transformers.utils import logging
 from transformers.trainer_utils import get_last_checkpoint
 
 import os
@@ -16,12 +14,11 @@ from dotenv import load_dotenv
 from model.dd_model import DiscreteDiffusionModelArguments
 from trainer.dd_trainer import DiscreteDiffusionTrainingArguments
 from dd_generator import DiscreteDiffusionGenerator, DiscreteDiffusionGeneratorArguments
-from dd_generator import MergeBLEU, MergeRouge, MergeSmatchPP, MergeWER, MultiMetric
+from dd_generator import MergeBLEU, MergeRouge, MergeWER, MultiMetric
 from trainer.dd_trainer import DiscreteDiffusionTrainer, DiscreteDiffusionLengthTrainer
 from utils import load_ckpt, is_master, argument_filter, load_model_tokenizer
 from data.dd_data import (
     DiscreteDiffusionDataArguments,
-    DiscreteDiffusionDataCollator,
     load_data,
 )
 
@@ -88,7 +85,6 @@ def main():
 
     # Initialize WandB if enabled
     if "wandb" in train_args.report_to:
-        import wandb
 
         # Set WandB project and run name from config
         if not os.getenv("WANDB_PROJECT"):
@@ -124,8 +120,6 @@ def main():
         metric = MergeBLEU()
     elif train_args.eval_metric == "rouge":
         metric = MergeRouge()
-    elif train_args.eval_metric == "smatchpp":
-        metric = MergeSmatchPP()
     elif train_args.eval_metric == "wer":
         metric = MergeWER()
     Trainer = (

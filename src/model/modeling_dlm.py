@@ -16,8 +16,6 @@ except ImportError:
 from collections import namedtuple
 import math
 import numpy as np
-from typing import List, Optional, Tuple, Union
-import warnings
 
 decoder_out_t = namedtuple(
     "decoder_out_t",
@@ -752,7 +750,6 @@ class DiscreteDiffusionModel(PreTrainedModel):
         else:
             partial_masks = attention_mask.bool()
 
-        prefix_masks = partial_masks
 
         # Initialize canvas with fixed length (LLaDA approach)
         # Instead of predicting length, use max_length as hyperparameter

@@ -603,7 +603,7 @@ def build_interface():
                     ko_output = gr.Textbox(label="🇰🇷 Korean", interactive=False)
 
         # Toggleable visualization block
-        with gr.Row(visible=True) as viz_section:
+        with gr.Row(visible=True):
             with gr.Column():
                 gr.Markdown("### 🔍 Step-by-Step Diffusion Process Visualization")
                 with gr.Tabs():

@@ -300,7 +300,7 @@ for label, task_token in tasks.items():
     os.remove(temp_readme_path)
 
     print("Done! You can now load the model with:")
-    print(f"from transformers import AutoModel")
+    print("from transformers import AutoModel")
     print(f"model = AutoModel.from_pretrained('{repo_id}', trust_remote_code=True)")
 
 

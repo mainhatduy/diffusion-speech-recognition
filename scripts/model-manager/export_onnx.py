@@ -1,14 +1,12 @@
 import sys
 import os
 import torch
-import json
 import numpy as np
 
 # Add src to Python path
 sys.path.append(os.path.abspath("src"))
 
-import transformers
-from transformers import AutoTokenizer, AutoConfig, PretrainedConfig, AutoModel
+from transformers import AutoTokenizer, AutoConfig, PretrainedConfig
 from model.modeling_dlm import DiscreteDiffusionModel
 from model.configuration_dlm import DiscreteDiffusionConfig
 
@@ -106,7 +104,7 @@ def main():
     state_dict = load_file(weights_path)
 
     missing, unexpected = model.load_state_dict(state_dict, strict=False)
-    print(f"Loaded weights with strict=False.")
+    print("Loaded weights with strict=False.")
     print(f"Missing keys: {len(missing)}")
     print(f"Unexpected keys: {len(unexpected)}")
 
@@ -140,7 +138,7 @@ def main():
     dummy_prev_output_tokens = torch.randint(
         0, len(tokenizer), (batch_size, seq_len), dtype=torch.long
     )
-    dummy_partial_mask = torch.randint(0, 2, (batch_size, seq_len), dtype=torch.bool)
+    torch.randint(0, 2, (batch_size, seq_len), dtype=torch.bool)
     dummy_audio_embeds = torch.randn(
         batch_size, audio_len, hidden_size, dtype=torch.float32
     )
@@ -232,7 +230,7 @@ def main():
 
             # Run inference
             ort_outputs = ort_sess.run(None, ort_inputs)
-            print(f"ONNX Runtime verification successful for Diffusion Backbone!")
+            print("ONNX Runtime verification successful for Diffusion Backbone!")
             print(f"Output shape: {ort_outputs[0].shape}")
 
             # Compare outputs with PyTorch
@@ -261,7 +259,7 @@ def main():
                 "audio_attention_mask": dummy_audio_attention_mask.numpy(),
             }
             ort_outputs = ort_sess.run(None, ort_inputs)
-            print(f"ONNX Runtime verification successful for Audio Encoder!")
+            print("ONNX Runtime verification successful for Audio Encoder!")
             print(f"Output shape: {ort_outputs[0].shape}")
 
             with torch.no_grad():

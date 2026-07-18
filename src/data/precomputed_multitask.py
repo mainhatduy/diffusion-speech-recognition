@@ -3,9 +3,7 @@ import json
 import logging
 import numpy as np
 import torch
-from typing import List
 from .base import PromptDataset
-from .utils import normalize_text
 
 
 class PrecomputedMultiTaskDataset(PromptDataset):

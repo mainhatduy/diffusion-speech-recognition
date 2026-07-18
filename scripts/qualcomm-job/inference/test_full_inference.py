@@ -10,8 +10,6 @@ import sys
 import time
 import json
 import argparse
-import traceback
-from datetime import datetime
 
 import numpy as np
 import torch

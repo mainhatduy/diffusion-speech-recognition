@@ -10,6 +10,15 @@ class PromptDataset(Dataset):
         self.item_size = {}
         self.max_length = args.max_length
 
+    def _get_rainbow_pad_ids(self):
+        """Cache rainbow pad token IDs."""
+        if not hasattr(self, '_rainbow_pad_ids'):
+            self._rainbow_pad_ids = [
+                self.tokenizer.convert_tokens_to_ids(f"<rpad_{i}>")
+                for i in range(7)
+            ]
+        return self._rainbow_pad_ids
+
     def __len__(self):
         return len(self.raw_data)
 

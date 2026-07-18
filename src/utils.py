@@ -128,7 +128,8 @@ def _get_missing_special_tokens(tokenizer, tokenizer_pad_to_multiple):
 # Task tokens that are permanently reserved for multi-task speech translation.
 # These are added to EVERY tokenizer load so that model vocab and tokenizer
 # are always in sync regardless of dataset_type or checkpoint resume.
-TASK_SPECIAL_TOKENS = ["<vi_en>", "<vi_zh>", "<vi_ko>"]
+RAINBOW_PAD_TOKENS = [f"<rpad_{i}>" for i in range(7)]
+TASK_SPECIAL_TOKENS = ["<vi_en>", "<vi_zh>", "<vi_ko>"] + RAINBOW_PAD_TOKENS
 
 
 # @serialized_func

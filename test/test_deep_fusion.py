@@ -34,6 +34,17 @@ def get_dummy_tokenizer():
     tokenizer.pad_token_id = 1
     tokenizer.mask_token_id = 3
     tokenizer.get_vocab = lambda: {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    
+    def convert_tokens_to_ids(token):
+        if token.startswith("<rpad_") and token.endswith(">"):
+            try:
+                idx = int(token[6:-1])
+                return 1000 + idx
+            except ValueError:
+                pass
+        return 999
+        
+    tokenizer.convert_tokens_to_ids = convert_tokens_to_ids
     return tokenizer
 
 @patch('transformers.MoonshineStreamingModel.from_pretrained')
@@ -204,7 +215,7 @@ def test_prefix_backward_compatibility(mock_autoconfig, mock_wav2vec2, mock_moon
     assert logits.shape == (batch_size, seq_len, 100)
 
 @patch('numpy.load')
-def test_llada_eos_padding(mock_np_load):
+def test_rainbow_padding(mock_np_load):
     import numpy as np
     mock_np_load.return_value = np.zeros((10, 64))
 
@@ -237,8 +248,8 @@ def test_llada_eos_padding(mock_np_load):
     # Target sequence should be exactly max_length (20)
     assert len(source) == 20
     
-    # Contents should be: [BOS (0), task_token (100), word1 (10), word2 (11), word3 (12)] + 15 EOS tokens (2)
-    expected = [0, 100, 10, 11, 12] + [2] * 15
+    # Contents should be: [BOS (0), task_token (100), word1 (10), word2 (11), word3 (12)] + 1 EOS (2) + cyclic rpad tokens (1000-1006)
+    expected = [0, 100, 10, 11, 12] + [2] + [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1000, 1001, 1002, 1003, 1004, 1005, 1006]
     assert source.tolist() == expected
 
 if __name__ == "__main__":
@@ -254,8 +265,8 @@ if __name__ == "__main__":
     test_prefix_backward_compatibility()
     print("test_prefix_backward_compatibility passed!")
     
-    print("Running test_llada_eos_padding...")
-    test_llada_eos_padding()
-    print("test_llada_eos_padding passed!")
+    print("Running test_rainbow_padding...")
+    test_rainbow_padding()
+    print("test_rainbow_padding passed!")
 
     print("All tests passed successfully!")

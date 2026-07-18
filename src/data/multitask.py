@@ -129,7 +129,12 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             concatenated = concatenated[:self.max_length]
         remaining = self.max_length - len(concatenated)
         if remaining > 0:
-            concatenated = concatenated + [self.tokenizer.eos_token_id] * remaining
+            eos_id = self.tokenizer.eos_token_id
+            rpad_ids = self._get_rainbow_pad_ids()
+            pad_seq = [eos_id]
+            for j in range(remaining - 1):
+                pad_seq.append(rpad_ids[j % len(rpad_ids)])
+            concatenated = concatenated + pad_seq[:remaining]
 
         # ground-truth target tensor expected by diffusion loss
         target_tgt = (

@@ -33,6 +33,11 @@ dependencies = [
     "streamlit>=1.58.0",
     "ipdb>=0.13.13",
     "pyarrow>=24.0.0",
+    "nltk>=3.10.0",
+    "accelerate>=1.14.0",
+    "fire>=0.7.1",
+    "nvidia-ml-py>=13.610.43",
+    "sentencepiece>=0.2.2",
 ]
 
 [dependency-groups]

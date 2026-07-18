@@ -125,6 +125,11 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
 
         src_length = len(src)  # 2: BOS + task_token
         concatenated = src + tgt  # [BOS, <vi_XX>, word1, ...]
+        if len(concatenated) > self.max_length:
+            concatenated = concatenated[:self.max_length]
+        remaining = self.max_length - len(concatenated)
+        if remaining > 0:
+            concatenated = concatenated + [self.tokenizer.eos_token_id] * remaining
 
         # ground-truth target tensor expected by diffusion loss
         target_tgt = (
@@ -135,7 +140,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
 
         return {
             "id": index,
-            "source": torch.tensor(concatenated)[-self.max_length :],
+            "source": torch.tensor(concatenated),
             "target": torch.tensor(target_tgt),
             "src_length": src_length,
             "audio_values": audio_values,

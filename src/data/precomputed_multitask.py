@@ -86,6 +86,11 @@ class PrecomputedMultiTaskDataset(PromptDataset):
 
         src_length = len(src)
         concatenated = src + tgt
+        if len(concatenated) > self.max_length:
+            concatenated = concatenated[:self.max_length]
+        remaining = self.max_length - len(concatenated)
+        if remaining > 0:
+            concatenated = concatenated + [self.tokenizer.eos_token_id] * remaining
 
         target_tgt = (
             [self.tokenizer.bos_token_id] + tgt
@@ -95,7 +100,7 @@ class PrecomputedMultiTaskDataset(PromptDataset):
 
         return {
             "id": flat_index,
-            "source": torch.tensor(concatenated)[-self.max_length :],
+            "source": torch.tensor(concatenated),
             "target": torch.tensor(target_tgt),
             "src_length": src_length,
             "precomputed_audio_embeds": audio_embeds,  # (T_frames, D_audio)

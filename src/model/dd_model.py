@@ -66,6 +66,10 @@ class DiscreteDiffusionModelArguments:
         default=True,
         metadata={"help": "whether to load pretrained weights for the audio encoder"},
     )
+    audio_fusion_strategy: str = field(
+        default="prefix",
+        metadata={"help": "fusion strategy: 'prefix' or 'deep_cross_attn'"},
+    )
 
     def __post_init__(self):
         if self.prefix_lm:
@@ -290,15 +294,6 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             )  # 1024 for mms-300m
             self.audio_projector = nn.Linear(audio_hidden_size, self.config.hidden_size)
 
-            # Cross-attention layer
-            self.cross_attn = nn.MultiheadAttention(
-                embed_dim=self.config.hidden_size,
-                num_heads=self.config.num_attention_heads,
-                dropout=0.1,
-                batch_first=True,
-            )
-            self.cross_attn_ln = nn.LayerNorm(self.config.hidden_size)
-
         # length predictor
         self.length_trm = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
@@ -316,6 +311,18 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                 self.config.intermediate_size, self.config.max_position_embeddings
             ),
         )
+
+        # Replace RobertaLayers with CrossAttnRobertaLayer if strategy is deep_cross_attn
+        audio_fusion_strategy = getattr(args, "audio_fusion_strategy", "prefix")
+        if self.has_audio_encoder and audio_fusion_strategy == "deep_cross_attn":
+            try:
+                from .cross_attn_roberta import CrossAttnRobertaEncoder
+            except ImportError:
+                from cross_attn_roberta import CrossAttnRobertaEncoder
+            
+            new_encoder = CrossAttnRobertaEncoder(self.config)
+            new_encoder.load_state_dict(self.model.roberta.encoder.state_dict(), strict=False)
+            self.model.roberta.encoder = new_encoder
 
     def resize_token_embeddings(self, new_num_tokens):
         """Resize token embeddings in the underlying model."""
@@ -434,7 +441,13 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                 embeddings + self.fake_layer * 0
             )  # trick to support lora + gradient checkpointing
 
-        # Audio fusion via Prefix Conditioning (Sequence Concatenation)
+        audio_fusion_strategy = getattr(self.args, "audio_fusion_strategy", "prefix")
+
+        audio_embeds = None
+        audio_attn = None
+        T_audio = 0
+
+        # Resolve audio features
         if self.has_audio_encoder and precomputed_audio_embeds is not None:
             # Fast path: use pre-computed encoder output, only apply trainable projector
             audio_embeds = self.audio_projector(
@@ -451,9 +464,6 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                     dtype=torch.int,
                     device=audio_embeds.device,
                 )
-
-            embeddings = torch.cat([audio_embeds, embeddings], dim=1)
-            combined_attention_mask = torch.cat([audio_attn, attention_mask], dim=1)
         elif self.has_audio_encoder and audio_features is not None:
             with torch.no_grad():
                 audio_outputs = self.audio_encoder(
@@ -484,52 +494,10 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                     device=audio_embeds.device,
                 )
 
-            # Concatenate audio features and text embeddings along sequence dimension
-            embeddings = torch.cat([audio_embeds, embeddings], dim=1)
-            combined_attention_mask = torch.cat([audio_attn, attention_mask], dim=1)
-        else:
+        if audio_fusion_strategy == "deep_cross_attn":
+            # For Deep Fusion, do not concatenate audio embeds to embeddings.
             combined_attention_mask = attention_mask
-            T_audio = 0
-
-        if self.args.prefix_lm:
-            # prefix_lm is only supported without audio or needs custom mapping.
-            # If there is audio, warn and fall back to full attention.
-            if T_audio > 0:
-                if not hasattr(self, "_warned_prefix_lm"):
-                    print(
-                        "Warning: prefix_lm attention strategy is not fully supported with audio input. Falling back to full attention."
-                    )
-                    self._warned_prefix_lm = True
-                attention_mask_converted, _ = (
-                    self.model.roberta._create_attention_masks(
-                        attention_mask=combined_attention_mask,
-                        encoder_attention_mask=None,
-                        embedding_output=embeddings,
-                        encoder_hidden_states=None,
-                        past_key_values=None,
-                    )
-                )
-            else:
-                ext_partial_mask = partial_mask.float()
-                ext_partial_mask = torch.bmm(
-                    ext_partial_mask[:, :, None], ext_partial_mask[:, None, :]
-                ).int()  # B, T, T
-                ext_mask = attention_mask[:, None, :].repeat(
-                    1, attention_mask.size(-1), 1
-                )
-                ext_mask[partial_mask] = ext_partial_mask[partial_mask]
-
-                # Convert 3D mask using _create_attention_masks
-                attention_mask_converted, _ = (
-                    self.model.roberta._create_attention_masks(
-                        attention_mask=ext_mask,
-                        encoder_attention_mask=None,
-                        embedding_output=embeddings,
-                        encoder_hidden_states=None,
-                        past_key_values=None,
-                    )
-                )
-        else:
+            
             # Convert 2D mask using _create_attention_masks
             attention_mask_converted, _ = self.model.roberta._create_attention_masks(
                 attention_mask=combined_attention_mask,
@@ -538,22 +506,90 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                 encoder_hidden_states=None,
                 past_key_values=None,
             )
+            
+            # Call the encoder directly, passing audio hidden states and padding mask
+            encoder_outputs = self.model.roberta.encoder(
+                embeddings,
+                attention_mask=attention_mask_converted,
+                encoder_hidden_states=audio_embeds,
+                encoder_attention_mask=audio_attn,
+                past_key_values=None,
+                use_cache=False,
+                position_ids=None,
+            )
+            outputs = encoder_outputs.last_hidden_state
+        else:
+            # Legacy prefix strategy: concatenate audio and text embeddings
+            if T_audio > 0 and audio_embeds is not None and audio_attn is not None:
+                embeddings = torch.cat([audio_embeds, embeddings], dim=1)
+                combined_attention_mask = torch.cat([audio_attn, attention_mask], dim=1)
+            else:
+                combined_attention_mask = attention_mask
+                T_audio = 0
 
-        # Call the encoder directly, bypassing self.model.roberta's embedding layer (which would double-embed)
-        encoder_outputs = self.model.roberta.encoder(
-            embeddings,
-            attention_mask=attention_mask_converted,
-            encoder_hidden_states=None,
-            encoder_attention_mask=None,
-            past_key_values=None,
-            use_cache=False,
-            position_ids=None,
-        )
-        outputs = encoder_outputs.last_hidden_state
+            if self.args.prefix_lm:
+                # prefix_lm is only supported without audio or needs custom mapping.
+                # If there is audio, warn and fall back to full attention.
+                if T_audio > 0:
+                    if not hasattr(self, "_warned_prefix_lm"):
+                        print(
+                            "Warning: prefix_lm attention strategy is not fully supported with audio input. Falling back to full attention."
+                        )
+                        self._warned_prefix_lm = True
+                    attention_mask_converted, _ = (
+                        self.model.roberta._create_attention_masks(
+                            attention_mask=combined_attention_mask,
+                            encoder_attention_mask=None,
+                            embedding_output=embeddings,
+                            encoder_hidden_states=None,
+                            past_key_values=None,
+                        )
+                    )
+                else:
+                    ext_partial_mask = partial_mask.float()
+                    ext_partial_mask = torch.bmm(
+                        ext_partial_mask[:, :, None], ext_partial_mask[:, None, :]
+                    ).int()  # B, T, T
+                    ext_mask = attention_mask[:, None, :].repeat(
+                        1, attention_mask.size(-1), 1
+                    )
+                    ext_mask[partial_mask] = ext_partial_mask[partial_mask]
 
-        # Extract the text portion of the encoder outputs
-        if T_audio > 0:
-            outputs = outputs[:, T_audio:]
+                    # Convert 3D mask using _create_attention_masks
+                    attention_mask_converted, _ = (
+                        self.model.roberta._create_attention_masks(
+                            attention_mask=ext_mask,
+                            encoder_attention_mask=None,
+                            embedding_output=embeddings,
+                            encoder_hidden_states=None,
+                            past_key_values=None,
+                        )
+                    )
+            else:
+                # Convert 2D mask using _create_attention_masks
+                attention_mask_converted, _ = self.model.roberta._create_attention_masks(
+                    attention_mask=combined_attention_mask,
+                    encoder_attention_mask=None,
+                    embedding_output=embeddings,
+                    encoder_hidden_states=None,
+                    past_key_values=None,
+                )
+
+            # Call the encoder directly, bypassing self.model.roberta's embedding layer (which would double-embed)
+            encoder_outputs = self.model.roberta.encoder(
+                embeddings,
+                attention_mask=attention_mask_converted,
+                encoder_hidden_states=None,
+                encoder_attention_mask=None,
+                past_key_values=None,
+                use_cache=False,
+                position_ids=None,
+            )
+            outputs = encoder_outputs.last_hidden_state
+
+            # Extract the text portion of the encoder outputs
+            if T_audio > 0:
+                outputs = outputs[:, T_audio:]
 
         if not (~torch.isnan(outputs)).all():
             outputs.masked_fill_(outputs.isnan(), 0)

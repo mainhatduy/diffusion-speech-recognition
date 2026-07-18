@@ -27,13 +27,18 @@ class BilingualDataset(PromptDataset):
 
         src_length = len(src)
         concatenated = src + tgt
+        if len(concatenated) > self.max_length:
+            concatenated = concatenated[:self.max_length]
+        remaining = self.max_length - len(concatenated)
+        if remaining > 0:
+            concatenated = concatenated + [self.tokenizer.eos_token_id] * remaining
 
         return {
             "id": index,
-            "source": torch.tensor(concatenated)[-self.max_length :],
+            "source": torch.tensor(concatenated),
             "target": torch.tensor(
                 [self.tokenizer.bos_token_id] + tgt
-                if tgt[0] != self.tokenizer.bos_token_id
+                if len(tgt) == 0 or tgt[0] != self.tokenizer.bos_token_id
                 else tgt
             ),
             "src_length": src_length,  # Length of source part in concatenated sequence

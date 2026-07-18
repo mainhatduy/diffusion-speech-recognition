@@ -23,6 +23,7 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         pad_token_id=None,
         argmax_decoding=True,  # Default to True for deterministic inference
         pretrained_audio_encoder=False,
+        audio_fusion_strategy="prefix",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -43,6 +44,7 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         self.pad_token_id = pad_token_id
         self.argmax_decoding = argmax_decoding
         self.pretrained_audio_encoder = pretrained_audio_encoder
+        self.audio_fusion_strategy = audio_fusion_strategy
 
         if backbone_config is None:
             self.backbone_config = AutoConfig.from_pretrained(

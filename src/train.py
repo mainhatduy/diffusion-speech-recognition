@@ -37,11 +37,16 @@ def parse_args():
     )
 
     # Check if a config file is provided as the first argument
-    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+    if len(sys.argv) >= 2 and sys.argv[1].endswith(".json"):
         config_file = sys.argv[1]
         data_args, model_args, train_args, gen_args = parser.parse_json_file(
             json_file=config_file, allow_extra_keys=True
         )
+        # Manually override resume_from_checkpoint if passed in command line
+        if "--resume_from_checkpoint" in sys.argv:
+            idx = sys.argv.index("--resume_from_checkpoint")
+            if idx + 1 < len(sys.argv):
+                train_args.resume_from_checkpoint = sys.argv[idx + 1]
     else:
         # Parse from command line arguments (original behavior)
         data_args, model_args, train_args, gen_args = (

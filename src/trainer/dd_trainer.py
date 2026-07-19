@@ -29,6 +29,8 @@ from tqdm import tqdm
 import math
 
 import os
+import threading
+from huggingface_hub import HfApi
 
 from transformers import TrainingArguments
 
@@ -89,6 +91,95 @@ class DiscreteDiffusionTrainingArguments(DiscreteDiffusionArguments):
             self.lr_scheduler = None
 
 
+
+class HuggingFacePushCallback(TrainerCallback):
+    def __init__(self, trainer=None):
+        self.trainer = trainer
+        self._upload_thread = None
+
+    def on_evaluate(self, args, state, control, **kwargs):
+        push_to_hub = getattr(args, "push_to_hub", False)
+        hub_model_id = getattr(args, "hub_model_id", None)
+        if not push_to_hub or not hub_model_id:
+            return
+
+        if not is_master():
+            return
+
+        import os
+        import json
+        import torch
+        import sys
+        import importlib.util
+
+        checkpoint_dir = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
+        os.makedirs(checkpoint_dir, exist_ok=True)
+
+        try:
+            # 1. Save model
+            model = kwargs.get("model", None)
+            if model is not None:
+                if hasattr(model, "save_pretrained"):
+                    model.save_pretrained(checkpoint_dir)
+                else:
+                    torch.save(model.state_dict(), os.path.join(checkpoint_dir, "pytorch_model.bin"))
+
+            # 2. Save tokenizer/processing_class
+            tokenizer = kwargs.get("processing_class", None) or kwargs.get("tokenizer", None)
+            if tokenizer is not None and hasattr(tokenizer, "save_pretrained"):
+                tokenizer.save_pretrained(checkpoint_dir)
+            elif self.trainer is not None:
+                if getattr(self.trainer, "processing_class", None) is not None:
+                    self.trainer.processing_class.save_pretrained(checkpoint_dir)
+                elif getattr(self.trainer, "tokenizer", None) is not None:
+                    self.trainer.tokenizer.save_pretrained(checkpoint_dir)
+
+            # 3. Save training state and metrics
+            state.save_to_json(os.path.join(checkpoint_dir, "trainer_state.json"))
+            
+            metrics = kwargs.get("metrics", None)
+            if metrics is not None:
+                with open(os.path.join(checkpoint_dir, "eval_metrics.json"), "w") as f:
+                    json.dump(metrics, f, indent=4)
+
+            # 4. Import push_checkpoint_to_hub dynamically from scripts/model-manager/push_checkpoint.py
+            try:
+                script_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                    "scripts",
+                    "model-manager",
+                    "push_checkpoint.py",
+                )
+                spec = importlib.util.spec_from_file_location("push_checkpoint", script_path)
+                push_checkpoint_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(push_checkpoint_module)
+                push_checkpoint_to_hub = push_checkpoint_module.push_checkpoint_to_hub
+            except Exception as e:
+                print(f"\n[HF Push Warning] Failed to import push_checkpoint: {e}")
+                raise e
+
+            # 5. Trigger asynchronous upload
+            token = os.getenv("HF_TOKEN")
+
+            def upload_task():
+                try:
+                    push_checkpoint_to_hub(
+                        repo_id=hub_model_id,
+                        checkpoint_dir=checkpoint_dir,
+                        repo_type=getattr(args, "hub_model_repo_type", "model"),
+                        token=token,
+                    )
+                    print(f"\n[HF Push] Successfully uploaded checkpoint and code to Hugging Face repository '{hub_model_id}' at step {state.global_step}")
+                except Exception as ex:
+                    print(f"\n[HF Push Warning] Failed to upload output to Hugging Face: {ex}")
+
+            self._upload_thread = threading.Thread(target=upload_task, daemon=True)
+            self._upload_thread.start()
+
+        except Exception as ex:
+            print(f"\n[HF Push Warning] Failed to prepare files for Hugging Face upload: {ex}")
+
+
 class DiscreteDiffusionTrainer(Trainer):
     def __init__(
         self,
@@ -127,6 +218,8 @@ class DiscreteDiffusionTrainer(Trainer):
         )
         self.generator = generator
         self.eval_compute_loss = True
+        if getattr(self.args, "push_to_hub", False):
+            self.add_callback(HuggingFacePushCallback(self))
         # self.dictionary = generator.dictionary
 
     def get_token_batched_dataloader(self, dataset, train=False):

@@ -28,6 +28,7 @@ from typing import List
 from utils import load_model_tokenizer, load_ckpt
 
 import os
+from dotenv import load_dotenv
 
 
 @dataclass
@@ -47,6 +48,7 @@ class DiscreteDiffusionEvalDataArguments(DiscreteDiffusionDataArguments):
 
 
 def main():
+    load_dotenv()
     parser = transformers.HfArgumentParser(
         (
             DiscreteDiffusionEvalArguments,

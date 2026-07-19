@@ -43,7 +43,7 @@
     "run_name": "vi_multitask_en_zh_ko",
     "log_level": "info",
     "remove_unused_columns": false,
-    "learning_rate": 1e-4,
+    "learning_rate": 0.0001,
     "weight_decay": 0.01,
     "adam_beta1": 0.9,
     "adam_beta2": 0.98,
@@ -66,5 +66,7 @@
     "bpe": "sentencepiece",
     "bleu_tokenize": "13a",
     "return_history": false,
-    "temperature": 1.0
+    "temperature": 1.0,
+    "push_to_hub": true,
+    "hub_model_id": "aiai-laboratory/discrete-diffusion-vi-multitask"
 }

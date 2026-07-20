@@ -236,6 +236,10 @@ class DiscreteDiffusionTrainer(Trainer):
             lengths=lengths,
             infinite=train,
         )
+        prefetch_factor = getattr(self.args, "dataloader_prefetch_factor", None)
+        if self.args.dataloader_num_workers == 0:
+            prefetch_factor = None
+
         dataloader = DataLoader(
             dataset,
             batch_sampler=batch_sampler,
@@ -244,6 +248,7 @@ class DiscreteDiffusionTrainer(Trainer):
             num_workers=self.args.dataloader_num_workers,
             pin_memory=self.args.dataloader_pin_memory,
             worker_init_fn=seed_worker,
+            prefetch_factor=prefetch_factor,
         )
         return dataloader
 

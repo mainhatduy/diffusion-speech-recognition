@@ -139,7 +139,7 @@ class StreamingPrecomputedMultiTaskDataset(IterableDataset):
         repo_id = getattr(
             args, "streaming_repo_id", "aiai-laboratory/vietspeech-train-streaming"
         )
-        buffer_size = getattr(args, "streaming_buffer_size", 10000)
+        buffer_size = getattr(args, "streaming_buffer_size", 1000)
         val_samples = getattr(args, "val_streaming_size", 500)
         hf_token = getattr(args, "hf_token", None) or os.getenv("HF_TOKEN")
 

@@ -162,6 +162,12 @@ if [ "$SKIP_DOWNLOAD" = false ]; then
     # Download to a temporary staging sub-directory so we don't clobber
     # existing checkpoints in OUTPUT_DIR directly.
     STAGING_DIR="${OUTPUT_DIR}/_hf_staging"
+
+    # Remove stale staging dir so load_checkpoint.py never hits "already exists" error.
+    if [ -d "$STAGING_DIR" ]; then
+        log_warn "Removing stale staging dir: ${STAGING_DIR}"
+        rm -rf "$STAGING_DIR"
+    fi
     mkdir -p "$STAGING_DIR"
 
     uv run python scripts/model-manager/load_checkpoint.py \

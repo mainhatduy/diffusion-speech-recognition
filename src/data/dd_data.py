@@ -84,7 +84,7 @@ class DiscreteDiffusionDataArguments:
         metadata={"help": "HF Hub repo ID for streaming dataset."},
     )
     streaming_buffer_size: int = field(
-        default=10000,
+        default=1000,
         metadata={"help": "Shuffle buffer size for streaming dataset."},
     )
     val_streaming_size: int = field(

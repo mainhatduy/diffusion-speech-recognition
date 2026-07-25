@@ -91,29 +91,48 @@ We recommend using [uv](https://github.com/astral-sh/uv) to manage the Python vi
 
 ## Running Training
 
-The repository provides pre-configured shell scripts under the `scripts/training/` directory to manage datasets and execute model training.
+The repository provides pre-configured shell scripts and datasets supporting two training modes: **Streaming Mode** (recommended to avoid disk/RAM bottlenecks) and **Local Precomputed Mode**.
 
-### 1. Run End-to-End Pipeline Training
-This script handles downloading the precomputed dataset shards automatically before training.
+### 🌊 Method 1: Streaming Mode (Recommended)
+
+Stream dataset shards directly from Hugging Face Hub during training without downloading the full dataset locally.
+
+#### Step 1: Prepare Streaming Dataset on HF Hub (One-Time Setup)
+Merge precomputed audio embeddings and target token IDs into a streaming-ready format and push to HF Hub:
 ```bash
-# Run full end-to-end training pipeline
-bash scripts/training/run_pipeline_end2end.sh
+uv run python scripts/data-preprocess/merge_to_streaming.py \
+    --source_repo aiai-laboratory/vietspeech-train-precompute \
+    --target_repo aiai-laboratory/vietspeech-train-streaming \
+    --shards_per_commit 5
+```
+> [!TIP]
+> `--shards_per_commit 5` bundles 5 dataset shards per commit to avoid Hugging Face commit rate limit errors (128 commits/hour limit). If interrupted, the script automatically resumes from the last uploaded shard.
+
+#### Step 2: Launch Streaming Training
+```bash
+# Run full streaming training pipeline
+CUDA_VISIBLE_DEVICES=0 bash scripts/training/run_pipeline_end2end.sh --streaming
+
+# Run quick 10-step validation test in streaming mode
+bash scripts/training/run_pipeline_end2end.sh --streaming --test
 ```
 
-To run a fast validation test/dry-run (downloads a tiny test subset and runs training for 10 steps):
+### 💾 Method 2: Local Precomputed Dataset Mode
+
+If you have sufficient disk space and RAM, you can download dataset shards to a local folder (`precomputed_data/`) before training:
+
 ```bash
+# Run full local end-to-end training (downloads dataset if missing)
+CUDA_VISIBLE_DEVICES=0 bash scripts/training/run_pipeline_end2end.sh
+
+# Run local dry-run test (downloads 1 shard, 10 steps)
 bash scripts/training/run_pipeline_end2end.sh --test
 ```
 
-Specify target GPU device with `CUDA_VISIBLE_DEVICES`:
+### ⚙️ Direct Custom Config Training
+To launch training directly with a specific JSON configuration file:
 ```bash
-CUDA_VISIBLE_DEVICES=0 bash scripts/training/run_pipeline_end2end.sh
-```
-
-### 2. Run Standard Training with Custom Config
-To launch training directly with a specific configuration JSON file:
-```bash
-bash scripts/training/speech_recognition_train.sh configs/speech_recognition_config.json
+bash scripts/training/speech_recognition_train.sh configs/vi_multitask_streaming_config.json
 ```
 
 ## Qualcomm Hardware Optimization and Deployment

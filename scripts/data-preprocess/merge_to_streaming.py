@@ -6,6 +6,7 @@ Usage:
     python scripts/data-preprocess/merge_to_streaming.py \
         --source_repo aiai-laboratory/vietspeech-train-precompute \
         --target_repo aiai-laboratory/vietspeech-train-streaming \
+        --shards_per_commit 5 \
         [--test] [--dry_run]
 """
 
@@ -20,7 +21,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pathlib import Path
 from dotenv import load_dotenv
-from huggingface_hub import HfApi, hf_hub_download, list_repo_files, upload_file
+from huggingface_hub import HfApi, hf_hub_download, list_repo_files, CommitOperationAdd
 
 
 def parse_args():
@@ -38,6 +39,12 @@ def parse_args():
         type=str,
         default="aiai-laboratory/vietspeech-train-streaming",
         help="Target Hugging Face dataset repository ID.",
+    )
+    parser.add_argument(
+        "--shards_per_commit",
+        type=int,
+        default=5,
+        help="Number of shards to bundle per single commit to avoid HF commit rate limits.",
     )
     parser.add_argument(
         "--test",
@@ -73,13 +80,15 @@ def main():
 
     print("=============================================================")
     print("  Merging Dataset to Streaming Format")
-    print(f"  Source Repo : {args.source_repo}")
-    print(f"  Target Repo : {args.target_repo}")
-    print(f"  Test Mode   : {args.test}")
-    print(f"  Dry Run     : {args.dry_run}")
+    print(f"  Source Repo      : {args.source_repo}")
+    print(f"  Target Repo      : {args.target_repo}")
+    print(f"  Shards / Commit  : {args.shards_per_commit}")
+    print(f"  Test Mode        : {args.test}")
+    print(f"  Dry Run          : {args.dry_run}")
     print("=============================================================")
 
     # Ensure target repo exists on HF Hub if not dry run
+    target_files = set()
     if not args.dry_run:
         try:
             api.create_repo(
@@ -89,8 +98,11 @@ def main():
                 exist_ok=True,
             )
             print(f"Target repo '{args.target_repo}' verified/created.")
+            # Fetch existing files in target repo for resume capability
+            target_files = set(list_repo_files(repo_id=args.target_repo, repo_type="dataset", token=token))
+            print(f"Found {len(target_files)} existing files in target repo.")
         except Exception as e:
-            print(f"Warning/Error creating target repo: {e}")
+            print(f"Warning/Error accessing target repo: {e}")
 
     # 1. Download metadata, index, and token_ids JSONs (lightweight)
     print("\nDownloading metadata and token ID mappings from source repo...")
@@ -137,8 +149,8 @@ def main():
             except Exception as e:
                 print(f"  Warning: token_ids/{task}.json not loaded: {e}")
 
-        # Upload metadata.json to target repo if not dry run
-        if not args.dry_run:
+        # Upload metadata.json to target repo if not present and not dry run
+        if not args.dry_run and "metadata.json" not in target_files:
             api.upload_file(
                 path_or_fileobj=meta_path,
                 path_in_repo="metadata.json",
@@ -178,60 +190,95 @@ def main():
         parquet_shards = parquet_shards[:1]
         print(f"[Test Mode] Processing only 1 shard: {parquet_shards[0]}")
 
-    # 4. Process shard by shard
-    for idx, shard_file_path in enumerate(parquet_shards):
-        shard_name = os.path.basename(shard_file_path)
-        print(f"\n[{idx+1}/{len(parquet_shards)}] Processing shard: {shard_name}...")
+    # Filter out shards already present in target repo
+    pending_shards = []
+    for s in parquet_shards:
+        target_path = f"data/{os.path.basename(s)}"
+        if target_path in target_files and not args.dry_run:
+            print(f"  [Skip] Shard '{target_path}' already exists on target repo.")
+        else:
+            pending_shards.append(s)
 
-        with tempfile.TemporaryDirectory() as shard_tmp_dir:
-            # Download single parquet shard
-            local_shard = hf_hub_download(
-                repo_id=args.source_repo,
-                filename=shard_file_path,
-                repo_type="dataset",
-                token=token,
-                local_dir=shard_tmp_dir,
-            )
+    print(f"\nRemaining shards to process & upload: {len(pending_shards)} / {len(parquet_shards)}")
 
-            # Read PyArrow table
-            table = pq.read_table(local_shard)
-            pylist = table.to_pylist()
-            print(f"  Read {len(pylist)} rows from {shard_name}")
+    if not pending_shards:
+        print("\nAll shards are already uploaded! Nothing to do.")
+        sys.exit(0)
 
-            merged_rows = []
-            for row in pylist:
-                embed_file = row["embed_file"]
-                tok_info = embed_file_to_tokens.get(embed_file, {})
+    # 4. Process shards in batches
+    batch_size = args.shards_per_commit
 
-                merged_row = {
-                    "embed_file": embed_file,
-                    "embedding_bytes": row["embedding_bytes"],
-                    "shape": row.get("shape", []),
-                    "english": tok_info.get("english", []),
-                    "chinese": tok_info.get("chinese", []),
-                    "korean": tok_info.get("korean", []),
-                }
-                merged_rows.append(merged_row)
+    for batch_start in range(0, len(pending_shards), batch_size):
+        batch_shards = pending_shards[batch_start : batch_start + batch_size]
+        batch_num = (batch_start // batch_size) + 1
+        total_batches = (len(pending_shards) + batch_size - 1) // batch_size
 
-            # Write to new merged Parquet shard
-            out_shard_path = os.path.join(shard_tmp_dir, shard_name)
-            merged_table = pa.Table.from_pylist(merged_rows)
-            pq.write_table(merged_table, out_shard_path, compression="snappy")
-            out_size_mb = os.path.getsize(out_shard_path) / (1024 * 1024)
-            print(f"  Created merged shard {shard_name} ({out_size_mb:.2f} MB)")
+        print(f"\n=============================================================")
+        print(f"  Batch {batch_num}/{total_batches}: Processing {len(batch_shards)} shards...")
+        print(f"=============================================================")
 
-            # Upload shard to target repo
-            if not args.dry_run:
-                target_path_in_repo = f"data/{shard_name}"
-                print(f"  Uploading {shard_name} to {args.target_repo}:{target_path_in_repo}...")
-                api.upload_file(
-                    path_or_fileobj=out_shard_path,
-                    path_in_repo=target_path_in_repo,
-                    repo_id=args.target_repo,
+        with tempfile.TemporaryDirectory() as batch_tmp_dir:
+            commit_operations = []
+
+            for idx, shard_file_path in enumerate(batch_shards):
+                shard_name = os.path.basename(shard_file_path)
+                print(f"  ({idx+1}/{len(batch_shards)}) Downloading & merging {shard_name}...")
+
+                # Download single parquet shard
+                local_shard = hf_hub_download(
+                    repo_id=args.source_repo,
+                    filename=shard_file_path,
                     repo_type="dataset",
                     token=token,
+                    local_dir=batch_tmp_dir,
                 )
-                print(f"  Uploaded {shard_name} successfully!")
+
+                # Read PyArrow table
+                table = pq.read_table(local_shard)
+                pylist = table.to_pylist()
+
+                merged_rows = []
+                for row in pylist:
+                    embed_file = row["embed_file"]
+                    tok_info = embed_file_to_tokens.get(embed_file, {})
+
+                    merged_row = {
+                        "embed_file": embed_file,
+                        "embedding_bytes": row["embedding_bytes"],
+                        "shape": row.get("shape", []),
+                        "english": tok_info.get("english", []),
+                        "chinese": tok_info.get("chinese", []),
+                        "korean": tok_info.get("korean", []),
+                    }
+                    merged_rows.append(merged_row)
+
+                # Write to new merged Parquet shard in batch_tmp_dir
+                out_shard_path = os.path.join(batch_tmp_dir, f"merged_{shard_name}")
+                merged_table = pa.Table.from_pylist(merged_rows)
+                pq.write_table(merged_table, out_shard_path, compression="snappy")
+                out_size_mb = os.path.getsize(out_shard_path) / (1024 * 1024)
+                print(f"    Merged {shard_name} ({len(pylist)} rows, {out_size_mb:.2f} MB)")
+
+                target_path_in_repo = f"data/{shard_name}"
+                commit_operations.append(
+                    CommitOperationAdd(
+                        path_in_repo=target_path_in_repo,
+                        path_or_fileobj=out_shard_path,
+                    )
+                )
+
+            # Upload all shards in this batch as ONE SINGLE COMMIT
+            if not args.dry_run and commit_operations:
+                commit_msg = f"Upload merged shards batch ({batch_shards[0]} to {batch_shards[-1]})"
+                print(f"\n  Committing batch of {len(commit_operations)} shards to HF Hub in 1 commit...")
+                api.create_commit(
+                    repo_id=args.target_repo,
+                    repo_type="dataset",
+                    operations=commit_operations,
+                    commit_message=commit_msg,
+                    token=token,
+                )
+                print(f"  Batch {batch_num}/{total_batches} committed successfully!")
 
     print("\n=============================================================")
     print("  Dataset Merge Completed Successfully!")

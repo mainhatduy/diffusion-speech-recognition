@@ -75,6 +75,22 @@ class DiscreteDiffusionDataArguments:
             "help": "Path to pre-computed audio embeddings & token IDs. If set, uses fast PrecomputedMultiTaskDataset."
         },
     )
+    streaming: bool = field(
+        default=False,
+        metadata={"help": "Stream data from Hugging Face Hub instead of downloading/loading locally."},
+    )
+    streaming_repo_id: str = field(
+        default="aiai-laboratory/vietspeech-train-streaming",
+        metadata={"help": "HF Hub repo ID for streaming dataset."},
+    )
+    streaming_buffer_size: int = field(
+        default=10000,
+        metadata={"help": "Shuffle buffer size for streaming dataset."},
+    )
+    val_streaming_size: int = field(
+        default=500,
+        metadata={"help": "Number of validation samples for streaming dataset."},
+    )
 
 
 def load_data(
@@ -124,8 +140,18 @@ def load_data(
                 "audio_encoder_name",
                 "UsefulSensors/moonshine-streaming-medium",
             )
-        # Use precomputed dataset if available
-        if getattr(data_args, "precomputed_data_dir", "") and os.path.exists(
+        # Use streaming dataset if enabled
+        if getattr(data_args, "streaming", False):
+            print(
+                f"[load_data] Using StreamingPrecomputedMultiTaskDataset from HF repo '{data_args.streaming_repo_id}'"
+            )
+            from .streaming_precomputed_multitask import StreamingPrecomputedMultiTaskDataset
+
+            datasets = StreamingPrecomputedMultiTaskDataset.load_data(
+                data_args, tokenizer, train, valid, test
+            )
+        # Use precomputed local dataset if available
+        elif getattr(data_args, "precomputed_data_dir", "") and os.path.exists(
             data_args.precomputed_data_dir
         ):
             print(

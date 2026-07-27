@@ -1,5 +1,5 @@
 import onnx
-from onnx import helper, TensorProto
+from onnx import TensorProto, helper
 
 
 def main():

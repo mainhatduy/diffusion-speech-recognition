@@ -1,12 +1,13 @@
-import os
 import logging
 import multiprocessing as mp
+import os
+from collections import OrderedDict
+
 import numpy as np
 import torch
-from typing import List
-from collections import OrderedDict
-from datasets import load_dataset, Audio
+from datasets import Audio, load_dataset
 from transformers import Wav2Vec2FeatureExtractor
+
 from .base import PromptDataset
 from .utils import _decode_wav_bytes, normalize_text
 
@@ -165,7 +166,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             )
 
         # 1. Parse task token names and resolve their IDs from tokenizer
-        task_tokens: List[str] = getattr(
+        task_tokens: list[str] = getattr(
             args, "task_tokens", ["<vi_en>", "<vi_zh>", "<vi_ko>"]
         )
         if not task_tokens:

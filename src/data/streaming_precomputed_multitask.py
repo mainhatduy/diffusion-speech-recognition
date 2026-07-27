@@ -1,11 +1,12 @@
-import os
 import json
 import logging
+import os
+
 import numpy as np
 import torch
-from torch.utils.data import IterableDataset
 from datasets import load_dataset
 from huggingface_hub import hf_hub_download
+from torch.utils.data import IterableDataset
 
 
 class StreamingPrecomputedMultiTaskDataset(IterableDataset):

@@ -1,7 +1,8 @@
 import io
 import re
-import wave
 import unicodedata
+import wave
+
 import numpy as np
 
 

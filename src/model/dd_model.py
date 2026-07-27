@@ -1,18 +1,11 @@
-import torch
-import torch.nn as nn
-from torch.nn.utils.rnn import pad_sequence
-
-from transformers import Wav2Vec2Model
-
+import math
+from collections import namedtuple
 from dataclasses import dataclass, field
 
-from collections import namedtuple
-
-import math
-
-from typing import List
-
-
+import torch
+from torch import nn
+from torch.nn.utils.rnn import pad_sequence
+from transformers import Wav2Vec2Model
 
 decoder_out_t = namedtuple(
     "decoder_out_t",
@@ -45,7 +38,7 @@ class DiscreteDiffusionModelArguments:
     attention_strategy: str = field(default="full")
     vocab_pad_to_multiple: int = field(default=1)  # 64
     lora: bool = field(default=False, metadata={"help": "whether to traing with lora"})
-    lora_target_modules: List[str] = field(default_factory=lambda: ["query", "value"])
+    lora_target_modules: list[str] = field(default_factory=lambda: ["query", "value"])
     lora_alpha: float = field(default=16)
     lora_rank: int = field(default=16)
     lora_bias: str = field(default="none")

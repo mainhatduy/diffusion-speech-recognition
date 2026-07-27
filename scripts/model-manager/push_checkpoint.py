@@ -1,7 +1,8 @@
-import sys
 import os
-from huggingface_hub import HfApi
+import sys
+
 from dotenv import load_dotenv
+from huggingface_hub import HfApi
 
 load_dotenv()
 

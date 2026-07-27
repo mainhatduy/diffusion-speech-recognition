@@ -1,10 +1,11 @@
+import argparse
 import os
 import sys
-import argparse
+
 import qai_hub as hub
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from utils import setup_qualcomm_token, repackage_model, monitor_jobs
+from utils import monitor_jobs, repackage_model, setup_qualcomm_token
 
 
 def print_banner():

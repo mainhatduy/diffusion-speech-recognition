@@ -1,4 +1,4 @@
-from transformers import PretrainedConfig, AutoConfig
+from transformers import AutoConfig, PretrainedConfig
 
 
 class DiscreteDiffusionConfig(PretrainedConfig):

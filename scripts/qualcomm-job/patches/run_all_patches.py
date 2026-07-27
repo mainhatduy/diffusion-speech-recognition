@@ -14,10 +14,11 @@ Steps:
 """
 
 import os
-import sys
 import subprocess
+import sys
+
 import onnx
-from onnx import helper, TensorProto
+from onnx import TensorProto, helper
 
 
 def run_command(cmd, desc):

@@ -1,8 +1,9 @@
 import torch
-import torch.nn as nn
-from transformers.models.roberta.modeling_roberta import RobertaLayer, RobertaEncoder
-from transformers.pytorch_utils import apply_chunking_to_forward
+from torch import nn
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
+from transformers.models.roberta.modeling_roberta import RobertaEncoder, RobertaLayer
+from transformers.pytorch_utils import apply_chunking_to_forward
+
 
 class CrossAttnRobertaLayer(RobertaLayer):
     def __init__(self, config, layer_idx=None):

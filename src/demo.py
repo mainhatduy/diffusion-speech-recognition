@@ -1,4 +1,5 @@
 import streamlit as st
+
 from interactive import InteractiveDiffusion
 
 st.title("Diffusion LLM demo")

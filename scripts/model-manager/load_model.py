@@ -1,20 +1,21 @@
-import sys
-import os
 import json
-import torch
-import numpy as np
+import os
+import sys
+
 import miniaudio
-from transformers import AutoTokenizer, AutoModel, AutoConfig
+import numpy as np
+import torch
 from dotenv import load_dotenv
+from transformers import AutoConfig, AutoModel, AutoTokenizer
 
 load_dotenv()
 
 # Add src to path
 sys.path.append(os.path.abspath("src"))
 
+from dd_generator import DiscreteDiffusionGenerator, DiscreteDiffusionGeneratorArguments
 from model.configuration_dlm import DiscreteDiffusionConfig
 from model.modeling_dlm import DiscreteDiffusionModel
-from dd_generator import DiscreteDiffusionGenerator, DiscreteDiffusionGeneratorArguments
 
 
 def main():

@@ -11,8 +11,9 @@ Usage:
 """
 
 import os
+
 import onnx
-from onnx import helper, TensorProto
+from onnx import TensorProto, helper
 
 
 def infer_tensor_types(graph):

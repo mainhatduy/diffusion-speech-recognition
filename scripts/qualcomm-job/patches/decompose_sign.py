@@ -13,9 +13,10 @@ Usage:
     python scripts/qualcomm-job/patches/decompose_sign.py
 """
 
-import onnx
-from onnx import helper, TensorProto, numpy_helper
 import numpy as np
+
+import onnx
+from onnx import TensorProto, helper, numpy_helper
 
 # Map ONNX elem_type to numpy dtype
 ELEM_TYPE_TO_NP = {

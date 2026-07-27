@@ -6,21 +6,24 @@ Vietnamese speech to English, Chinese, and Korean, with a detailed, step-by-step
 visualization of the forward (add noise) and reverse (denoise) diffusion processes.
 """
 
-import sys
 import os
-import torch
-import numpy as np
+import sys
+
 import gradio as gr
+import numpy as np
+import torch
 
 # ─── Resolve project root so we can import src/ modules ──────────────────────
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 
+import json
+
+from huggingface_hub import hf_hub_download
 from transformers import AutoTokenizer, Wav2Vec2FeatureExtractor
+
 from model.configuration_dlm import DiscreteDiffusionConfig
 from model.modeling_dlm import DiscreteDiffusionModel, decoder_out_t
-from huggingface_hub import hf_hub_download
-import json
 
 # ─── Global variables for preloaded model/tokenizer ─────────────────────────
 _tokenizer = None
@@ -394,7 +397,7 @@ def run_speech_translation(audio_path, max_iterations, strategy, slow_mode_enabl
         import traceback
 
         err_msg = (
-            f"An error occurred during inference:\n{str(e)}\n\n{traceback.format_exc()}"
+            f"An error occurred during inference:\n{e!s}\n\n{traceback.format_exc()}"
         )
         print(err_msg)
         yield err_msg, "", "", "", "", ""
@@ -603,21 +606,20 @@ def build_interface():
                     ko_output = gr.Textbox(label="🇰🇷 Korean", interactive=False)
 
         # Toggleable visualization block
-        with gr.Row(visible=True):
-            with gr.Column():
-                gr.Markdown("### 🔍 Step-by-Step Diffusion Process Visualization")
-                with gr.Tabs():
-                    with gr.Tab("🇬🇧 English"):
-                        gr.Markdown("#### Reverse Process (Denoising)")
-                        en_denoise_html = gr.HTML()
+        with gr.Row(visible=True), gr.Column():
+            gr.Markdown("### 🔍 Step-by-Step Diffusion Process Visualization")
+            with gr.Tabs():
+                with gr.Tab("🇬🇧 English"):
+                    gr.Markdown("#### Reverse Process (Denoising)")
+                    en_denoise_html = gr.HTML()
 
-                    with gr.Tab("🇨🇳 Chinese"):
-                        gr.Markdown("#### Reverse Process (Denoising)")
-                        zh_denoise_html = gr.HTML()
+                with gr.Tab("🇨🇳 Chinese"):
+                    gr.Markdown("#### Reverse Process (Denoising)")
+                    zh_denoise_html = gr.HTML()
 
-                    with gr.Tab("🇰🇷 Korean"):
-                        gr.Markdown("#### Reverse Process (Denoising)")
-                        ko_denoise_html = gr.HTML()
+                with gr.Tab("🇰🇷 Korean"):
+                    gr.Markdown("#### Reverse Process (Denoising)")
+                    ko_denoise_html = gr.HTML()
 
         # Click listeners
         load_sample_btn.click(fn=load_test_sample, outputs=audio_input)

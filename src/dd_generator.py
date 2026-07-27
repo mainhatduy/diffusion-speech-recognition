@@ -1,17 +1,12 @@
+import math
 from dataclasses import dataclass, field
 
+import numpy as np
+import sacrebleu
 import torch
 import torch.distributions as dists
-from torch.nn.utils.rnn import pad_sequence
-
-import numpy as np
-
-import math
-
-
-import sacrebleu
-
 from rouge import Rouge
+from torch.nn.utils.rnn import pad_sequence
 
 try:
     import jiwer
@@ -59,7 +54,7 @@ def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
     return masking
 
 
-class MergeBLEU(object):
+class MergeBLEU:
     def __call__(self, evalpreds):
         # if torch.distributed.get_rank() == 0:
         #     import ipdb; ipdb.set_trace()
@@ -93,7 +88,7 @@ class MergeBLEU(object):
         }
 
 
-class MergeRouge(object):
+class MergeRouge:
     def __call__(self, evalpreds):
         # if torch.distributed.get_rank() == 0:
         #     import ipdb; ipdb.set_trace()
@@ -108,7 +103,7 @@ class MergeRouge(object):
         return {"rouge": rouge}
 
 
-class MergeWER(object):
+class MergeWER:
     """Word Error Rate metric aggregator.
 
     evalpreds[0]: float32 tensor of shape [N] containing per-batch WER numerators

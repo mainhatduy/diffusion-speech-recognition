@@ -18,11 +18,11 @@ Usage:
   python scripts/qualcomm-job/inference/test_inference_multi_chipset.py --runtime onnx --audio test/test_data/test_sample.mp3
 """
 
+import argparse
+import json
 import os
 import sys
 import time
-import json
-import argparse
 from datetime import datetime
 
 import numpy as np
@@ -34,10 +34,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from utils import (
     AUDIO_SAMPLE_RATE,
     MAX_SEQ_LEN,
-    setup_qualcomm_token,
     load_audio,
     prepare_audio_inputs,
     prepare_backbone_inputs,
+    setup_qualcomm_token,
 )
 
 # ─────────────────────────────── Constants ────────────────────────────────
@@ -193,6 +193,7 @@ def main():
     # Load tokenizer and config for decoding
     print("\n[*] Loading tokenizer and config from HuggingFace Hub...")
     from transformers import AutoTokenizer
+
     from model.configuration_dlm import DiscreteDiffusionConfig
 
     repo_id = "aiai-laboratory/diffusion-speech-translation-from-vi-v1"

@@ -1,34 +1,30 @@
-import transformers
 import dataclasses
+import json
+import os
+from copy import deepcopy
 from dataclasses import dataclass, field
 
-import json
+import transformers
+from dotenv import load_dotenv
 
-from model.dd_model import DiscreteDiffusionModelArguments
 from data.dd_data import (
     DiscreteDiffusionDataArguments,
     load_data,
 )
-from trainer.dd_trainer import (
-    DiscreteDiffusionTrainingArguments,
-    DiscreteDiffusionTrainer,
-)
 from dd_generator import (
-    DiscreteDiffusionGeneratorArguments,
     DiscreteDiffusionGenerator,
+    DiscreteDiffusionGeneratorArguments,
     MergeBLEU,
-    MergeWER,
     MergeRouge,
+    MergeWER,
     MultiMetric,
 )
-
-from copy import deepcopy
-from typing import List
-
-from utils import load_model_tokenizer, load_ckpt
-
-import os
-from dotenv import load_dotenv
+from model.dd_model import DiscreteDiffusionModelArguments
+from trainer.dd_trainer import (
+    DiscreteDiffusionTrainer,
+    DiscreteDiffusionTrainingArguments,
+)
+from utils import load_ckpt, load_model_tokenizer
 
 
 @dataclass
@@ -44,7 +40,7 @@ class DiscreteDiffusionEvalArguments:
 
 @dataclass
 class DiscreteDiffusionEvalDataArguments(DiscreteDiffusionDataArguments):
-    data_path: List[str] = field(default_factory=lambda: [])
+    data_path: list[str] = field(default_factory=list)
 
 
 def main():

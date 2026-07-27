@@ -15,13 +15,11 @@ import json
 import os
 import sys
 import tempfile
-import shutil
-import numpy as np
+
 import pyarrow as pa
 import pyarrow.parquet as pq
-from pathlib import Path
 from dotenv import load_dotenv
-from huggingface_hub import HfApi, hf_hub_download, list_repo_files, CommitOperationAdd
+from huggingface_hub import CommitOperationAdd, HfApi, hf_hub_download, list_repo_files
 
 
 def parse_args():
@@ -213,9 +211,9 @@ def main():
         batch_num = (batch_start // batch_size) + 1
         total_batches = (len(pending_shards) + batch_size - 1) // batch_size
 
-        print(f"\n=============================================================")
+        print("\n=============================================================")
         print(f"  Batch {batch_num}/{total_batches}: Processing {len(batch_shards)} shards...")
-        print(f"=============================================================")
+        print("=============================================================")
 
         with tempfile.TemporaryDirectory() as batch_tmp_dir:
             commit_operations = []

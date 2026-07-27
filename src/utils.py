@@ -1,18 +1,14 @@
+import math
+import os
+from typing import Union, get_args
+
 import torch
 import torch.distributed as dist
-
-from peft import PeftModel, LoraConfig, TaskType, get_peft_model
-
-from model.dd_model import DiscreteDiffusionXLMRModel
-
-from transformers import AutoTokenizer, AutoModelForMaskedLM
+from peft import LoraConfig, PeftModel, TaskType, get_peft_model
+from transformers import AutoModelForMaskedLM, AutoTokenizer
 from transformers.utils import logging
 
-import os
-
-from typing import Dict, List, Union, get_args
-
-import math
+from model.dd_model import DiscreteDiffusionXLMRModel
 
 logger = logging.get_logger(__name__)
 
@@ -49,21 +45,21 @@ def mean_ds(x, dim=None):
 
 
 def argument_filter(arguments):
-    if isinstance(arguments, List):
+    if isinstance(arguments, list):
         arg_list = []
         for item in arguments:
             if isinstance(item, get_args(Union[int, float, str])):
                 arg_list.append(item)
-            elif isinstance(item, get_args(List)):
+            elif isinstance(item, get_args(list)):
                 arg_list.append(argument_filter(item))
         return arg_list
-    elif isinstance(arguments, Dict):
+    elif isinstance(arguments, dict):
         arg_dict = {}
         for key, value in arguments.items():
             assert isinstance(key, str)
             if isinstance(value, get_args(Union[int, float, str])):
                 arg_dict[key] = value
-            elif isinstance(value, get_args(Union[Dict, List])):
+            elif isinstance(value, get_args(Union[dict, list])):
                 arg_dict[key] = argument_filter(value)
         return arg_dict
 

@@ -35,11 +35,12 @@ Usage:
 """
 
 import os
-import onnx
-from onnx import helper, TensorProto
-from onnx import shape_inference
-import onnxruntime as ort
+
 import numpy as np
+import onnxruntime as ort
+
+import onnx
+from onnx import TensorProto, helper, shape_inference
 
 
 def build_output_map(graph):

@@ -1,9 +1,10 @@
-import torch
 from dataclasses import dataclass
+
+import torch
 
 
 @dataclass
-class DiscreteDiffusionDataCollator(object):
+class DiscreteDiffusionDataCollator:
     bos_id: int
     eos_id: int
     pad_id: int

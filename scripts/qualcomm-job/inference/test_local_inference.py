@@ -11,14 +11,15 @@ Usage:
   uv run python scripts/qualcomm-job/inference/test_local_inference.py --mode onnx --audio test/test_data/test_sample.mp3
 """
 
+import argparse
+import json
 import os
 import sys
 import time
-import json
-import argparse
+
 import numpy as np
-import torch
 import onnxruntime as ort
+import torch
 from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
 from transformers import AutoTokenizer
@@ -27,17 +28,16 @@ from transformers import AutoTokenizer
 sys.path.insert(0, os.path.abspath("src"))
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from model.configuration_dlm import DiscreteDiffusionConfig
+from model.modeling_dlm import DiscreteDiffusionModel
 from utils import (
     AUDIO_SAMPLE_RATE,
     MAX_SEQ_LEN,
+    decode_tokens,
     load_audio,
     prepare_audio_inputs,
     reparam_decoding,
-    decode_tokens,
 )
-
-from model.modeling_dlm import DiscreteDiffusionModel
-from model.configuration_dlm import DiscreteDiffusionConfig
 
 # ────────────────────────────── Run Functions ──────────────────────────────
 

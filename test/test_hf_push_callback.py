@@ -1,13 +1,12 @@
-import unittest
-from unittest.mock import MagicMock, patch
 import os
 import shutil
 import tempfile
-import threading
-import time
+import unittest
+from unittest.mock import MagicMock, patch
+
+from transformers import TrainerState, TrainingArguments
 
 from trainer.dd_trainer import HuggingFacePushCallback
-from transformers import TrainingArguments, TrainerState
 
 
 class TestHuggingFacePushCallback(unittest.TestCase):

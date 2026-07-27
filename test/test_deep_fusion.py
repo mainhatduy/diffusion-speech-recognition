@@ -1,12 +1,14 @@
-import torch
-import torch.nn as nn
 from unittest.mock import MagicMock, patch
 
+import torch
+from torch import nn
+from transformers import AutoModelForMaskedLM, RobertaConfig
+
 from model.configuration_dlm import DiscreteDiffusionConfig
-from model.modeling_dlm import DiscreteDiffusionModel
-from model.dd_model import DiscreteDiffusionXLMRModel, DiscreteDiffusionModelArguments
 from model.cross_attn_roberta import CrossAttnRobertaLayer
-from transformers import RobertaConfig, AutoModelForMaskedLM
+from model.dd_model import DiscreteDiffusionModelArguments, DiscreteDiffusionXLMRModel
+from model.modeling_dlm import DiscreteDiffusionModel
+
 
 class MockAudioConfig:
     def __init__(self):

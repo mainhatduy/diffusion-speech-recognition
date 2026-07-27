@@ -10,12 +10,13 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sys
 import time
-import hashlib
 from pathlib import Path
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset
@@ -235,7 +236,7 @@ def main():
         args.audio_encoder_name, cache_dir=args.cache_dir
     )
 
-    from datasets import load_dataset, Audio
+    from datasets import Audio, load_dataset
 
     translated_ds = load_dataset(
         "aiai-laboratory/vietspeech-train-translated",

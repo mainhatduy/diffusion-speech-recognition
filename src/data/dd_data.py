@@ -1,15 +1,14 @@
 import os
 from dataclasses import dataclass, field
-from typing import List, Tuple, Optional
 
 # Re-exporting all dataset components for backward compatibility
 from .base import PromptDataset
 from .bilingual import BilingualDataset
-from .speech import SpeechDataset
-from .translated_speech import TranslatedSpeechDataset
+from .collator import DiscreteDiffusionDataCollator
 from .multitask import MultiTaskTranslatedSpeechDataset
 from .precomputed_multitask import PrecomputedMultiTaskDataset
-from .collator import DiscreteDiffusionDataCollator
+from .speech import SpeechDataset
+from .translated_speech import TranslatedSpeechDataset
 
 # Legacy placeholders to avoid breaking imports
 PairDataset = BilingualDataset
@@ -63,7 +62,7 @@ class DiscreteDiffusionDataArguments:
     dereify: bool = field(
         default=False, metadata={"help": "whether to dereify AMR graph"}
     )
-    task_tokens: List[str] = field(
+    task_tokens: list[str] = field(
         default_factory=lambda: ["<vi_en>", "<vi_zh>", "<vi_ko>"],
         metadata={
             "help": "List of task token strings (with <>) for multi-task speech translation. E.g. ['<vi_en>', '<vi_zh>', '<vi_ko>']"
@@ -100,12 +99,12 @@ def load_data(
     train: bool = True,
     valid: bool = True,
     test: bool = False,
-) -> Tuple[
-    Tuple[Optional[PromptDataset], Optional[PromptDataset], Optional[PromptDataset]],
+) -> tuple[
+    tuple[PromptDataset | None, PromptDataset | None, PromptDataset | None],
     DiscreteDiffusionDataCollator,
 ]:
     """Unified dataset loader entry point. Sets appropriate configs and returns data splits and the collator."""
-    setattr(data_args, "cache_dir", model_args.cache_dir)
+    data_args.cache_dir = model_args.cache_dir
 
     # Dispatch dataset loading
     if data_args.dataset_type in ["bilingual", "pair"]:
@@ -145,7 +144,9 @@ def load_data(
             print(
                 f"[load_data] Using StreamingPrecomputedMultiTaskDataset from HF repo '{data_args.streaming_repo_id}'"
             )
-            from .streaming_precomputed_multitask import StreamingPrecomputedMultiTaskDataset
+            from .streaming_precomputed_multitask import (
+                StreamingPrecomputedMultiTaskDataset,
+            )
 
             datasets = StreamingPrecomputedMultiTaskDataset.load_data(
                 data_args, tokenizer, train, valid, test

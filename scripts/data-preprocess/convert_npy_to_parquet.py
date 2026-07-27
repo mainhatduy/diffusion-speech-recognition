@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-import os
-import sys
 import json
-import time
+import os
 import shutil
+import sys
+import time
+from pathlib import Path
+
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-from pathlib import Path
 from tqdm import tqdm
 
 

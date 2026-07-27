@@ -1,14 +1,16 @@
-import sys
 import os
-import torch
+import sys
+
 import numpy as np
+import torch
 
 # Add src to Python path
 sys.path.append(os.path.abspath("src"))
 
-from transformers import AutoTokenizer, AutoConfig, PretrainedConfig
-from model.modeling_dlm import DiscreteDiffusionModel
+from transformers import AutoConfig, AutoTokenizer, PretrainedConfig
+
 from model.configuration_dlm import DiscreteDiffusionConfig
+from model.modeling_dlm import DiscreteDiffusionModel
 
 # Patch configurations to force "eager" attention implementation (bypasses SDPA SymBool issue in PyTorch 2.x)
 orig_auto_config_from_pretrained = AutoConfig.from_pretrained

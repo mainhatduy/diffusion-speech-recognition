@@ -1,10 +1,12 @@
-import os
 import logging
 import multiprocessing as mp
+import os
+
 import numpy as np
 import torch
-from datasets import load_dataset, Audio
+from datasets import Audio, load_dataset
 from transformers import Wav2Vec2FeatureExtractor
+
 from .base import PromptDataset
 from .utils import _decode_wav_bytes
 

@@ -5,15 +5,15 @@ This script runs the full diffusion denoising loop on the Qualcomm S25 chipset
 by submitting step-by-step backbone inference requests to Qualcomm AI Hub.
 """
 
+import argparse
+import json
 import os
 import sys
 import time
-import json
-import argparse
 
 import numpy as np
-import torch
 import onnxruntime as ort
+import torch
 
 # Add src to path for model configuration
 sys.path.insert(0, os.path.abspath("src"))
@@ -22,12 +22,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from utils import (
     AUDIO_SAMPLE_RATE,
     MAX_SEQ_LEN,
-    setup_qualcomm_token,
+    decode_tokens,
     load_audio,
     prepare_audio_inputs,
     prepare_backbone_inputs,
     reparam_decoding,
-    decode_tokens,
+    setup_qualcomm_token,
 )
 
 # ─────────────────────────────── Constants ────────────────────────────────
@@ -80,6 +80,7 @@ def main():
     # Load tokenizer and config
     print("\n[*] Loading tokenizer and config from HuggingFace Hub...")
     from transformers import AutoTokenizer
+
     from model.configuration_dlm import DiscreteDiffusionConfig
 
     repo_id = "aiai-laboratory/diffusion-speech-translation-from-vi-v1"

@@ -9,11 +9,12 @@ Usage:
     uv run python scripts/model-manager/inference.py path/to/audio.wav
 """
 
-import sys
-import os
 import argparse
-import torch
+import os
+import sys
+
 import numpy as np
+import torch
 
 # ─── Resolve project root so we can import src/ modules ──────────────────────
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -114,8 +115,7 @@ def translate(
     Returns:
         dict with keys 'english', 'chinese', 'korean'.
     """
-    from transformers import AutoTokenizer
-    from transformers import Wav2Vec2FeatureExtractor
+    from transformers import AutoTokenizer, Wav2Vec2FeatureExtractor
 
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -129,10 +129,12 @@ def translate(
 
     print(f"[inference] Loading model from {repo_id} ...")
     # Use local source classes directly to avoid meta-device issues with nested from_pretrained calls
+    import json
+
+    from huggingface_hub import hf_hub_download
+
     from model.configuration_dlm import DiscreteDiffusionConfig
     from model.modeling_dlm import DiscreteDiffusionModel
-    from huggingface_hub import hf_hub_download
-    import json
 
     # Download just the config
     config_path = hf_hub_download(repo_id=repo_id, filename="config.json")

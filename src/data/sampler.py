@@ -1,6 +1,7 @@
 import math
+from collections.abc import Iterator
+
 import torch
-from typing import List, Optional, Iterator
 from torch.utils.data import Dataset
 from transformers.trainer_pt_utils import DistributedLengthGroupedSampler
 
@@ -10,13 +11,13 @@ class TokenSizeDistributedLengthGroupSampler(DistributedLengthGroupedSampler):
         self,
         batch_size: int,
         max_length: int,
-        dataset: Optional[Dataset],
-        num_replicas: Optional[int] = None,
-        rank: Optional[int] = None,
+        dataset: Dataset | None,
+        num_replicas: int | None = None,
+        rank: int | None = None,
         seed: int = 0,
         drop_last: bool = False,
-        lengths: Optional[List[int]] = None,
-        model_input_name: Optional[str] = None,
+        lengths: list[int] | None = None,
+        model_input_name: str | None = None,
         infinite: bool = False,
     ):
         super().__init__(

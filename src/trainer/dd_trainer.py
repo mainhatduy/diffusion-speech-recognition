@@ -1,47 +1,36 @@
-from transformers import Trainer
-from transformers.utils import logging
+import math
+import os
+import threading
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
+
+import torch
+import torch.nn.functional as F
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
+from transformers import Trainer, TrainingArguments
+from transformers.data.data_collator import DataCollator
+from transformers.modeling_utils import PreTrainedModel
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
+from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import (
     EvalPrediction,
     seed_worker,
 )
-from transformers.trainer_callback import TrainerCallback
-from transformers.modeling_utils import PreTrainedModel
-from transformers.data.data_collator import DataCollator
-from transformers.tokenization_utils_base import PreTrainedTokenizerBase
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-
-
-from typing import List, Dict, Any, Union, Optional, Tuple, Callable
+from transformers.utils import logging
 
 from data.sampler import TokenSizeDistributedLengthGroupSampler
 from dd_generator import DiscreteDiffusionGenerator
-
-from dataclasses import dataclass, field
-
 from utils import is_master
-
-from tqdm import tqdm
-
-import math
-
-import os
-import threading
-from huggingface_hub import HfApi
-
-from transformers import TrainingArguments
-
-
 
 
 @dataclass
 class DiscreteDiffusionArguments(TrainingArguments):
     batch_by_tokens: bool = field(default=False)
     eval_metric: str = field(default="none")
-    eval_metrics: List[str] = field(
+    eval_metrics: list[str] = field(
         default_factory=list,
         metadata={
             "help": "list of metrics to compute, e.g. ['wer', 'bleu']. Overrides eval_metric when non-empty."
@@ -106,11 +95,11 @@ class HuggingFacePushCallback(TrainerCallback):
         if not is_master():
             return
 
-        import os
-        import json
-        import torch
-        import sys
         import importlib.util
+        import json
+        import os
+
+        import torch
 
         checkpoint_dir = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -183,23 +172,21 @@ class HuggingFacePushCallback(TrainerCallback):
 class DiscreteDiffusionTrainer(Trainer):
     def __init__(
         self,
-        model: Union[PreTrainedModel, nn.Module] = None,
+        model: PreTrainedModel | nn.Module = None,
         args: DiscreteDiffusionTrainingArguments = None,
         generator: DiscreteDiffusionGenerator = None,
-        data_collator: Optional[DataCollator] = None,
-        train_dataset: Optional[Dataset] = None,
-        eval_dataset: Optional[Union[Dataset, Dict[str, Dataset]]] = None,
-        tokenizer: Optional[PreTrainedTokenizerBase] = None,
-        model_init: Optional[Callable[[], PreTrainedModel]] = None,
-        compute_metrics: Optional[Callable[[EvalPrediction], Dict]] = None,
-        callbacks: Optional[List[TrainerCallback]] = None,
-        optimizers: Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (
+        data_collator: DataCollator | None = None,
+        train_dataset: Dataset | None = None,
+        eval_dataset: Dataset | dict[str, Dataset] | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        model_init: Callable[[], PreTrainedModel] | None = None,
+        compute_metrics: Callable[[EvalPrediction], dict] | None = None,
+        callbacks: list[TrainerCallback] | None = None,
+        optimizers: tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (
             None,
             None,
         ),
-        preprocess_logits_for_metrics: Optional[
-            Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
-        ] = None,
+        preprocess_logits_for_metrics: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None,
     ):
         # SỬA FILE: src/trainer/dd_trainer.py
 
@@ -259,7 +246,7 @@ class DiscreteDiffusionTrainer(Trainer):
         else:
             return super().get_train_dataloader()
 
-    def get_eval_dataloader(self, eval_dataset: Optional[Dataset] = None) -> DataLoader:
+    def get_eval_dataloader(self, eval_dataset: Dataset | None = None) -> DataLoader:
         if eval_dataset is None and self.eval_dataset is None:
             raise ValueError("Trainer: evaluation requires an eval_dataset.")
         # if eval_dataset is not None:
@@ -414,8 +401,8 @@ class DiscreteDiffusionTrainer(Trainer):
 
     def _save(
         self,
-        output_dir: Optional[str] = None,
-        state_dict: Optional[Dict[str, Any]] = None,
+        output_dir: str | None = None,
+        state_dict: dict[str, Any] | None = None,
     ):
         output_dir = output_dir if output_dir is not None else self.args.output_dir
         os.makedirs(output_dir, exist_ok=True)
@@ -424,7 +411,7 @@ class DiscreteDiffusionTrainer(Trainer):
         logger.info(f"Saving model checkpoint to {output_dir}")
 
         from transformers.modeling_utils import PreTrainedModel
-        from transformers.utils import is_peft_available, WEIGHTS_NAME
+        from transformers.utils import WEIGHTS_NAME, is_peft_available
 
         if is_peft_available():
             from peft import PeftModel
@@ -483,10 +470,10 @@ class DiscreteDiffusionTrainer(Trainer):
     def prediction_step(
         self,
         model: nn.Module,
-        inputs: Dict[str, Union[torch.Tensor, Any]],
+        inputs: dict[str, torch.Tensor | Any],
         prediction_loss_only: bool,
-        ignore_keys: Optional[List[str]] = None,
-    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+        ignore_keys: list[str] | None = None,
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
         inputs = self._prepare_inputs(inputs)
         if not self.eval_compute_loss:
             loss = torch.tensor([0.0]).to(inputs["target"].device)
@@ -500,8 +487,9 @@ class DiscreteDiffusionTrainer(Trainer):
             not hasattr(self, "has_printed_sample") or not self.has_printed_sample
         ):
             try:
-                import os
                 import json
+                import os
+
                 import miniaudio
                 import numpy as np
 

@@ -1,6 +1,7 @@
-import onnx
-from onnx import helper, TensorProto
 import os
+
+import onnx
+from onnx import TensorProto, helper
 
 
 def test_patch():

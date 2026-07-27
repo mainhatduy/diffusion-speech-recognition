@@ -1,10 +1,10 @@
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 from transformers import (
-    PreTrainedModel,
-    AutoModelForMaskedLM,
     AutoConfig,
+    AutoModelForMaskedLM,
+    PreTrainedModel,
     Wav2Vec2Model,
 )
 
@@ -13,8 +13,9 @@ try:
 except ImportError:
     from configuration_dlm import DiscreteDiffusionConfig
 
-from collections import namedtuple
 import math
+from collections import namedtuple
+
 import numpy as np
 
 decoder_out_t = namedtuple(

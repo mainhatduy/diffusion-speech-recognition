@@ -1,24 +1,25 @@
+import argparse
+import io
+import json
 import os
 import sys
 import time
-import argparse
-import json
-import torch
+
 import numpy as np
-import io
 import soundfile as sf
+import torch
 from datasets import load_dataset
-from transformers import AutoTokenizer, Wav2Vec2FeatureExtractor
 from tqdm import tqdm
+from transformers import AutoTokenizer, Wav2Vec2FeatureExtractor
 
 # Resolve project root so we can import src/ modules
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 
-from model.configuration_dlm import DiscreteDiffusionConfig
-from model.modeling_dlm import DiscreteDiffusionModel
-from model.modeling_dlm import decoder_out_t
 import sacrebleu
+
+from model.configuration_dlm import DiscreteDiffusionConfig
+from model.modeling_dlm import DiscreteDiffusionModel, decoder_out_t
 
 
 def load_audio_from_bytes(raw_bytes: bytes, target_sr: int = 16000) -> np.ndarray:

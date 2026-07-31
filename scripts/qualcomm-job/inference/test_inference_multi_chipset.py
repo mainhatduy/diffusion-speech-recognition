@@ -84,7 +84,7 @@ def extract_latency(profile_data) -> str:
         summary = profile_data.get("execution_summary", {})
         latency_us = summary.get("estimated_inference_time", 0)
         if latency_us > 0:
-            return f"{latency_us/1000:.2f} ms"
+            return f"{latency_us / 1000:.2f} ms"
     return "N/A"
 
 
@@ -128,7 +128,7 @@ def print_results_table(results: list):
     for r in results:
         if r["errors"]:
             if not errors_found:
-                print(f"\n{'─'*95}")
+                print(f"\n{'─' * 95}")
                 print("ERRORS:")
                 errors_found = True
             print(f"\n  {r['device']}:")
@@ -212,7 +212,7 @@ def main():
 
     audio = load_audio(args.audio, target_sr=AUDIO_SAMPLE_RATE)
     audio_inputs = prepare_audio_inputs(audio)
-    print(f"    Audio duration: {len(audio)/AUDIO_SAMPLE_RATE:.2f}s")
+    print(f"    Audio duration: {len(audio) / AUDIO_SAMPLE_RATE:.2f}s")
     print(f"    Audio shape: {audio_inputs['audio_features'].shape}")
 
     # Load ground truth if available
@@ -636,9 +636,9 @@ def main():
                     profile_data = info["backbone_prof"].download_profile()
                     result["diffusion_backbone"]["profile"] = profile_data
                 else:
-                    result["diffusion_backbone"][
-                        "profile"
-                    ] = f"FAILED: {status.message}"
+                    result["diffusion_backbone"]["profile"] = (
+                        f"FAILED: {status.message}"
+                    )
             except Exception as e:
                 result["diffusion_backbone"]["profile"] = f"ERROR: {e}"
 

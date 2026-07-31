@@ -12,10 +12,9 @@ class PromptDataset(Dataset):
 
     def _get_rainbow_pad_ids(self):
         """Cache rainbow pad token IDs."""
-        if not hasattr(self, '_rainbow_pad_ids'):
+        if not hasattr(self, "_rainbow_pad_ids"):
             self._rainbow_pad_ids = [
-                self.tokenizer.convert_tokens_to_ids(f"<rpad_{i}>")
-                for i in range(7)
+                self.tokenizer.convert_tokens_to_ids(f"<rpad_{i}>") for i in range(7)
             ]
         return self._rainbow_pad_ids
 

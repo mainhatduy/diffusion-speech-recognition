@@ -169,7 +169,7 @@ def tokens_to_html_denoise_single_line(
     header_html = f"""
     <div class="console-header">
         <div class="console-status-group">
-            <span class="status-dot {'status-pulse' if step_idx < max_iterations else 'status-done'}"></span>
+            <span class="status-dot {"status-pulse" if step_idx < max_iterations else "status-done"}"></span>
             <span class="console-title">Reverse Process (Denoising) — Step {step_idx}/{max_iterations}</span>
         </div>
         <div class="console-progress-container">
@@ -558,9 +558,7 @@ def build_interface():
     get_model_and_tokenizer()
 
     with gr.Blocks(title="Discrete Diffusion Speech Translation") as demo:
-        gr.Markdown(
-            "# 🎙️ Vietnamese Speech Translation & Discrete Diffusion Visualizer"
-        )
+        gr.Markdown("# 🎙️ Vietnamese Speech Translation & Discrete Diffusion Visualizer")
         gr.Markdown(
             "Translate Vietnamese speech directly into three target languages: **English, Chinese, and Korean** "
             "using the Discrete Diffusion model. Record or upload an audio file to start."

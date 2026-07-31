@@ -98,7 +98,6 @@ def main():
 
     # Initialize WandB if enabled
     if "wandb" in train_args.report_to:
-
         # Set WandB project and run name from config
         if not os.getenv("WANDB_PROJECT"):
             wandb_project = getattr(train_args, "wandb_project", "mlm-to-dlm")

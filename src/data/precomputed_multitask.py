@@ -89,7 +89,7 @@ class PrecomputedMultiTaskDataset(PromptDataset):
         src_length = len(src)
         concatenated = src + tgt
         if len(concatenated) > self.max_length:
-            concatenated = concatenated[:self.max_length]
+            concatenated = concatenated[: self.max_length]
         remaining = self.max_length - len(concatenated)
         if remaining > 0:
             eos_id = self.tokenizer.eos_token_id
@@ -249,7 +249,7 @@ class PrecomputedMultiTaskDataset(PromptDataset):
         )
         print(
             f"[PrecomputedMultiTask] Effective (×{n_tasks}): "
-            f"{len(train_index)*n_tasks} train / {len(val_index)*n_tasks} val"
+            f"{len(train_index) * n_tasks} train / {len(val_index) * n_tasks} val"
         )
 
         train_ds = (

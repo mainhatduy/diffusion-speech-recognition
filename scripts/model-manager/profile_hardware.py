@@ -653,12 +653,12 @@ Evaluated on translation task `{task_token}` (`{task_lang}`) with audio duration
 ---
 
 ## 🚀 GPU (CUDA) Performance Benchmarks (Batch Size = 1)
-- **Device:** {g['device_name']} (BF16 Precision)
-- **Avg Latency:** {g['latency_sec']:.3f}s
-- **Real-Time Factor (RTF):** {g['rtf']:.3f}
-- **Generation Speed:** {g['tokens_per_sec']:.1f} tokens/s
-- **Peak VRAM Allocated:** {g['peak_vram_allocated_mb']:.2f} MB (Weights + Activations)
-- **Peak VRAM Reserved:** {g['peak_vram_reserved_mb']:.2f} MB
+- **Device:** {g["device_name"]} (BF16 Precision)
+- **Avg Latency:** {g["latency_sec"]:.3f}s
+- **Real-Time Factor (RTF):** {g["rtf"]:.3f}
+- **Generation Speed:** {g["tokens_per_sec"]:.1f} tokens/s
+- **Peak VRAM Allocated:** {g["peak_vram_allocated_mb"]:.2f} MB (Weights + Activations)
+- **Peak VRAM Reserved:** {g["peak_vram_reserved_mb"]:.2f} MB
 """
 
     with open(args.output_markdown, "w", encoding="utf-8") as f:

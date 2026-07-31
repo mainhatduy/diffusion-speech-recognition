@@ -281,10 +281,10 @@ def main():
     print(f"  Target Device:  {args.device}")
     print(f"  Total Steps:    {args.steps}")
     print(
-        f"  Total Duration: {total_time:.2f} seconds ({total_time/args.steps:.2f}s per step)"
+        f"  Total Duration: {total_time:.2f} seconds ({total_time / args.steps:.2f}s per step)"
     )
     if os.path.exists(gt_path):
-        print(f"  Ground Truth:   \"{gt.get('english', 'N/A')}\"")
+        print(f'  Ground Truth:   "{gt.get("english", "N/A")}"')
     print(f'  Model Output:   "{final_output}"')
     print("=" * 80)
 

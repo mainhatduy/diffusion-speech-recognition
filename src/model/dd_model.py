@@ -105,15 +105,15 @@ class DiscreteDiffusionBase(nn.Module):
         )
 
     def add_fake_layer(self):
-        assert hasattr(
-            self, "config"
-        ), "could not infer embedding dimension because self.config is not found."
+        assert hasattr(self, "config"), (
+            "could not infer embedding dimension because self.config is not found."
+        )
         self.fake_layer = nn.Parameter(torch.zeros((self.config.hidden_size,)))
 
     def q_sample_coupled(self, x_0, t1, t2, maskable_mask):
-        assert (
-            self.args.diffusion_type == "absorbing"
-        ), "we only support absorbing diffusion temporarily"
+        assert self.args.diffusion_type == "absorbing", (
+            "we only support absorbing diffusion temporarily"
+        )
         # partial mask: True for the part should not be mask
         t1_eq_t2_mask = t1 == t2
         t1, t2 = torch.maximum(t1, t2).float(), torch.minimum(t1, t2).float()
@@ -312,9 +312,11 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                 from .cross_attn_roberta import CrossAttnRobertaEncoder
             except ImportError:
                 from cross_attn_roberta import CrossAttnRobertaEncoder
-            
+
             new_encoder = CrossAttnRobertaEncoder(self.config)
-            new_encoder.load_state_dict(self.model.roberta.encoder.state_dict(), strict=False)
+            new_encoder.load_state_dict(
+                self.model.roberta.encoder.state_dict(), strict=False
+            )
             self.model.roberta.encoder = new_encoder
 
     def resize_token_embeddings(self, new_num_tokens):
@@ -490,7 +492,7 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         if audio_fusion_strategy == "deep_cross_attn":
             # For Deep Fusion, do not concatenate audio embeds to embeddings.
             combined_attention_mask = attention_mask
-            
+
             # Convert 2D mask using _create_attention_masks
             attention_mask_converted, _ = self.model.roberta._create_attention_masks(
                 attention_mask=combined_attention_mask,
@@ -499,7 +501,7 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                 encoder_hidden_states=None,
                 past_key_values=None,
             )
-            
+
             # Call the encoder directly, passing audio hidden states and padding mask
             encoder_outputs = self.model.roberta.encoder(
                 embeddings,
@@ -560,12 +562,14 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                     )
             else:
                 # Convert 2D mask using _create_attention_masks
-                attention_mask_converted, _ = self.model.roberta._create_attention_masks(
-                    attention_mask=combined_attention_mask,
-                    encoder_attention_mask=None,
-                    embedding_output=embeddings,
-                    encoder_hidden_states=None,
-                    past_key_values=None,
+                attention_mask_converted, _ = (
+                    self.model.roberta._create_attention_masks(
+                        attention_mask=combined_attention_mask,
+                        encoder_attention_mask=None,
+                        embedding_output=embeddings,
+                        encoder_hidden_states=None,
+                        past_key_values=None,
+                    )
                 )
 
             # Call the encoder directly, bypassing self.model.roberta's embedding layer (which would double-embed)

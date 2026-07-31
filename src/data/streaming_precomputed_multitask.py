@@ -46,8 +46,7 @@ class StreamingPrecomputedMultiTaskDataset(IterableDataset):
         """Cache rainbow pad token IDs."""
         if self._rainbow_pad_ids is None:
             self._rainbow_pad_ids = [
-                self.tokenizer.convert_tokens_to_ids(f"<rpad_{i}>")
-                for i in range(7)
+                self.tokenizer.convert_tokens_to_ids(f"<rpad_{i}>") for i in range(7)
             ]
         return self._rainbow_pad_ids
 
@@ -158,7 +157,9 @@ class StreamingPrecomputedMultiTaskDataset(IterableDataset):
                 metadata = json.load(f)
             save_dtype_str = metadata.get("save_dtype", "float16")
         except Exception as e:
-            print(f"[StreamingPrecomputedMultiTask] Warning: metadata.json fetch failed ({e}). Defaulting float16.")
+            print(
+                f"[StreamingPrecomputedMultiTask] Warning: metadata.json fetch failed ({e}). Defaulting float16."
+            )
             save_dtype_str = "float16"
 
         save_dtype = np.float16 if save_dtype_str == "float16" else np.float32

@@ -207,9 +207,11 @@ class DiscreteDiffusionModel(PreTrainedModel):
                 from .cross_attn_roberta import CrossAttnRobertaEncoder
             except ImportError:
                 from cross_attn_roberta import CrossAttnRobertaEncoder
-            
+
             new_encoder = CrossAttnRobertaEncoder(self.model.config)
-            new_encoder.load_state_dict(self.model.roberta.encoder.state_dict(), strict=False)
+            new_encoder.load_state_dict(
+                self.model.roberta.encoder.state_dict(), strict=False
+            )
             self.model.roberta.encoder = new_encoder
 
     def add_fake_layer(self):
@@ -235,9 +237,9 @@ class DiscreteDiffusionModel(PreTrainedModel):
 
     def q_sample_coupled(self, x_0, t1, t2, maskable_mask):
         # ... copy from DiscreteDiffusionBase ...
-        assert (
-            self.config.diffusion_type == "absorbing"
-        ), "we only support absorbing diffusion temporarily"
+        assert self.config.diffusion_type == "absorbing", (
+            "we only support absorbing diffusion temporarily"
+        )
         t1_eq_t2_mask = t1 == t2
         t1, t2 = torch.maximum(t1, t2).float(), torch.minimum(t1, t2).float()
 
@@ -477,7 +479,7 @@ class DiscreteDiffusionModel(PreTrainedModel):
         if audio_fusion_strategy == "deep_cross_attn":
             # For Deep Fusion, do not concatenate audio embeds to embeddings.
             combined_attention_mask = attention_mask
-            
+
             # Convert 2D mask using _create_attention_masks
             attention_mask_converted, _ = self.model.roberta._create_attention_masks(
                 attention_mask=combined_attention_mask,
@@ -486,7 +488,7 @@ class DiscreteDiffusionModel(PreTrainedModel):
                 encoder_hidden_states=None,
                 past_key_values=None,
             )
-            
+
             # Call the encoder directly, passing audio hidden states and padding mask
             encoder_outputs = self.model.roberta.encoder(
                 embeddings,
@@ -549,12 +551,14 @@ class DiscreteDiffusionModel(PreTrainedModel):
                     )
             else:
                 # Convert 2D mask using _create_attention_masks
-                attention_mask_converted, _ = self.model.roberta._create_attention_masks(
-                    attention_mask=combined_attention_mask,
-                    encoder_attention_mask=None,
-                    embedding_output=embeddings,
-                    encoder_hidden_states=None,
-                    past_key_values=None,
+                attention_mask_converted, _ = (
+                    self.model.roberta._create_attention_masks(
+                        attention_mask=combined_attention_mask,
+                        encoder_attention_mask=None,
+                        embedding_output=embeddings,
+                        encoder_hidden_states=None,
+                        past_key_values=None,
+                    )
                 )
 
             # Call the encoder directly, bypassing self.model.roberta's embedding layer (which would double-embed)
@@ -782,7 +786,6 @@ class DiscreteDiffusionModel(PreTrainedModel):
             partial_masks = torch.ones_like(src_tokens).bool()
         else:
             partial_masks = attention_mask.bool()
-
 
         # Initialize canvas with fixed length (LLaDA approach)
         # Instead of predicting length, use max_length as hyperparameter

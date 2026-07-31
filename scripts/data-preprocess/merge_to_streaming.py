@@ -97,7 +97,11 @@ def main():
             )
             print(f"Target repo '{args.target_repo}' verified/created.")
             # Fetch existing files in target repo for resume capability
-            target_files = set(list_repo_files(repo_id=args.target_repo, repo_type="dataset", token=token))
+            target_files = set(
+                list_repo_files(
+                    repo_id=args.target_repo, repo_type="dataset", token=token
+                )
+            )
             print(f"Found {len(target_files)} existing files in target repo.")
         except Exception as e:
             print(f"Warning/Error accessing target repo: {e}")
@@ -143,7 +147,9 @@ def main():
                 )
                 with open(task_path) as f:
                     task_tokens_map[task] = json.load(f)
-                print(f"  Loaded {len(task_tokens_map[task])} token entries for '{task}'")
+                print(
+                    f"  Loaded {len(task_tokens_map[task])} token entries for '{task}'"
+                )
             except Exception as e:
                 print(f"  Warning: token_ids/{task}.json not loaded: {e}")
 
@@ -178,9 +184,15 @@ def main():
     print(f"Lookup map built for {len(embed_file_to_tokens)} unique embedding files.")
 
     # 3. List all parquet shards in source repo
-    repo_files = list_repo_files(repo_id=args.source_repo, repo_type="dataset", token=token)
+    repo_files = list_repo_files(
+        repo_id=args.source_repo, repo_type="dataset", token=token
+    )
     parquet_shards = sorted(
-        [f for f in repo_files if f.startswith("audio_embeds/") and f.endswith(".parquet")]
+        [
+            f
+            for f in repo_files
+            if f.startswith("audio_embeds/") and f.endswith(".parquet")
+        ]
     )
     print(f"\nFound {len(parquet_shards)} parquet shards in source repo.")
 
@@ -197,7 +209,9 @@ def main():
         else:
             pending_shards.append(s)
 
-    print(f"\nRemaining shards to process & upload: {len(pending_shards)} / {len(parquet_shards)}")
+    print(
+        f"\nRemaining shards to process & upload: {len(pending_shards)} / {len(parquet_shards)}"
+    )
 
     if not pending_shards:
         print("\nAll shards are already uploaded! Nothing to do.")
@@ -212,7 +226,9 @@ def main():
         total_batches = (len(pending_shards) + batch_size - 1) // batch_size
 
         print("\n=============================================================")
-        print(f"  Batch {batch_num}/{total_batches}: Processing {len(batch_shards)} shards...")
+        print(
+            f"  Batch {batch_num}/{total_batches}: Processing {len(batch_shards)} shards..."
+        )
         print("=============================================================")
 
         with tempfile.TemporaryDirectory() as batch_tmp_dir:
@@ -220,7 +236,9 @@ def main():
 
             for idx, shard_file_path in enumerate(batch_shards):
                 shard_name = os.path.basename(shard_file_path)
-                print(f"  ({idx+1}/{len(batch_shards)}) Downloading & merging {shard_name}...")
+                print(
+                    f"  ({idx + 1}/{len(batch_shards)}) Downloading & merging {shard_name}..."
+                )
 
                 # Download single parquet shard
                 local_shard = hf_hub_download(
@@ -255,7 +273,9 @@ def main():
                 merged_table = pa.Table.from_pylist(merged_rows)
                 pq.write_table(merged_table, out_shard_path, compression="snappy")
                 out_size_mb = os.path.getsize(out_shard_path) / (1024 * 1024)
-                print(f"    Merged {shard_name} ({len(pylist)} rows, {out_size_mb:.2f} MB)")
+                print(
+                    f"    Merged {shard_name} ({len(pylist)} rows, {out_size_mb:.2f} MB)"
+                )
 
                 target_path_in_repo = f"data/{shard_name}"
                 commit_operations.append(
@@ -268,7 +288,9 @@ def main():
             # Upload all shards in this batch as ONE SINGLE COMMIT
             if not args.dry_run and commit_operations:
                 commit_msg = f"Upload merged shards batch ({batch_shards[0]} to {batch_shards[-1]})"
-                print(f"\n  Committing batch of {len(commit_operations)} shards to HF Hub in 1 commit...")
+                print(
+                    f"\n  Committing batch of {len(commit_operations)} shards to HF Hub in 1 commit..."
+                )
                 api.create_commit(
                     repo_id=args.target_repo,
                     repo_type="dataset",

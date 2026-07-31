@@ -272,11 +272,11 @@ def main():
     hs = precompute_audio(
         args, vietspeech_ds, feat_ext, path_to_vs_idx, args.output_dir, done_ids
     )
-    print(f"[Precompute] Audio phase: {time.time()-t0:.1f}s")
+    print(f"[Precompute] Audio phase: {time.time() - t0:.1f}s")
 
     t0 = time.time()
     precompute_text(args, translated_ds, tokenizer, args.task_tokens, args.output_dir)
-    print(f"[Precompute] Text phase: {time.time()-t0:.1f}s")
+    print(f"[Precompute] Text phase: {time.time() - t0:.1f}s")
 
     build_index(translated_ds, path_to_vs_idx, args.output_dir)
 

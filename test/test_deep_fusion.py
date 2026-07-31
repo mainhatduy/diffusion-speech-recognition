@@ -14,20 +14,31 @@ class MockAudioConfig:
     def __init__(self):
         self.hidden_size = 64
 
+
 class MockAudioEncoder(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.config = MockAudioConfig()
+
     def forward(self, x, attention_mask=None):
         class Output:
             last_hidden_state = torch.zeros(x.size(0), 10, 64, device=x.device)
+
         return Output()
+
     def _get_feature_vector_attention_mask(self, feature_vector_length, attention_mask):
-        return torch.ones(attention_mask.size(0), feature_vector_length, dtype=torch.int, device=attention_mask.device)
+        return torch.ones(
+            attention_mask.size(0),
+            feature_vector_length,
+            dtype=torch.int,
+            device=attention_mask.device,
+        )
+
 
 class MockMoonshineModel:
     def __init__(self, *args, **kwargs):
         self.encoder = MockAudioEncoder()
+
 
 def get_dummy_tokenizer():
     tokenizer = MagicMock()
@@ -36,7 +47,7 @@ def get_dummy_tokenizer():
     tokenizer.pad_token_id = 1
     tokenizer.mask_token_id = 3
     tokenizer.get_vocab = lambda: {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    
+
     def convert_tokens_to_ids(token):
         if token.startswith("<rpad_") and token.endswith(">"):
             try:
@@ -45,13 +56,14 @@ def get_dummy_tokenizer():
             except ValueError:
                 pass
         return 999
-        
+
     tokenizer.convert_tokens_to_ids = convert_tokens_to_ids
     return tokenizer
 
-@patch('transformers.MoonshineStreamingModel.from_pretrained')
-@patch('transformers.Wav2Vec2Model.from_pretrained')
-@patch('transformers.AutoConfig.from_pretrained')
+
+@patch("transformers.MoonshineStreamingModel.from_pretrained")
+@patch("transformers.Wav2Vec2Model.from_pretrained")
+@patch("transformers.AutoConfig.from_pretrained")
 def test_deep_fusion_xlmr_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
     # Setup mocks
     mock_moonshine.return_value = MockMoonshineModel()
@@ -64,7 +76,7 @@ def test_deep_fusion_xlmr_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
         hidden_size=64,
         num_attention_heads=2,
         num_hidden_layers=2,
-        intermediate_size=128
+        intermediate_size=128,
     )
     backbone_model = AutoModelForMaskedLM.from_config(backbone_config)
     tokenizer = get_dummy_tokenizer()
@@ -76,19 +88,21 @@ def test_deep_fusion_xlmr_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
         attention_strategy="full",
         audio_fusion_strategy="deep_cross_attn",
         cache_dir="./cache",
-        pretrained_audio_encoder=True
+        pretrained_audio_encoder=True,
     )
     args.dataset_type = "speech_recognition"
 
     # Instantiate model
     model = DiscreteDiffusionXLMRModel(args, tokenizer, backbone_model)
-    
+
     # Verify the layers were replaced
     assert isinstance(model.model.roberta.encoder.layer[0], CrossAttnRobertaLayer)
     assert isinstance(model.model.roberta.encoder.layer[1], CrossAttnRobertaLayer)
-    
+
     # Verify weight initialization
-    weight_data = model.model.roberta.encoder.layer[0].cross_attention.out_proj.weight.data
+    weight_data = model.model.roberta.encoder.layer[
+        0
+    ].cross_attention.out_proj.weight.data
     assert weight_data.abs().max() < 0.2
 
     # 3. Test forward pass
@@ -104,14 +118,15 @@ def test_deep_fusion_xlmr_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
         prev_output_tokens=prev_output_tokens,
         partial_mask=partial_mask,
         audio_features=audio_features,
-        audio_attention_mask=audio_attention_mask
+        audio_attention_mask=audio_attention_mask,
     )
-    
+
     assert logits.shape == (batch_size, seq_len, 100)
 
-@patch('transformers.MoonshineStreamingModel.from_pretrained')
-@patch('transformers.Wav2Vec2Model.from_pretrained')
-@patch('transformers.AutoConfig.from_pretrained')
+
+@patch("transformers.MoonshineStreamingModel.from_pretrained")
+@patch("transformers.Wav2Vec2Model.from_pretrained")
+@patch("transformers.AutoConfig.from_pretrained")
 def test_deep_fusion_dlm_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
     mock_moonshine.return_value = MockMoonshineModel()
     mock_wav2vec2.return_value = MockAudioEncoder()
@@ -123,9 +138,9 @@ def test_deep_fusion_dlm_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
         hidden_size=64,
         num_attention_heads=2,
         num_hidden_layers=2,
-        intermediate_size=128
+        intermediate_size=128,
     )
-    
+
     config = DiscreteDiffusionConfig(
         backbone_config=backbone_config.to_dict(),
         num_diffusion_timesteps=10,
@@ -138,15 +153,15 @@ def test_deep_fusion_dlm_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
         eos_token_id=2,
         pad_token_id=1,
         cache_dir="./cache",
-        pretrained_audio_encoder=True
+        pretrained_audio_encoder=True,
     )
 
     # Instantiate model
     model = DiscreteDiffusionModel(config)
-    
+
     # Verify layers replaced
     assert isinstance(model.model.roberta.encoder.layer[0], CrossAttnRobertaLayer)
-    
+
     # Run forward
     batch_size = 2
     seq_len = 8
@@ -159,14 +174,15 @@ def test_deep_fusion_dlm_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
         prev_output_tokens=prev_output_tokens,
         partial_mask=partial_mask,
         audio_features=audio_features,
-        audio_attention_mask=audio_attention_mask
+        audio_attention_mask=audio_attention_mask,
     )
-    
+
     assert logits.shape == (batch_size, seq_len, 100)
 
-@patch('transformers.MoonshineStreamingModel.from_pretrained')
-@patch('transformers.Wav2Vec2Model.from_pretrained')
-@patch('transformers.AutoConfig.from_pretrained')
+
+@patch("transformers.MoonshineStreamingModel.from_pretrained")
+@patch("transformers.Wav2Vec2Model.from_pretrained")
+@patch("transformers.AutoConfig.from_pretrained")
 def test_prefix_backward_compatibility(mock_autoconfig, mock_wav2vec2, mock_moonshine):
     mock_moonshine.return_value = MockMoonshineModel()
     mock_wav2vec2.return_value = MockAudioEncoder()
@@ -178,7 +194,7 @@ def test_prefix_backward_compatibility(mock_autoconfig, mock_wav2vec2, mock_moon
         hidden_size=64,
         num_attention_heads=2,
         num_hidden_layers=2,
-        intermediate_size=128
+        intermediate_size=128,
     )
     backbone_model = AutoModelForMaskedLM.from_config(backbone_config)
     tokenizer = get_dummy_tokenizer()
@@ -190,12 +206,12 @@ def test_prefix_backward_compatibility(mock_autoconfig, mock_wav2vec2, mock_moon
         attention_strategy="full",
         audio_fusion_strategy="prefix",
         cache_dir="./cache",
-        pretrained_audio_encoder=True
+        pretrained_audio_encoder=True,
     )
     args.dataset_type = "speech_recognition"
 
     model = DiscreteDiffusionXLMRModel(args, tokenizer, backbone_model)
-    
+
     # Verify layers are standard RobertaLayers (not CrossAttnRobertaLayer)
     assert not isinstance(model.model.roberta.encoder.layer[0], CrossAttnRobertaLayer)
 
@@ -211,28 +227,30 @@ def test_prefix_backward_compatibility(mock_autoconfig, mock_wav2vec2, mock_moon
         prev_output_tokens=prev_output_tokens,
         partial_mask=partial_mask,
         audio_features=audio_features,
-        audio_attention_mask=audio_attention_mask
+        audio_attention_mask=audio_attention_mask,
     )
-    
+
     assert logits.shape == (batch_size, seq_len, 100)
 
-@patch('numpy.load')
+
+@patch("numpy.load")
 def test_rainbow_padding(mock_np_load):
     import numpy as np
+
     mock_np_load.return_value = np.zeros((10, 64))
 
     from data.precomputed_multitask import PrecomputedMultiTaskDataset
-    
+
     class DummyArgs:
         def __init__(self):
             self.max_length = 20
-            
+
     args = DummyArgs()
     index = [{"idx": 0, "wav_id": "dummy", "embed_file": "dummy.npy"}]
     token_ids_map = {"english": [[10, 11, 12]]}
     task_configs = [("english", 100)]
     tokenizer = get_dummy_tokenizer()
-    
+
     dataset = PrecomputedMultiTaskDataset(
         args=args,
         index=index,
@@ -241,18 +259,38 @@ def test_rainbow_padding(mock_np_load):
         tokenizer=tokenizer,
         embed_dir="dummy_dir",
         save_dtype="float32",
-        is_train=True
+        is_train=True,
     )
-    
+
     sample = dataset[0]
     source = sample["source"]
-    
+
     # Target sequence should be exactly max_length (20)
     assert len(source) == 20
-    
+
     # Contents should be: [BOS (0), task_token (100), word1 (10), word2 (11), word3 (12)] + 1 EOS (2) + cyclic rpad tokens (1000-1006)
-    expected = [0, 100, 10, 11, 12] + [2] + [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1000, 1001, 1002, 1003, 1004, 1005, 1006]
+    expected = (
+        [0, 100, 10, 11, 12]
+        + [2]
+        + [
+            1000,
+            1001,
+            1002,
+            1003,
+            1004,
+            1005,
+            1006,
+            1000,
+            1001,
+            1002,
+            1003,
+            1004,
+            1005,
+            1006,
+        ]
+    )
     assert source.tolist() == expected
+
 
 if __name__ == "__main__":
     print("Running test_deep_fusion_xlmr_model...")
@@ -266,7 +304,7 @@ if __name__ == "__main__":
     print("Running test_prefix_backward_compatibility...")
     test_prefix_backward_compatibility()
     print("test_prefix_backward_compatibility passed!")
-    
+
     print("Running test_rainbow_padding...")
     test_rainbow_padding()
     print("test_rainbow_padding passed!")

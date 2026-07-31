@@ -19,7 +19,9 @@ class TestHuggingFacePushCallback(unittest.TestCase):
     @patch("trainer.dd_trainer.is_master", return_value=True)
     @patch("importlib.util.module_from_spec")
     @patch("importlib.util.spec_from_file_location")
-    def test_callback_pushes_when_enabled(self, mock_spec_func, mock_mod_func, mock_is_master):
+    def test_callback_pushes_when_enabled(
+        self, mock_spec_func, mock_mod_func, mock_is_master
+    ):
         mock_push_function = MagicMock()
         mock_module = MagicMock()
         mock_module.push_checkpoint_to_hub = mock_push_function
@@ -47,7 +49,9 @@ class TestHuggingFacePushCallback(unittest.TestCase):
         callback = HuggingFacePushCallback(trainer=trainer)
 
         # Trigger event
-        callback.on_evaluate(args, state, control=MagicMock(), model=model, metrics={"eval_loss": 0.5})
+        callback.on_evaluate(
+            args, state, control=MagicMock(), model=model, metrics={"eval_loss": 0.5}
+        )
 
         # Wait for the background upload thread to finish
         if callback._upload_thread is not None:
@@ -56,8 +60,12 @@ class TestHuggingFacePushCallback(unittest.TestCase):
         # Verify directories & files are saved
         checkpoint_dir = os.path.join(self.tmpdir, "checkpoint-42")
         self.assertTrue(os.path.exists(checkpoint_dir))
-        self.assertTrue(os.path.exists(os.path.join(checkpoint_dir, "trainer_state.json")))
-        self.assertTrue(os.path.exists(os.path.join(checkpoint_dir, "eval_metrics.json")))
+        self.assertTrue(
+            os.path.exists(os.path.join(checkpoint_dir, "trainer_state.json"))
+        )
+        self.assertTrue(
+            os.path.exists(os.path.join(checkpoint_dir, "eval_metrics.json"))
+        )
 
         # Check model and tokenizer save methods were called
         model.save_pretrained.assert_called_once_with(checkpoint_dir)

@@ -83,7 +83,7 @@ class TranslatedSpeechDataset(PromptDataset):
         src_length = len(src)
         concatenated = src + tgt
         if len(concatenated) > self.max_length:
-            concatenated = concatenated[:self.max_length]
+            concatenated = concatenated[: self.max_length]
         remaining = self.max_length - len(concatenated)
         if remaining > 0:
             eos_id = self.tokenizer.eos_token_id

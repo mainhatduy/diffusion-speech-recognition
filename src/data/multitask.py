@@ -127,7 +127,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         src_length = len(src)  # 2: BOS + task_token
         concatenated = src + tgt  # [BOS, <vi_XX>, word1, ...]
         if len(concatenated) > self.max_length:
-            concatenated = concatenated[:self.max_length]
+            concatenated = concatenated[: self.max_length]
         remaining = self.max_length - len(concatenated)
         if remaining > 0:
             eos_id = self.tokenizer.eos_token_id
@@ -267,7 +267,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         print(
             f"[MultiTask] Base split: {len(train_raw)} train / {len(valid_raw)} val\n"
             f"[MultiTask] Effective (×{n_tasks} tasks): "
-            f"{len(train_raw)*n_tasks} train / {len(valid_raw)*n_tasks} val"
+            f"{len(train_raw) * n_tasks} train / {len(valid_raw) * n_tasks} val"
         )
 
         # 8. Filter — sample must fit in max_length for ALL target languages

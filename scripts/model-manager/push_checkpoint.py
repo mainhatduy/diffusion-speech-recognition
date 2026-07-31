@@ -7,7 +7,9 @@ from huggingface_hub import HfApi
 load_dotenv()
 
 
-def push_checkpoint_to_hub(repo_id: str, checkpoint_dir: str, repo_type: str = "model", token: str = None):
+def push_checkpoint_to_hub(
+    repo_id: str, checkpoint_dir: str, repo_type: str = "model", token: str = None
+):
     if token is None:
         token = os.getenv("HF_TOKEN")
     if not token:
@@ -122,4 +124,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

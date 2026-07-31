@@ -76,7 +76,9 @@ class DiscreteDiffusionDataArguments:
     )
     streaming: bool = field(
         default=False,
-        metadata={"help": "Stream data from Hugging Face Hub instead of downloading/loading locally."},
+        metadata={
+            "help": "Stream data from Hugging Face Hub instead of downloading/loading locally."
+        },
     )
     streaming_repo_id: str = field(
         default="aiai-laboratory/vietspeech-train-streaming",

@@ -114,9 +114,9 @@ def _get_missing_special_tokens(tokenizer, tokenizer_pad_to_multiple):
         * tokenizer_pad_to_multiple
     )
     for i in range(target_vocab_size - current_vocab_size):
-        assert (
-            f"<unused{i}>" not in tokenizer.get_vocab()
-        ), f"unused_{i} already exists in the vocabulary"
+        assert f"<unused{i}>" not in tokenizer.get_vocab(), (
+            f"unused_{i} already exists in the vocabulary"
+        )
         padding_tokens.append(f"<unused{i}>")
     return special_token_dict, padding_tokens
 

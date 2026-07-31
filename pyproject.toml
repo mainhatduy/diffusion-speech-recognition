@@ -38,6 +38,7 @@ dependencies = [
     "fire>=0.7.1",
     "nvidia-ml-py>=13.610.43",
     "sentencepiece>=0.2.2",
+    "ruff>=0.16.1",
 ]
 
 [dependency-groups]

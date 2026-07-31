@@ -113,9 +113,12 @@ class StreamingAugmentedDataset(Dataset):
             id_val = sample.get("id", None)
             
         else:
-            audio = sample["audio"]        # 1D Tensor [total_samples]
-            text_ids = sample["text_ids"]  # 1D Tensor [text_len]
+            audio = sample.get("audio", sample.get("audio_values"))
+            text_ids = sample.get("text_ids", sample.get("target"))
             task_token_id = sample.get("task_token_id", None)
+            source = sample.get("source", None)
+            src_length = sample.get("src_length", None)
+            id_val = sample.get("id", None)
     
             if isinstance(audio, list):
                 audio = torch.tensor(audio, dtype=torch.float)
@@ -167,14 +170,15 @@ class StreamingAugmentedDataset(Dataset):
             "task_token_id": task_token_id,          # int or None
         }
         
-        # Add precomputed specific fields if available
+        # Add extra specific fields if available
         if has_precomputed:
             out["is_precomputed"] = True
-            if source is not None:
-                out["source"] = source
-            if src_length is not None:
-                out["src_length"] = src_length
-            if id_val is not None:
-                out["id"] = id_val
+            
+        if source is not None:
+            out["source"] = source
+        if src_length is not None:
+            out["src_length"] = src_length
+        if id_val is not None:
+            out["id"] = id_val
                 
         return out

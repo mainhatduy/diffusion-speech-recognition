@@ -215,7 +215,8 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             if torch.distributed.is_initialized()
             else 1
         )
-        num_proc = max(1, int(mp.cpu_count() / world_size))
+        # Limit num_proc to prevent OOM on high-core machines
+        num_proc = min(8, max(1, int(mp.cpu_count() / world_size)))
 
         # 4. Load aiai-laboratory/vietspeech-train-translated
         print(

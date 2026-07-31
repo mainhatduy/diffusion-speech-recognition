@@ -287,6 +287,19 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             )  # 1024 for mms-300m
             self.audio_projector = nn.Linear(audio_hidden_size, self.config.hidden_size)
 
+            # Streaming audio adapter (richer than simple projector: adds position embeddings + downsampling)
+            if getattr(args, "streaming_augmentation", False):
+                try:
+                    from .streaming_audio_adapter import StreamingAudioAdapter
+                except ImportError:
+                    from streaming_audio_adapter import StreamingAudioAdapter
+                self.audio_adapter = StreamingAudioAdapter(
+                    audio_hidden_size=audio_hidden_size,
+                    text_hidden_size=self.config.hidden_size,
+                    max_frames_per_chunk=256,
+                    use_downsample=True,
+                )
+
         # length predictor
         self.length_trm = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(

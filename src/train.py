@@ -113,6 +113,8 @@ def main():
     model_args.dataset_type = data_args.dataset_type
     if hasattr(data_args, "audio_encoder_name"):
         model_args.audio_encoder_name = data_args.audio_encoder_name
+    if hasattr(data_args, "streaming_augmentation"):
+        model_args.streaming_augmentation = data_args.streaming_augmentation
     model, tokenizer = load_model_tokenizer(model_args, do_train=True)
 
     # load datasets

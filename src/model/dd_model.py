@@ -63,6 +63,34 @@ class DiscreteDiffusionModelArguments:
         default="prefix",
         metadata={"help": "fusion strategy: 'prefix' or 'deep_cross_attn'"},
     )
+    # Streaming backbone config fields (parsed from JSON, used to build StreamingDiffusionBackbone)
+    streaming_augmentation: bool = field(
+        default=False, init=False,
+        metadata={"help": "Set from data_args in train.py"},
+    )
+    num_ergodic_layers: int = field(
+        default=6, metadata={"help": "Number of ergodic (position-free) layers"},
+    )
+    num_ergodic_cross_attn_layers: int = field(
+        default=0, metadata={"help": "Number of last ergodic layers with cross-attention"},
+    )
+    ergodic_window_left: int = field(default=64)
+    ergodic_window_right: int = field(default=16)
+    num_position_layers: int = field(
+        default=6, metadata={"help": "Number of position-aware (RoPE) layers"},
+    )
+    position_window_left: int = field(default=128)
+    position_window_right: int = field(default=32)
+    rope_theta: float = field(default=10000.0)
+    active_window_size: int = field(default=64)
+    frozen_cache_size: int = field(default=128)
+    streaming_denoise_steps: int = field(default=3)
+    freeze_confidence_threshold: float = field(default=0.92)
+    remask_confidence_threshold: float = field(default=0.30)
+    loss_weight_supported: float = field(default=2.0)
+    loss_weight_unsupported: float = field(default=0.3)
+    use_confidence_calibration: bool = field(default=True)
+    max_chunk_tokens: int = field(default=32)
 
     def __post_init__(self):
         if self.prefix_lm:
@@ -299,6 +327,40 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                     max_frames_per_chunk=256,
                     use_downsample=True,
                 )
+
+                # Build StreamingDiffusionBackbone for the streaming trainer
+                try:
+                    from .streaming_backbone import StreamingBackboneConfig, StreamingDiffusionBackbone
+                except ImportError:
+                    from streaming_backbone import StreamingBackboneConfig, StreamingDiffusionBackbone
+                backbone_config = StreamingBackboneConfig(
+                    backbone=getattr(args, "pretrained", "FacebookAI/xlm-roberta-base"),
+                    num_hidden_layers=getattr(args, "num_ergodic_layers", 6) + getattr(args, "num_position_layers", 6),
+                    hidden_size=self.config.hidden_size,
+                    num_attention_heads=self.config.num_attention_heads,
+                    intermediate_size=self.config.intermediate_size,
+                    num_ergodic_layers=getattr(args, "num_ergodic_layers", 6),
+                    num_ergodic_cross_attn_layers=getattr(args, "num_ergodic_cross_attn_layers", 0),
+                    ergodic_window_left=getattr(args, "ergodic_window_left", 64),
+                    ergodic_window_right=getattr(args, "ergodic_window_right", 16),
+                    num_position_layers=getattr(args, "num_position_layers", 6),
+                    position_window_left=getattr(args, "position_window_left", 128),
+                    position_window_right=getattr(args, "position_window_right", 32),
+                    rope_theta=getattr(args, "rope_theta", 10000.0),
+                    active_window_size=getattr(args, "active_window_size", 64),
+                    frozen_cache_size=getattr(args, "frozen_cache_size", 128),
+                )
+                self.backbone = StreamingDiffusionBackbone.from_pretrained_xlmr(
+                    backbone_config,
+                    vocab_size=self.config.vocab_size,
+                    cache_dir=getattr(args, "cache_dir", None),
+                )
+
+                # Store streaming config attributes for trainer access
+                self.num_diffusion_timesteps = getattr(args, "num_diffusion_timesteps", 50)
+                self.loss_weight_supported = getattr(args, "loss_weight_supported", 2.0)
+                self.loss_weight_unsupported = getattr(args, "loss_weight_unsupported", 0.3)
+                self.use_confidence_calibration = getattr(args, "use_confidence_calibration", False)
 
         # length predictor
         self.length_trm = nn.TransformerEncoder(

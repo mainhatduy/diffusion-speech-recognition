@@ -1,4 +1,5 @@
 import logging
+import os
 import multiprocessing as mp
 import os
 from collections import OrderedDict
@@ -9,7 +10,11 @@ from datasets import Audio, load_dataset
 from transformers import Wav2Vec2FeatureExtractor
 
 from .base import PromptDataset
-from .utils import _decode_wav_bytes, normalize_text
+from .utils import (
+    _decode_wav_bytes,
+    check_ram_capacity_for_dataset,
+    normalize_text,
+)
 
 
 class MultiTaskTranslatedSpeechDataset(PromptDataset):
@@ -46,12 +51,14 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         task_configs: list,  # list[tuple[str, int]]
         tokenizer,
         feature_extractor,
+        ram_audio_store: dict | None = None,
     ):
         super().__init__(args, raw_data, tokenizer)
         self.vietspeech_dataset = vietspeech_dataset
         self.path_to_vs_idx = path_to_vs_idx
         self.task_configs = task_configs  # [(field_name, token_id), ...]
         self.feature_extractor = feature_extractor
+        self.ram_audio_store = ram_audio_store
         self.target_sample_rate = 16000
         self.n_tasks = len(task_configs)
         self.audio_cache = OrderedDict()
@@ -77,15 +84,18 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             # Move to end to mark as recently used
             self.audio_cache.move_to_end(wav_id)
         else:
-            vs_idx = self.path_to_vs_idx.get(wav_id)
-            if vs_idx is None:
-                raise ValueError(
-                    f"WAV ID '{wav_id}' not found in NhutP/VietSpeech index."
-                )
+            if self.ram_audio_store is not None and wav_id in self.ram_audio_store:
+                wav_bytes = self.ram_audio_store[wav_id]
+            else:
+                vs_idx = self.path_to_vs_idx.get(wav_id)
+                if vs_idx is None:
+                    raise ValueError(
+                        f"WAV ID '{wav_id}' not found in NhutP/VietSpeech index."
+                    )
+                vs_item = self.vietspeech_dataset[vs_idx]
+                wav_bytes = vs_item["audio"]["bytes"]
 
-            vs_item = self.vietspeech_dataset[vs_idx]
-            audio_info = vs_item["audio"]
-            waveform, sample_rate = _decode_wav_bytes(audio_info["bytes"])
+            waveform, sample_rate = _decode_wav_bytes(wav_bytes)
 
             # Resample to 16 kHz if necessary
             if sample_rate != self.target_sample_rate:
@@ -231,33 +241,101 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
                 )
 
         # 5. Load NhutP/VietSpeech for audio
-        print("[MultiTask] Loading audio from NhutP/VietSpeech")
-        try:
-            vietspeech_dataset = load_dataset(
-                "NhutP/VietSpeech",
-                token=hf_token,
-                cache_dir=getattr(args, "cache_dir", None),
-                split="train[:100%]",
+        ram_audio_store = None
+        path_to_vs_idx = {}
+        vietspeech_dataset = None
+
+        if getattr(args, "use_ram_cache", False):
+            threshold_ratio = getattr(args, "ram_free_threshold_ratio", 0.30)
+            is_approved, est_gb, proj_ratio, total_examples = (
+                check_ram_capacity_for_dataset(
+                    "NhutP/VietSpeech",
+                    hf_token=hf_token,
+                    threshold_ratio=threshold_ratio,
+                )
             )
-        except Exception as e:
-            print(f"Error loading VietSpeech dataset: {e}")
-            raise
 
-        # Decode=False to avoid torchcodec dependency
-        vietspeech_dataset = vietspeech_dataset.cast_column(
-            "audio", Audio(decode=False)
-        )
+            if is_approved:
+                try:
+                    import shutil
+                    import pyarrow.parquet as pq
+                    from tqdm import tqdm
+                    from huggingface_hub import HfFileSystem, hf_hub_download
+                    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        # 6. Build path → index mapping for VietSpeech
-        print("[MultiTask] Building audio path→index mapping")
-        audio_column = vietspeech_dataset.data.column("audio")
-        vs_paths = []
-        for chunk in audio_column.chunks:
-            vs_paths.extend(chunk.field("path").to_pylist())
-        path_to_vs_idx = {path: idx for idx, path in enumerate(vs_paths)}
-        print(f"[MultiTask] VietSpeech index built: {len(path_to_vs_idx)} entries")
+                    ram_store = {}
+                    fs = HfFileSystem(token=hf_token)
+                    files = fs.ls("datasets/NhutP/VietSpeech/data", detail=False)
+                    parquet_files = [f.split("NhutP/VietSpeech/")[-1] for f in files if f.endswith(".parquet")]
 
-        # 7. Shuffle & split translated dataset
+                    print(f"\n[RAM Cache] Bypassing slow streaming... Downloading {len(parquet_files)} parquet files to RAM disk (/dev/shm) in parallel!")
+
+                    def process_parquet(filename):
+                        # Use RAM disk to store temp files to maximize download speed and prevent SSD usage
+                        ram_cache_dir = f"/dev/shm/hf_cache_{os.getpid()}_{filename.replace('/', '_')}"
+                        os.makedirs(ram_cache_dir, exist_ok=True)
+                        local_store = {}
+                        try:
+                            local_path = hf_hub_download(
+                                repo_id="NhutP/VietSpeech",
+                                repo_type="dataset",
+                                filename=filename,
+                                token=hf_token,
+                                cache_dir=ram_cache_dir,
+                            )
+                            # PyArrow loads it directly into Python memory
+                            table = pq.read_table(local_path)
+                            data = table.to_pylist()
+                            for row in data:
+                                audio_info = row.get("audio", {})
+                                if audio_info and "path" in audio_info and "bytes" in audio_info:
+                                    local_store[audio_info["path"]] = audio_info["bytes"]
+                        finally:
+                            # Safely delete to free up RAM disk
+                            shutil.rmtree(ram_cache_dir, ignore_errors=True)
+                        return local_store
+
+                    with ThreadPoolExecutor(max_workers=8) as executor:
+                        futures = {executor.submit(process_parquet, pf): pf for pf in parquet_files}
+                        for future in tqdm(as_completed(futures), total=len(parquet_files), desc="Fast Parallel Caching (Parquet Files)"):
+                            ram_store.update(future.result())
+
+                    ram_audio_store = ram_store
+                    print(
+                        f"[RAM Cache] SUCCESS: Preloaded {len(ram_audio_store)} raw audio samples ({est_gb:.2f} GB) directly into RAM!"
+                    )
+                except Exception as e:
+                    print(f"[RAM Cache] Warning: Failed to stream into RAM: {e}. Falling back to disk cache.")
+                    ram_audio_store = None
+
+        if ram_audio_store is None:
+            # Fallback to standard disk cache mode
+            print("[MultiTask] Loading audio from NhutP/VietSpeech into disk cache...")
+            try:
+                vietspeech_dataset = load_dataset(
+                    "NhutP/VietSpeech",
+                    token=hf_token,
+                    cache_dir=getattr(args, "cache_dir", None),
+                    split="train[:100%]",
+                )
+            except Exception as e:
+                print(f"Error loading VietSpeech dataset: {e}")
+                raise
+
+            vietspeech_dataset = vietspeech_dataset.cast_column(
+                "audio", Audio(decode=False)
+            )
+
+            # Build path → index mapping for VietSpeech
+            print("[MultiTask] Building audio path→index mapping")
+            audio_column = vietspeech_dataset.data.column("audio")
+            vs_paths = []
+            for chunk in audio_column.chunks:
+                vs_paths.extend(chunk.field("path").to_pylist())
+            path_to_vs_idx = {path: idx for idx, path in enumerate(vs_paths)}
+            print(f"[MultiTask] VietSpeech index built: {len(path_to_vs_idx)} entries")
+
+        # 6. Shuffle & split translated dataset
         translated_dataset = translated_dataset.shuffle(seed=42)
         split = translated_dataset.train_test_split(test_size=0.01, seed=42)
         train_raw = split["train"]
@@ -270,7 +348,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             f"{len(train_raw) * n_tasks} train / {len(valid_raw) * n_tasks} val"
         )
 
-        # 8. Filter — sample must fit in max_length for ALL target languages
+        # 7. Filter — sample must fit in max_length for ALL target languages
         def filter_fn(example):
             for field_name, _ in task_configs:
                 text = example.get(field_name, "") or ""
@@ -293,7 +371,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             f"base samples"
         )
 
-        # 9. Construct dataset objects
+        # 8. Construct dataset objects
         train_dataset = (
             MultiTaskTranslatedSpeechDataset(
                 args,
@@ -303,6 +381,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
                 task_configs,
                 tokenizer,
                 feature_extractor,
+                ram_audio_store=ram_audio_store,
             )
             if train
             else None
@@ -316,6 +395,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
                 task_configs,
                 tokenizer,
                 feature_extractor,
+                ram_audio_store=ram_audio_store,
             )
             if valid
             else None
@@ -329,6 +409,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
                 task_configs,
                 tokenizer,
                 feature_extractor,
+                ram_audio_store=ram_audio_store,
             )
             if test
             else None

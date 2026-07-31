@@ -92,6 +92,14 @@ class DiscreteDiffusionDataArguments:
         default=500,
         metadata={"help": "Number of validation samples for streaming dataset."},
     )
+    use_ram_cache: bool = field(
+        default=False,
+        metadata={"help": "Whether to cache raw audio bytes in RAM if free RAM > threshold_ratio."},
+    )
+    ram_free_threshold_ratio: float = field(
+        default=0.30,
+        metadata={"help": "Minimum required free RAM ratio after preloading audio bytes into RAM."},
+    )
 
 
 def load_data(
@@ -164,6 +172,39 @@ def load_data(
                 data_args, tokenizer, train, valid, test
             )
         else:
+            # Check RAM Cache capacity if enabled
+            if getattr(data_args, "use_ram_cache", False):
+                threshold_ratio = getattr(data_args, "ram_free_threshold_ratio", 0.30)
+                from .utils import check_ram_capacity_for_dataset
+
+                hf_token = data_args.hf_token or os.getenv("HF_TOKEN")
+                is_approved, est_gb, proj_ratio, total_examples = (
+                    check_ram_capacity_for_dataset(
+                        "NhutP/VietSpeech",
+                        hf_token=hf_token,
+                        threshold_ratio=threshold_ratio,
+                    )
+                )
+                if not is_approved:
+                    print(
+                        f"\n[load_data] AUTOMATIC FALLBACK TO STREAMING METHOD:\n"
+                        f"  Projected free RAM ({proj_ratio * 100:.1f}%) <= {threshold_ratio * 100:.1f}% threshold.\n"
+                        f"  Automatically switching to StreamingPrecomputedMultiTaskDataset ('{data_args.streaming_repo_id}') (ZERO DISK CACHE)!\n"
+                    )
+                    from .streaming_precomputed_multitask import (
+                        StreamingPrecomputedMultiTaskDataset,
+                    )
+
+                    datasets = StreamingPrecomputedMultiTaskDataset.load_data(
+                        data_args, tokenizer, train, valid, test
+                    )
+                    collator = DiscreteDiffusionDataCollator(
+                        bos_id=tokenizer.bos_token_id,
+                        eos_id=tokenizer.eos_token_id,
+                        pad_id=tokenizer.pad_token_id,
+                    )
+                    return datasets, collator
+
             datasets = MultiTaskTranslatedSpeechDataset.load_data(
                 data_args, tokenizer, train, valid, test
             )

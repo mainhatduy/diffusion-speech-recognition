@@ -8,7 +8,7 @@ from datasets import Audio, load_dataset
 from transformers import Wav2Vec2FeatureExtractor
 
 from .base import PromptDataset
-from .utils import _decode_wav_bytes
+from .utils import _decode_wav_bytes, check_ram_capacity_for_dataset
 
 
 class SpeechDataset(PromptDataset):
@@ -16,17 +16,23 @@ class SpeechDataset(PromptDataset):
     Uses NhutP/VietSpeech or similar datasets with 'audio' and 'transcription' columns.
     """
 
-    def __init__(self, args, raw_data, tokenizer, feature_extractor):
+    def __init__(self, args, raw_data, tokenizer, feature_extractor, ram_audio_store: dict | None = None):
         super().__init__(args, raw_data, tokenizer)
         self.feature_extractor = feature_extractor
         self.target_sample_rate = 16000  # MMS expects 16kHz
+        self.ram_audio_store = ram_audio_store
 
     def __getitem__(self, index):
         item = self.raw_data[index]
 
         # Decode audio from raw bytes (dataset loaded with decode=False)
         audio_info = item["audio"]
-        wav_bytes = audio_info["bytes"]
+        wav_path = audio_info.get("path")
+        if self.ram_audio_store is not None and wav_path in self.ram_audio_store:
+            wav_bytes = self.ram_audio_store[wav_path]
+        else:
+            wav_bytes = audio_info["bytes"]
+
         waveform, sample_rate = _decode_wav_bytes(wav_bytes)
 
         # Resample if needed (unlikely for VietSpeech which is 16kHz, but handle it)
@@ -115,6 +121,69 @@ class SpeechDataset(PromptDataset):
         )
         num_proc = max(1, int(mp.cpu_count() / world_size))
 
+        ram_audio_store = None
+        full_dataset = None
+
+        if getattr(args, "use_ram_cache", False):
+            threshold_ratio = getattr(args, "ram_free_threshold_ratio", 0.30)
+            is_approved, est_gb, proj_ratio, total_examples = (
+                check_ram_capacity_for_dataset(
+                    args.data_path,
+                    hf_token=hf_token,
+                    threshold_ratio=threshold_ratio,
+                )
+            )
+
+            if is_approved:
+                try:
+                    import shutil
+                    import pyarrow.parquet as pq
+                    from tqdm import tqdm
+                    from huggingface_hub import HfFileSystem, hf_hub_download
+                    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                    ram_store = {}
+                    fs = HfFileSystem(token=hf_token)
+                    files = fs.ls(f"datasets/{args.data_path}/data", detail=False)
+                    parquet_files = [f.split(f"{args.data_path}/")[-1] for f in files if f.endswith(".parquet")]
+
+                    print(f"\n[RAM Cache] Bypassing slow streaming... Downloading {len(parquet_files)} parquet files to RAM disk (/dev/shm) in parallel!")
+
+                    def process_parquet(filename):
+                        ram_cache_dir = f"/dev/shm/hf_cache_{os.getpid()}_{filename.replace('/', '_')}"
+                        os.makedirs(ram_cache_dir, exist_ok=True)
+                        local_store = {}
+                        try:
+                            local_path = hf_hub_download(
+                                repo_id=args.data_path,
+                                repo_type="dataset",
+                                filename=filename,
+                                token=hf_token,
+                                cache_dir=ram_cache_dir,
+                            )
+                            table = pq.read_table(local_path)
+                            data = table.to_pylist()
+                            for row in data:
+                                audio_info = row.get("audio", {})
+                                if audio_info and "path" in audio_info and "bytes" in audio_info:
+                                    local_store[audio_info["path"]] = audio_info["bytes"]
+                        finally:
+                            shutil.rmtree(ram_cache_dir, ignore_errors=True)
+                        return local_store
+
+                    with ThreadPoolExecutor(max_workers=8) as executor:
+                        futures = {executor.submit(process_parquet, pf): pf for pf in parquet_files}
+                        for future in tqdm(as_completed(futures), total=len(parquet_files), desc="Fast Parallel Caching (Parquet Files)"):
+                            ram_store.update(future.result())
+
+                    ram_audio_store = ram_store
+                    print(
+                        f"[RAM Cache] SUCCESS: Preloaded {len(ram_audio_store)} raw audio samples ({est_gb:.2f} GB) directly into RAM!"
+                    )
+                except Exception as e:
+                    print(f"[RAM Cache] Warning: Failed to stream into RAM: {e}. Falling back to disk cache.")
+                    ram_audio_store = None
+
         print(f"Loading speech dataset from {args.data_path}")
         try:
             full_dataset = load_dataset(
@@ -158,17 +227,35 @@ class SpeechDataset(PromptDataset):
         )
 
         train_dataset = (
-            SpeechDataset(args, train_raw, tokenizer, feature_extractor)
+            SpeechDataset(
+                args,
+                train_raw,
+                tokenizer,
+                feature_extractor,
+                ram_audio_store=ram_audio_store,
+            )
             if train
             else None
         )
         valid_dataset = (
-            SpeechDataset(args, valid_raw, tokenizer, feature_extractor)
+            SpeechDataset(
+                args,
+                valid_raw,
+                tokenizer,
+                feature_extractor,
+                ram_audio_store=ram_audio_store,
+            )
             if valid
             else None
         )
         test_dataset = (
-            SpeechDataset(args, valid_raw, tokenizer, feature_extractor)
+            SpeechDataset(
+                args,
+                valid_raw,
+                tokenizer,
+                feature_extractor,
+                ram_audio_store=ram_audio_store,
+            )
             if test
             else None
         )

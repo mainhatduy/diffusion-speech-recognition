@@ -90,3 +90,77 @@ class DiscreteDiffusionDataCollator:
         }
 
         return batch
+
+
+@dataclass
+class StreamingCollator:
+    """
+    Collator for StreamingAugmentedDataset.
+
+    Handles batching of:
+    - Variable-length audio chunks (padded to max chunks in batch)
+    - Variable-length text sequences (padded to max text length)
+    - Support ratios and supported text lengths
+
+    Output keys:
+        audio_chunks: [B, max_chunks, chunk_samples]
+        audio_mask: [B, max_chunks] — True where chunk is real (not padding)
+        text_ids: [B, max_text_len]
+        text_mask: [B, max_text_len] — True where token is real
+        support_ratios: [B]
+        supported_lens: [B]
+        task_token_ids: [B] or None
+    """
+
+    pad_token_id: int
+
+    def __call__(self, batch):
+        # Filter None samples
+        batch = [s for s in batch if s is not None]
+        if len(batch) == 0:
+            return {}
+
+        B = len(batch)
+
+        # --- Audio chunks ---
+        max_chunks = max(s["audio_chunks"].shape[0] for s in batch)
+        chunk_len = batch[0]["audio_chunks"].shape[1]
+
+        audio_batch = torch.zeros(B, max_chunks, chunk_len)
+        audio_mask = torch.zeros(B, max_chunks, dtype=torch.bool)
+
+        for i, s in enumerate(batch):
+            n = s["audio_chunks"].shape[0]
+            audio_batch[i, :n] = s["audio_chunks"]
+            audio_mask[i, :n] = True
+
+        # --- Text ---
+        max_text = max(len(s["text_ids"]) for s in batch)
+        text_batch = torch.full((B, max_text), self.pad_token_id, dtype=torch.long)
+        text_mask = torch.zeros(B, max_text, dtype=torch.bool)
+
+        for i, s in enumerate(batch):
+            n = len(s["text_ids"])
+            text_batch[i, :n] = s["text_ids"]
+            text_mask[i, :n] = True
+
+        # --- Support info ---
+        support_ratios = torch.tensor([s["support_ratio"] for s in batch])
+        supported_lens = torch.tensor([s["supported_text_len"] for s in batch])
+
+        # --- Task token IDs ---
+        task_token_ids = None
+        if batch[0].get("task_token_id") is not None:
+            task_token_ids = torch.tensor(
+                [s["task_token_id"] for s in batch], dtype=torch.long
+            )
+
+        return {
+            "audio_chunks": audio_batch,
+            "audio_mask": audio_mask,
+            "text_ids": text_batch,
+            "text_mask": text_mask,
+            "support_ratios": support_ratios,
+            "supported_lens": supported_lens,
+            "task_token_ids": task_token_ids,
+        }

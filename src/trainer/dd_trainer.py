@@ -1182,3 +1182,155 @@ class DiscreteDiffusionLengthTrainer(DiscreteDiffusionTrainer):
         logits = raw_model.forward_length(input_tokens)
         loss = F.cross_entropy(logits, target)
         return (loss, logits) if return_outputs else loss
+
+
+# =============================================================================
+# Streaming Diffusion Trainer
+# =============================================================================
+
+
+class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
+    """
+    Trainer for Streaming Discrete Diffusion.
+
+    Key differences from DiscreteDiffusionTrainer:
+    1. Per-chunk audio encoding through frozen Moonshine + adapter
+    2. Streaming diffusion q_sample (mask text tokens)
+    3. Position-weighted CE loss (supported=2.0, unsupported=0.3)
+    4. Timestep weighting (linear schedule)
+    5. Optional confidence calibration loss
+    """
+
+    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        raw_model = model.module if hasattr(model, "module") else model
+
+        audio_chunks = inputs["audio_chunks"]       # [B, num_chunks, chunk_samples]
+        audio_mask = inputs["audio_mask"]            # [B, num_chunks]
+        text_ids = inputs["text_ids"]                # [B, text_len]
+        text_mask = inputs["text_mask"]              # [B, text_len]
+        support_ratios = inputs["support_ratios"]    # [B]
+        supported_lens = inputs["supported_lens"]    # [B]
+        task_token_ids = inputs.get("task_token_ids")  # [B] or None
+
+        B, T_len = text_ids.shape
+        device = text_ids.device
+
+        # Get streaming config from model
+        num_timesteps = getattr(raw_model, "num_diffusion_timesteps", 50)
+        mask_id = raw_model.mask_id
+        loss_weight_supported = getattr(raw_model, "loss_weight_supported", 2.0)
+        loss_weight_unsupported = getattr(raw_model, "loss_weight_unsupported", 0.3)
+        use_confidence_calibration = getattr(
+            raw_model, "use_confidence_calibration", False
+        )
+
+        # === 1. ENCODE AUDIO (per-chunk through frozen encoder + adapter) ===
+        audio_embeds_list = []
+        for b in range(B):
+            visible_mask = audio_mask[b]  # [num_chunks]
+            visible_chunks = audio_chunks[b][visible_mask]  # [num_visible, chunk_samples]
+
+            if visible_chunks.shape[0] == 0:
+                # No audio — create zero tensor
+                audio_embeds_list.append(
+                    torch.zeros(1, raw_model.config.hidden_size, device=device)
+                )
+                continue
+
+            with torch.no_grad():
+                # Encode each chunk through frozen audio encoder
+                chunk_embeds = raw_model.audio_encoder(visible_chunks)
+                if hasattr(chunk_embeds, "last_hidden_state"):
+                    chunk_embeds = chunk_embeds.last_hidden_state
+
+            # Project through adapter
+            projected = raw_model.audio_adapter(chunk_embeds)  # [num_visible, tokens, D]
+            # Flatten all chunks into single sequence
+            audio_embeds_list.append(projected.reshape(-1, projected.shape[-1]))
+
+        # Pad audio embeddings to same length
+        max_audio_len = max(a.shape[0] for a in audio_embeds_list)
+        audio_embeds = torch.zeros(
+            B, max_audio_len, raw_model.config.hidden_size, device=device
+        )
+        for b, a in enumerate(audio_embeds_list):
+            audio_embeds[b, : a.shape[0]] = a
+
+        # === 2. DIFFUSION FORWARD (q_sample) ===
+        # Sample timestep t ∈ {1, ..., T}
+        t = torch.randint(1, num_timesteps + 1, (B,), device=device)
+
+        # Maskable mask: only mask text tokens (not special tokens)
+        maskable_mask = text_mask.clone()
+        maskable_mask[:, 0] = False  # Don't mask BOS
+
+        # q_sample: add MASK according to timestep
+        u = torch.rand_like(text_ids.float())
+        mask_prob = t.float().unsqueeze(1) / num_timesteps  # [B, 1]
+        mask_indices = (u < mask_prob) & maskable_mask
+        x_t = text_ids.masked_fill(mask_indices, mask_id)
+
+        # === 3. PREPEND TASK TOKEN (if available) ===
+        if task_token_ids is not None:
+            task_tensor = task_token_ids.unsqueeze(1)  # [B, 1]
+            model_input = torch.cat([task_tensor, x_t], dim=1)  # [B, 1 + text_len]
+        else:
+            model_input = x_t
+
+        # === 4. FORWARD THROUGH BACKBONE ===
+        logits, _ = raw_model.backbone(
+            input_ids=model_input,
+            audio_hidden=audio_embeds,
+        )
+
+        # Remove task token position from logits
+        if task_token_ids is not None:
+            logits = logits[:, 1:, :]  # [B, text_len, vocab]
+
+        # === 5. STREAMING LOSS ===
+        # 5a. Position weighting (supported vs unsupported regions)
+        position_weights = torch.ones(B, T_len, device=device)
+        for b in range(B):
+            sup_len = supported_lens[b].item()
+            position_weights[b, :sup_len] = loss_weight_supported
+            position_weights[b, sup_len:] = loss_weight_unsupported
+
+        # 5b. Timestep weighting (linear: higher weight for less noisy steps)
+        timestep_weights = (num_timesteps - (t.float() - 1)).unsqueeze(1)  # [B, 1]
+
+        # 5c. Cross-entropy (only on masked positions)
+        ce = F.cross_entropy(
+            logits.reshape(-1, logits.shape[-1]),
+            text_ids.reshape(-1),
+            reduction="none",
+        ).reshape(B, T_len)
+
+        # 5d. Combined weighted loss
+        loss_mask = mask_indices.float()  # Only compute loss on masked positions
+        weighted_loss = ce * position_weights * loss_mask * timestep_weights
+
+        # Normalize
+        num_masked = loss_mask.sum(dim=1).clamp(min=1)  # [B]
+        loss_per_sample = weighted_loss.sum(dim=1) / num_masked
+        loss = loss_per_sample.mean()
+
+        # === 6. (Optional) Confidence Calibration Loss ===
+        if use_confidence_calibration:
+            probs = F.softmax(logits.detach(), dim=-1)
+            max_probs = probs.max(dim=-1).values  # [B, text_len]
+
+            # Unsupported region mask
+            unsupported_mask = torch.zeros(B, T_len, device=device)
+            for b in range(B):
+                sup_len = supported_lens[b].item()
+                unsupported_mask[b, sup_len:] = 1.0
+
+            # Penalize confidence > 0.5 in unsupported regions
+            overconfident = (max_probs - 0.5).clamp(min=0) * unsupported_mask
+            cal_loss = overconfident.sum() / unsupported_mask.sum().clamp(min=1)
+
+            loss = loss + 0.1 * cal_loss
+
+        if return_outputs:
+            return loss, {"logits": logits}
+        return loss

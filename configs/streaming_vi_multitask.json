@@ -3,17 +3,14 @@
     "data_path": "NhutP/VietSpeech",
     "audio_encoder_name": "UsefulSensors/moonshine-streaming-medium",
     "task_tokens": [
-        "<vi_en>",
-        "<vi_zh>",
-        "<vi_ko>"
+        "<vi_en>"
     ],
-    "max_length": 256,
+    "max_length": 64,
     "packing": false,
-    "streaming": true,
-    "streaming_repo_id": "aiai-laboratory/vietspeech-train-streaming",
-    "streaming_buffer_size": 1000,
-    "val_streaming_size": 500,
-    "ignore_data_skip": true,
+    "precomputed_data_dir": "",
+    "streaming": false,
+    "use_ram_cache": true,
+    "ram_free_threshold_ratio": 0.30,
     "batch_by_tokens": false,
 
     "num_diffusion_timesteps": 50,
@@ -26,6 +23,7 @@
     "audio_fusion_strategy": "deep_cross_attn",
 
     "num_ergodic_layers": 6,
+    "num_ergodic_cross_attn_layers": 2,
     "ergodic_window_left": 64,
     "ergodic_window_right": 16,
     "num_position_layers": 6,
@@ -48,8 +46,8 @@
     "output_dir": "outputs/streaming_vi_multitask",
     "per_device_train_batch_size": 32,
     "per_device_eval_batch_size": 16,
-    "dataloader_num_workers": 0,
-    "dataloader_pin_memory": false,
+    "dataloader_num_workers": 4,
+    "dataloader_pin_memory": true,
     "gradient_accumulation_steps": 4,
     "max_steps": 100000,
     "do_eval": true,
@@ -61,7 +59,7 @@
         "wer"
     ],
     "load_best_model_at_end": true,
-    "metric_for_best_model": "wer",
+    "metric_for_best_model": "bleu",
     "greater_is_better": false,
     "logging_steps": 200,
     "save_steps": 10000,

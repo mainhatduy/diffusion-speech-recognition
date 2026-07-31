@@ -147,6 +147,8 @@ class StreamingCollator:
         # --- Support info ---
         support_ratios = torch.tensor([s["support_ratio"] for s in batch])
         supported_lens = torch.tensor([s["supported_text_len"] for s in batch])
+        num_visible_chunks = torch.tensor([s["num_visible_chunks"] for s in batch])
+        total_chunks = torch.tensor([s["total_chunks"] for s in batch])
 
         # --- Task token IDs ---
         task_token_ids = None
@@ -155,12 +157,19 @@ class StreamingCollator:
                 [s["task_token_id"] for s in batch], dtype=torch.long
             )
 
-        return {
+        out = {
             "audio_chunks": audio_batch,
             "audio_mask": audio_mask,
             "text_ids": text_batch,
             "text_mask": text_mask,
             "support_ratios": support_ratios,
             "supported_lens": supported_lens,
+            "num_visible_chunks": num_visible_chunks,
+            "total_chunks": total_chunks,
             "task_token_ids": task_token_ids,
         }
+        
+        if batch[0].get("is_precomputed"):
+            out["is_precomputed"] = True
+            
+        return out

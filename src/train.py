@@ -30,6 +30,7 @@ from trainer.dd_trainer import (
     DiscreteDiffusionLengthTrainer,
     DiscreteDiffusionTrainer,
     DiscreteDiffusionTrainingArguments,
+    StreamingDiffusionTrainer,
 )
 from utils import argument_filter, is_master, load_ckpt, load_model_tokenizer
 
@@ -134,11 +135,14 @@ def main():
         metric = MergeRouge()
     elif train_args.eval_metric == "wer":
         metric = MergeWER()
-    Trainer = (
-        DiscreteDiffusionTrainer
-        if not train_args.train_length
-        else DiscreteDiffusionLengthTrainer
-    )
+    if getattr(data_args, "streaming_augmentation", False):
+        Trainer = StreamingDiffusionTrainer
+    else:
+        Trainer = (
+            DiscreteDiffusionTrainer
+            if not train_args.train_length
+            else DiscreteDiffusionLengthTrainer
+        )
     trainer = Trainer(
         model=model,
         args=train_args,

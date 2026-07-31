@@ -120,10 +120,16 @@ class StreamingDiffusionEngine:
         self.active_tokens.extend([self.mask_id] * num_new_tokens)
         self.active_confidence.extend([0.0] * num_new_tokens)
 
-        # 4. Truncate active zone if too long
+        # 4. Truncate active zone if too long (force-freeze from the left)
+        force_frozen = []
         if len(self.active_tokens) > self.active_window_size:
-            self.active_tokens = self.active_tokens[: self.active_window_size]
-            self.active_confidence = self.active_confidence[: self.active_window_size]
+            overflow = len(self.active_tokens) - self.active_window_size
+            force_frozen_tokens = self.active_tokens[:overflow]
+            self.active_tokens = self.active_tokens[overflow:]
+            self.active_confidence = self.active_confidence[overflow:]
+            
+            # Compute KV cache and move to frozen zone
+            force_frozen = self._force_freeze_tokens(force_frozen_tokens, backbone)
 
         # 5. Denoise active zone
         self._denoise_active_zone(backbone)
@@ -131,7 +137,7 @@ class StreamingDiffusionEngine:
         # 6. Freeze confident tokens
         newly_frozen = self._freeze_confident_tokens(backbone)
 
-        return newly_frozen
+        return force_frozen + newly_frozen
 
     def _get_audio_context(self) -> torch.Tensor | None:
         """Get concatenated audio context (last 2 chunks) for cross-attention."""
@@ -195,6 +201,62 @@ class StreamingDiffusionEngine:
             # Update active zone
             self.active_tokens = predicted
             self.active_confidence = confidence
+
+    @torch.no_grad()
+    def _force_freeze_tokens(self, tokens: list[int], backbone: torch.nn.Module) -> list[int]:
+        """
+        Force-freeze tokens and move them to the frozen zone.
+        Computes KV cache for these tokens and updates the state.
+        
+        Args:
+            tokens: list of token IDs to freeze
+            backbone: StreamingDiffusionBackbone
+        Returns:
+            list of frozen token IDs
+        """
+        if not tokens:
+            return []
+            
+        frozen_ids = torch.tensor(
+            [tokens], dtype=torch.long, device=self.device
+        )
+        _, new_kv = backbone(
+            input_ids=frozen_ids,
+            past_kv_caches=self.frozen_kv_caches,
+            audio_hidden=None,  # Frozen tokens don't need audio anymore
+        )
+        
+        # Merge into frozen KV cache
+        if self.frozen_kv_caches is None:
+            self.frozen_kv_caches = new_kv
+        else:
+            self.frozen_kv_caches = [
+                (
+                    torch.cat([old_k, new_k], dim=2),
+                    torch.cat([old_v, new_v], dim=2),
+                )
+                for (old_k, old_v), (new_k, new_v) in zip(
+                    self.frozen_kv_caches, new_kv
+                )
+            ]
+            
+        # Update frozen tokens list
+        self.frozen_tokens.extend(tokens)
+        
+        # Evict oldest tokens if cache exceeds max size
+        max_cache = self.frozen_cache_size
+        if len(self.frozen_tokens) > max_cache:
+            excess = len(self.frozen_tokens) - max_cache
+            self.frozen_tokens = self.frozen_tokens[excess:]
+
+            # Trim KV cache
+            self.frozen_kv_caches = [
+                (k[:, :, excess:, :], v[:, :, excess:, :])
+                for k, v in self.frozen_kv_caches
+            ]
+
+        self.total_tokens_yielded += len(tokens)
+        return tokens
 
     @torch.no_grad()
     def _freeze_confident_tokens(self, backbone: torch.nn.Module) -> list[int]:

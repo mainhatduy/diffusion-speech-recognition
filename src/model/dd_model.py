@@ -319,6 +319,18 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             )
             self.model.roberta.encoder = new_encoder
 
+        # Add streaming length predictor if streaming augmentation is enabled
+        if getattr(args, "streaming_augmentation", False):
+            try:
+                from .streaming_length_predictor import StreamingLengthPredictor
+            except ImportError:
+                from streaming_length_predictor import StreamingLengthPredictor
+            self.streaming_length_predictor = StreamingLengthPredictor(
+                hidden_size=self.config.hidden_size,
+                vocab_size=self.config.vocab_size,
+                max_output_tokens=getattr(args, "max_chunk_tokens", 32)
+            )
+
     def resize_token_embeddings(self, new_num_tokens):
         """Resize token embeddings in the underlying model."""
         return self.model.resize_token_embeddings(new_num_tokens)

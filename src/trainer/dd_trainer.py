@@ -1210,6 +1210,7 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
         text_mask = inputs["text_mask"]              # [B, text_len]
         support_ratios = inputs["support_ratios"]    # [B]
         supported_lens = inputs["supported_lens"]    # [B]
+        total_chunks = inputs.get("total_chunks")    # [B] or None
         task_token_ids = inputs.get("task_token_ids")  # [B] or None
 
         B, T_len = text_ids.shape
@@ -1226,6 +1227,7 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
 
         # === 1. ENCODE AUDIO (per-chunk through frozen encoder + adapter) ===
         audio_embeds_list = []
+        last_chunk_embeds_list = []
         for b in range(B):
             visible_mask = audio_mask[b]  # [num_chunks]
             visible_chunks = audio_chunks[b][visible_mask]  # [num_visible, chunk_samples]
@@ -1237,14 +1239,18 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
                 )
                 continue
 
-            with torch.no_grad():
-                # Encode each chunk through frozen audio encoder
-                chunk_embeds = raw_model.audio_encoder(visible_chunks)
-                if hasattr(chunk_embeds, "last_hidden_state"):
-                    chunk_embeds = chunk_embeds.last_hidden_state
+            if inputs.get("is_precomputed", False):
+                chunk_embeds = visible_chunks
+            else:
+                with torch.no_grad():
+                    # Encode each chunk through frozen audio encoder
+                    chunk_embeds = raw_model.audio_encoder(visible_chunks)
+                    if hasattr(chunk_embeds, "last_hidden_state"):
+                        chunk_embeds = chunk_embeds.last_hidden_state
 
             # Project through adapter
             projected = raw_model.audio_adapter(chunk_embeds)  # [num_visible, tokens, D]
+            last_chunk_embeds_list.append(projected[-1])
             # Flatten all chunks into single sequence
             audio_embeds_list.append(projected.reshape(-1, projected.shape[-1]))
 
@@ -1330,6 +1336,39 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
             cal_loss = overconfident.sum() / unsupported_mask.sum().clamp(min=1)
 
             loss = loss + 0.1 * cal_loss
+
+        # === 7. Length Predictor Loss ===
+        if hasattr(raw_model, "streaming_length_predictor") and total_chunks is not None:
+            # Predict for the last chunk
+            last_chunk_embeds = torch.stack(last_chunk_embeds_list) # [B, tokens, D]
+            
+            # Context: roughly last 32 tokens from supported length
+            # Note: During training, we simplify context since it's hard to extract precisely
+            context_ids = []
+            for b in range(B):
+                sl = supported_lens[b].item()
+                start = max(0, sl - 32)
+                ctx = text_ids[b, start:sl]
+                # Pad to 32 if needed
+                if ctx.shape[0] < 32:
+                    ctx = F.pad(ctx, (32 - ctx.shape[0], 0), value=mask_id)
+                context_ids.append(ctx)
+            context_ids = torch.stack(context_ids) # [B, 32]
+            
+            # Forward length predictor
+            length_logits = raw_model.streaming_length_predictor(last_chunk_embeds, context_ids)
+            
+            # Ground truth: N / total_chunks
+            N = text_mask.sum(dim=1).float()
+            gt_lengths = (N / total_chunks.float()).round().long()
+            max_tokens = raw_model.streaming_length_predictor.max_output_tokens
+            gt_lengths = gt_lengths.clamp(min=0, max=max_tokens)
+            
+            # Length loss
+            length_loss = F.cross_entropy(length_logits, gt_lengths)
+            
+            # Add to total loss
+            loss = loss + 0.2 * length_loss
 
         if return_outputs:
             return loss, {"logits": logits}

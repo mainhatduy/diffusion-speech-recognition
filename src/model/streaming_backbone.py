@@ -47,6 +47,7 @@ class StreamingBackboneConfig:
     ergodic_window_left: int = 64
     ergodic_window_right: int = 16
     ergodic_use_rope: bool = False
+    num_ergodic_cross_attn_layers: int = 0  # Number of last Phase A layers with cross-attention
 
     # Phase B: Position-Aware layers (RoPE, wider sliding window, cross-attention)
     num_position_layers: int = 6
@@ -309,8 +310,14 @@ class StreamingRobertaLayer(nn.Module):
         self.self_attn_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.self_attn_dropout = nn.Dropout(config.hidden_dropout_prob)
 
-        # Cross-Attention with Audio (Phase B only)
-        self.has_cross_attn = use_rope
+        # Cross-Attention with Audio
+        is_phase_b = layer_idx >= config.num_ergodic_layers
+        is_late_ergodic = (
+            not is_phase_b 
+            and layer_idx >= config.num_ergodic_layers - config.num_ergodic_cross_attn_layers
+        )
+        self.has_cross_attn = is_phase_b or is_late_ergodic
+        
         if self.has_cross_attn:
             self.cross_attn = nn.MultiheadAttention(
                 config.hidden_size,

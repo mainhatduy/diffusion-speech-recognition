@@ -100,6 +100,22 @@ class DiscreteDiffusionDataArguments:
         default=0.30,
         metadata={"help": "Minimum required free RAM ratio after preloading audio bytes into RAM."},
     )
+    streaming_augmentation: bool = field(
+        default=False,
+        metadata={"help": "Whether to use StreamingAugmentedDataset during training."}
+    )
+    curriculum_training: bool = field(
+        default=False,
+        metadata={"help": "Whether to enable curriculum training for streaming augmentation."}
+    )
+    audio_chunk_duration: float = field(
+        default=2.0,
+        metadata={"help": "Audio chunk duration in seconds for streaming augmentation."}
+    )
+    audio_overlap_duration: float = field(
+        default=0.5,
+        metadata={"help": "Audio overlap duration in seconds for streaming augmentation."}
+    )
 
 
 def load_data(
@@ -213,11 +229,32 @@ def load_data(
             f"Unknown or unsupported dataset type: {data_args.dataset_type}"
         )
 
+    # Apply Streaming Augmentation if enabled
+    use_streaming_aug = getattr(data_args, "streaming_augmentation", False)
+    
+    if use_streaming_aug and datasets[0] is not None:
+        from .streaming_augmented import StreamingAugmentedDataset
+        
+        datasets = (
+            StreamingAugmentedDataset(
+                base_dataset=datasets[0],
+                tokenizer=tokenizer,
+                chunk_duration=getattr(data_args, "audio_chunk_duration", 2.0),
+                overlap_duration=getattr(data_args, "audio_overlap_duration", 0.5),
+            ),
+            datasets[1], # Validation typically uses full audio
+            datasets[2], # Test typically uses full audio
+        )
+
     # Build collator
-    collator = DiscreteDiffusionDataCollator(
-        bos_id=tokenizer.bos_token_id,
-        eos_id=tokenizer.eos_token_id,
-        pad_id=tokenizer.pad_token_id,
-    )
+    if use_streaming_aug:
+        from .collator import StreamingCollator
+        collator = StreamingCollator(pad_token_id=tokenizer.pad_token_id)
+    else:
+        collator = DiscreteDiffusionDataCollator(
+            bos_id=tokenizer.bos_token_id,
+            eos_id=tokenizer.eos_token_id,
+            pad_id=tokenizer.pad_token_id,
+        )
 
     return datasets, collator

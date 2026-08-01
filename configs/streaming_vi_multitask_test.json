@@ -43,7 +43,7 @@
     "audio_chunk_duration": 2.0,
     "audio_overlap_duration": 0.5,
 
-    "output_dir": "outputs/streaming_vi_multitask",
+    "output_dir": "outputs/streaming_vi_multitask_test",
     "per_device_train_batch_size": 64,
     "per_device_eval_batch_size": 32,
     "dataloader_num_workers": 8,

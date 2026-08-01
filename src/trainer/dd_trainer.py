@@ -255,6 +255,7 @@ class DiscreteDiffusionTrainer(Trainer):
             pin_memory=self.args.dataloader_pin_memory,
             worker_init_fn=seed_worker,
             prefetch_factor=prefetch_factor,
+            persistent_workers=getattr(self.args, "dataloader_persistent_workers", False) and self.args.dataloader_num_workers > 0,
         )
         return dataloader
 
@@ -1245,34 +1246,54 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
             raw_model, "use_confidence_calibration", False
         )
 
-        # === 1. ENCODE AUDIO (per-chunk through frozen encoder + adapter) ===
+        # === 1. ENCODE AUDIO (batched across chunks) ===
         audio_embeds_list = []
         last_chunk_embeds_list = []
+        
+        # Gather all visible chunks across the batch
+        all_visible_chunks = []
+        batch_chunk_counts = []
+        
         for b in range(B):
-            visible_mask = audio_mask[b]  # [num_chunks]
-            visible_chunks = audio_chunks[b][visible_mask]  # [num_visible, chunk_samples]
-
+            visible_mask = audio_mask[b]
+            visible_chunks = audio_chunks[b][visible_mask]
+            
             if visible_chunks.shape[0] == 0:
-                # No audio — create zero tensor
-                audio_embeds_list.append(
-                    torch.zeros(1, raw_model.config.hidden_size, device=device)
-                )
-                continue
-
+                batch_chunk_counts.append(0)
+            else:
+                all_visible_chunks.append(visible_chunks)
+                batch_chunk_counts.append(visible_chunks.shape[0])
+                
+        if len(all_visible_chunks) > 0:
+            batched_chunks = torch.cat(all_visible_chunks, dim=0) # [total_visible_chunks, chunk_samples]
+            
             if inputs.get("is_precomputed", False):
-                chunk_embeds = visible_chunks
+                batched_embeds = batched_chunks
             else:
                 with torch.no_grad():
-                    # Encode each chunk through frozen audio encoder
-                    chunk_embeds = raw_model.audio_encoder(visible_chunks)
-                    if hasattr(chunk_embeds, "last_hidden_state"):
-                        chunk_embeds = chunk_embeds.last_hidden_state
-
+                    batched_embeds = raw_model.audio_encoder(batched_chunks)
+                    if hasattr(batched_embeds, "last_hidden_state"):
+                        batched_embeds = batched_embeds.last_hidden_state
+                        
             # Project through adapter
-            projected = raw_model.audio_adapter(chunk_embeds)  # [num_visible, tokens, D]
-            last_chunk_embeds_list.append(projected[-1])
-            # Flatten all chunks into single sequence
-            audio_embeds_list.append(projected.reshape(-1, projected.shape[-1]))
+            batched_projected = raw_model.audio_adapter(batched_embeds) # [total_visible_chunks, tokens, D]
+            
+            # Split back to individual samples
+            projected_splits = torch.split(batched_projected, [c for c in batch_chunk_counts if c > 0])
+            
+            split_idx = 0
+            for b in range(B):
+                if batch_chunk_counts[b] == 0:
+                    audio_embeds_list.append(torch.zeros(1, raw_model.config.hidden_size, device=device))
+                else:
+                    projected = projected_splits[split_idx]
+                    last_chunk_embeds_list.append(projected[-1])
+                    audio_embeds_list.append(projected.reshape(-1, projected.shape[-1]))
+                    split_idx += 1
+        else:
+            # Fallback if ALL chunks in batch are empty
+            for b in range(B):
+                audio_embeds_list.append(torch.zeros(1, raw_model.config.hidden_size, device=device))
 
         # Pad audio embeddings to same length
         max_audio_len = max(a.shape[0] for a in audio_embeds_list)

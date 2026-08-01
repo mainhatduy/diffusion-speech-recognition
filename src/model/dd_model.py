@@ -405,10 +405,33 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                 vocab_size=self.config.vocab_size,
                 max_output_tokens=getattr(args, "max_chunk_tokens", 32)
             )
+            # Free unused original model to save VRAM and avoid unused parameters in optimizer
+            del self.model
+            self.model = None
 
     def resize_token_embeddings(self, new_num_tokens):
-        """Resize token embeddings in the underlying model."""
-        return self.model.resize_token_embeddings(new_num_tokens)
+        """Resize token embeddings in the underlying model and/or backbone."""
+        if self.model is not None:
+            return self.model.resize_token_embeddings(new_num_tokens)
+        # For streaming backbone path: resize word_embeddings and lm_head directly
+        if hasattr(self, "backbone") and self.backbone is not None:
+            old_embeddings = self.backbone.word_embeddings
+            old_vocab_size, embedding_dim = old_embeddings.weight.shape
+            if new_num_tokens == old_vocab_size:
+                return old_embeddings
+            # Create new embedding table with zeros for new rows
+            new_embeddings = nn.Embedding(new_num_tokens, embedding_dim)
+            new_embeddings.weight.data[:old_vocab_size] = old_embeddings.weight.data
+            self.backbone.word_embeddings = new_embeddings
+            # Resize lm_head Linear too
+            old_lm_head = self.backbone.lm_head
+            new_lm_head = nn.Linear(embedding_dim, new_num_tokens, bias=False)
+            new_lm_head.weight.data[:old_vocab_size] = old_lm_head.weight.data[:old_vocab_size]
+            self.backbone.lm_head = new_lm_head
+            # Re-tie weights
+            self.backbone.lm_head.weight = self.backbone.word_embeddings.weight
+            return self.backbone.word_embeddings
+        return None
 
     def remove_redundant_embeddings(self, dictionary):
         assert self._is_tokenizer_index_correct
@@ -506,6 +529,26 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         input_ids = prev_output_tokens
         if attention_mask is None:
             attention_mask = prev_output_tokens.ne(self.pad_id).int()
+
+        # If using StreamingDiffusionBackbone, route forward pass through backbone directly
+        if hasattr(self, "backbone") and self.backbone is not None:
+            audio_embeds = None
+            if self.has_audio_encoder and precomputed_audio_embeds is not None:
+                audio_embeds = self.audio_projector(precomputed_audio_embeds)
+            elif self.has_audio_encoder and audio_features is not None:
+                with torch.no_grad():
+                    audio_outputs = self.audio_encoder(
+                        audio_features, attention_mask=audio_attention_mask
+                    )
+                    audio_embeds = audio_outputs.last_hidden_state
+                audio_embeds = self.audio_projector(audio_embeds)
+
+            logits, _ = self.backbone(
+                input_ids=input_ids,
+                audio_hidden=audio_embeds,
+            )
+            logits = logits[loss_mask] if loss_mask is not None else logits
+            return logits
 
         # Build full embeddings first (word + position + token type + LayerNorm + dropout)
         embeddings = self.model.roberta.embeddings(

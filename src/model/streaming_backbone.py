@@ -46,7 +46,7 @@ class StreamingBackboneConfig:
     num_ergodic_layers: int = 6
     ergodic_window_left: int = 64
     ergodic_window_right: int = 16
-    ergodic_use_rope: bool = False
+    ergodic_use_rope: bool = True
     num_ergodic_cross_attn_layers: int = 0  # Number of last Phase A layers with cross-attention
 
     # Phase B: Position-Aware layers (RoPE, wider sliding window, cross-attention)
@@ -303,7 +303,7 @@ class StreamingRobertaLayer(nn.Module):
     def __init__(self, config: StreamingBackboneConfig, layer_idx: int):
         super().__init__()
 
-        use_rope = layer_idx >= config.num_ergodic_layers
+        use_rope = config.position_use_rope if layer_idx >= config.num_ergodic_layers else config.ergodic_use_rope
 
         # Self-Attention
         self.self_attn = SlidingWindowAttention(config, layer_idx, use_rope=use_rope)
@@ -417,6 +417,7 @@ class StreamingDiffusionBackbone(nn.Module):
 
         # LM Head (predict vocabulary)
         self.lm_head = nn.Linear(config.hidden_size, vocab_size, bias=False)
+        self.lm_head.weight = self.word_embeddings.weight
 
     def forward(
         self,

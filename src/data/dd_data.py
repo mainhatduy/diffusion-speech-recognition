@@ -194,9 +194,10 @@ def load_data(
                 from .utils import check_ram_capacity_for_dataset
 
                 hf_token = data_args.hf_token or os.getenv("HF_TOKEN")
+                audio_repo_id = getattr(data_args, "data_path", None) or "NhutP/VietSpeech"
                 is_approved, est_gb, proj_ratio, total_examples = (
                     check_ram_capacity_for_dataset(
-                        "NhutP/VietSpeech",
+                        audio_repo_id,
                         hf_token=hf_token,
                         threshold_ratio=threshold_ratio,
                     )

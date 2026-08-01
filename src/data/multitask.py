@@ -90,7 +90,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
                 vs_idx = self.path_to_vs_idx.get(wav_id)
                 if vs_idx is None:
                     raise ValueError(
-                        f"WAV ID '{wav_id}' not found in NhutP/VietSpeech index."
+                        f"WAV ID '{wav_id}' not found in audio dataset index."
                     )
                 vs_item = self.vietspeech_dataset[vs_idx]
                 wav_bytes = vs_item["audio"]["bytes"]
@@ -218,13 +218,16 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         # Limit num_proc to prevent OOM on high-core machines
         num_proc = min(8, max(1, int(mp.cpu_count() / world_size)))
 
-        # 4. Load aiai-laboratory/vietspeech-train-translated
-        print(
-            "[MultiTask] Loading translated dataset from aiai-laboratory/vietspeech-train-translated"
+        # 4. Load translated dataset
+        translated_repo_id = (
+            getattr(args, "translated_data_path", None)
+            or getattr(args, "text_data_path", None)
+            or "aiai-laboratory/vietspeech-train-translated"
         )
+        print(f"[MultiTask] Loading translated dataset from {translated_repo_id}")
         try:
             translated_dataset = load_dataset(
-                "aiai-laboratory/vietspeech-train-translated",
+                translated_repo_id,
                 token=hf_token,
                 cache_dir=getattr(args, "cache_dir", None),
                 split="train[:100%]",
@@ -241,7 +244,8 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
                     f"Available columns: {list(translated_dataset.features.keys())}"
                 )
 
-        # 5. Load NhutP/VietSpeech for audio
+        # 5. Load audio dataset
+        audio_repo_id = getattr(args, "data_path", None) or "NhutP/VietSpeech"
         ram_audio_store = None
         path_to_vs_idx = {}
         vietspeech_dataset = None
@@ -250,7 +254,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             threshold_ratio = getattr(args, "ram_free_threshold_ratio", 0.30)
             is_approved, est_gb, proj_ratio, total_examples = (
                 check_ram_capacity_for_dataset(
-                    "NhutP/VietSpeech",
+                    audio_repo_id,
                     hf_token=hf_token,
                     threshold_ratio=threshold_ratio,
                 )
@@ -266,8 +270,8 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
 
                     ram_store = {}
                     fs = HfFileSystem(token=hf_token)
-                    files = fs.ls("datasets/NhutP/VietSpeech/data", detail=False)
-                    parquet_files = [f.split("NhutP/VietSpeech/")[-1] for f in files if f.endswith(".parquet")]
+                    files = fs.ls(f"datasets/{audio_repo_id}/data", detail=False)
+                    parquet_files = [f.split(f"{audio_repo_id}/")[-1] for f in files if f.endswith(".parquet")]
 
                     print(f"\n[RAM Cache] Bypassing slow streaming... Downloading {len(parquet_files)} parquet files to RAM disk (/dev/shm) in parallel!")
 
@@ -278,7 +282,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
                         local_store = {}
                         try:
                             local_path = hf_hub_download(
-                                repo_id="NhutP/VietSpeech",
+                                repo_id=audio_repo_id,
                                 repo_type="dataset",
                                 filename=filename,
                                 token=hf_token,
@@ -311,16 +315,16 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
 
         if ram_audio_store is None:
             # Fallback to standard disk cache mode
-            print("[MultiTask] Loading audio from NhutP/VietSpeech into disk cache...")
+            print(f"[MultiTask] Loading audio from {audio_repo_id} into disk cache...")
             try:
                 vietspeech_dataset = load_dataset(
-                    "NhutP/VietSpeech",
+                    audio_repo_id,
                     token=hf_token,
                     cache_dir=getattr(args, "cache_dir", None),
                     split="train[:100%]",
                 )
             except Exception as e:
-                print(f"Error loading VietSpeech dataset: {e}")
+                print(f"Error loading {audio_repo_id} dataset: {e}")
                 raise
 
             vietspeech_dataset = vietspeech_dataset.cast_column(
@@ -328,13 +332,31 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             )
 
             # Build path → index mapping for VietSpeech
-            print("[MultiTask] Building audio path→index mapping")
+            print(f"[MultiTask] Building audio path→index mapping for {audio_repo_id}")
             audio_column = vietspeech_dataset.data.column("audio")
             vs_paths = []
             for chunk in audio_column.chunks:
                 vs_paths.extend(chunk.field("path").to_pylist())
             path_to_vs_idx = {path: idx for idx, path in enumerate(vs_paths)}
-            print(f"[MultiTask] VietSpeech index built: {len(path_to_vs_idx)} entries")
+            print(f"[MultiTask] Audio dataset index built: {len(path_to_vs_idx)} entries")
+
+        # 5.5. Filter translated dataset to only keep samples with matching audio
+        available_audio_ids = (
+            set(ram_audio_store.keys())
+            if ram_audio_store is not None
+            else set(path_to_vs_idx.keys())
+        )
+        if len(translated_dataset) > len(available_audio_ids):
+            print(
+                f"[MultiTask] Filtering translated text dataset ({len(translated_dataset)} samples) to match available audio IDs ({len(available_audio_ids)} samples)..."
+            )
+            translated_dataset = translated_dataset.filter(
+                lambda ex: ex.get("id") in available_audio_ids,
+                num_proc=num_proc,
+            )
+            print(
+                f"[MultiTask] Matched {len(translated_dataset)} samples between text and audio datasets."
+            )
 
         # 6. Shuffle & split translated dataset
         translated_dataset = translated_dataset.shuffle(seed=42)

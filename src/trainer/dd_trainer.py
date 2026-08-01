@@ -1201,7 +1201,27 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
     5. Optional confidence calibration loss
     """
 
+    def get_eval_dataloader(self, eval_dataset=None):
+        """Use the standard collator for evaluation since eval data isn't streaming-augmented."""
+        from data.collator import DiscreteDiffusionDataCollator
+
+        tokenizer = self.model.module.tokenizer if hasattr(self.model, "module") else self.model.tokenizer
+        original_collator = self.data_collator
+        self.data_collator = DiscreteDiffusionDataCollator(
+            bos_id=tokenizer.bos_token_id,
+            eos_id=tokenizer.eos_token_id,
+            pad_id=tokenizer.pad_token_id,
+        )
+        dataloader = super().get_eval_dataloader(eval_dataset)
+        self.data_collator = original_collator
+        return dataloader
+
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        # During evaluation, inputs come in standard format (no audio_chunks).
+        # Delegate to the parent's compute_loss which handles standard format.
+        if "audio_chunks" not in inputs:
+            return DiscreteDiffusionTrainer.compute_loss(self, model, inputs, return_outputs=return_outputs, **kwargs)
+
         raw_model = model.module if hasattr(model, "module") else model
 
         audio_chunks = inputs["audio_chunks"]       # [B, num_chunks, chunk_samples]

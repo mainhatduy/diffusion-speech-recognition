@@ -41,7 +41,7 @@ class TranslatedSpeechDataset(PromptDataset):
 
         vs_idx = self.path_to_vs_idx.get(wav_id)
         if vs_idx is None:
-            raise ValueError(f"WAV ID {wav_id} not found in NhutP/VietSpeech")
+            raise ValueError(f"WAV ID {wav_id} not found in audio dataset index")
 
         vs_item = self.vietspeech_dataset[vs_idx]
 
@@ -134,12 +134,15 @@ class TranslatedSpeechDataset(PromptDataset):
         num_proc = max(1, int(mp.cpu_count() / world_size))
 
         # 1. Load translated dataset from aiai-laboratory/vietspeech-train-translated
-        print(
-            "Loading translated speech dataset from aiai-laboratory/vietspeech-train-translated"
+        translated_repo_id = (
+            getattr(args, "translated_data_path", None)
+            or getattr(args, "text_data_path", None)
+            or "aiai-laboratory/vietspeech-train-translated"
         )
+        print(f"Loading translated dataset from {translated_repo_id}")
         try:
             translated_dataset = load_dataset(
-                "aiai-laboratory/vietspeech-train-translated",
+                translated_repo_id,
                 token=hf_token,
                 cache_dir=getattr(args, "cache_dir", None),
                 split="train[:100%]",
@@ -148,17 +151,18 @@ class TranslatedSpeechDataset(PromptDataset):
             print(f"Error loading translated dataset: {e}")
             raise
 
-        # 2. Load speech dataset from NhutP/VietSpeech
-        print("Loading audio dataset from NhutP/VietSpeech")
+        # 2. Load speech dataset
+        audio_repo_id = getattr(args, "data_path", None) or "NhutP/VietSpeech"
+        print(f"Loading audio dataset from {audio_repo_id}")
         try:
             vietspeech_dataset = load_dataset(
-                "NhutP/VietSpeech",
+                audio_repo_id,
                 token=hf_token,
                 cache_dir=getattr(args, "cache_dir", None),
                 split="train[:100%]",
             )
         except Exception as e:
-            print(f"Error loading VietSpeech dataset: {e}")
+            print(f"Error loading {audio_repo_id} dataset: {e}")
             raise
 
         # Disable audio decoding to avoid torchcodec dependency
@@ -173,6 +177,20 @@ class TranslatedSpeechDataset(PromptDataset):
         for chunk in audio_column.chunks:
             vs_paths.extend(chunk.field("path").to_pylist())
         path_to_vs_idx = {path: idx for idx, path in enumerate(vs_paths)}
+
+        # Filter translated dataset to match available audio paths
+        available_audio_ids = set(path_to_vs_idx.keys())
+        if len(translated_dataset) > len(available_audio_ids):
+            print(
+                f"Filtering translated text dataset ({len(translated_dataset)} samples) to match available audio IDs ({len(available_audio_ids)} samples)..."
+            )
+            translated_dataset = translated_dataset.filter(
+                lambda ex: ex.get("id") in available_audio_ids,
+                num_proc=num_proc,
+            )
+            print(
+                f"Matched {len(translated_dataset)} samples between text and audio datasets."
+            )
 
         # Determine the target field based on config
         tgt_col = args.tgt_column or args.tgt_lang or "english"

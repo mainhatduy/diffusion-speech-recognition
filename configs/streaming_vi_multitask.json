@@ -23,7 +23,10 @@
     "audio_fusion_strategy": "deep_cross_attn",
 
     "num_ergodic_layers": 6,
-    "num_ergodic_cross_attn_layers": 2,
+    "num_ergodic_cross_attn_layers": 6,
+    "num_queries": 32,
+    "num_resampler_layers": 2,
+    "resampler_nhead": 8,
     "ergodic_window_left": 64,
     "ergodic_window_right": 16,
     "num_position_layers": 6,

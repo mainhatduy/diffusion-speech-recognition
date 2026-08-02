@@ -91,6 +91,9 @@ class DiscreteDiffusionModelArguments:
     loss_weight_unsupported: float = field(default=0.3)
     use_confidence_calibration: bool = field(default=True)
     max_chunk_tokens: int = field(default=32)
+    num_queries: int = field(default=32, metadata={"help": "Number of Q-Former query tokens"})
+    num_resampler_layers: int = field(default=2, metadata={"help": "Number of Q-Former cross-attention layers"})
+    resampler_nhead: int = field(default=8, metadata={"help": "Number of attention heads in Q-Former"})
 
     def __post_init__(self):
         if self.prefix_lm:
@@ -328,6 +331,17 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                     use_downsample=True,
                 )
 
+                try:
+                    from .audio_query_resampler import AudioQueryResampler
+                except ImportError:
+                    from audio_query_resampler import AudioQueryResampler
+                self.audio_resampler = AudioQueryResampler(
+                    hidden_size=self.config.hidden_size,
+                    num_queries=getattr(args, "num_queries", 32),
+                    num_layers=getattr(args, "num_resampler_layers", 2),
+                    nhead=getattr(args, "resampler_nhead", 8),
+                )
+
                 # Build StreamingDiffusionBackbone for the streaming trainer
                 try:
                     from .streaming_backbone import StreamingBackboneConfig, StreamingDiffusionBackbone
@@ -543,6 +557,9 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                     audio_embeds = audio_outputs.last_hidden_state
                 audio_embeds = self.audio_projector(audio_embeds)
 
+            if audio_embeds is not None and hasattr(self, "audio_resampler"):
+                audio_embeds = self.audio_resampler(audio_embeds)
+
             logits, _ = self.backbone(
                 input_ids=input_ids,
                 audio_hidden=audio_embeds,
@@ -618,6 +635,16 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                     dtype=torch.int,
                     device=audio_embeds.device,
                 )
+
+        if audio_embeds is not None and hasattr(self, "audio_resampler"):
+            audio_embeds = self.audio_resampler(audio_embeds, audio_mask=audio_attn)
+            T_audio = audio_embeds.size(1)
+            audio_attn = torch.ones(
+                audio_embeds.size(0),
+                T_audio,
+                dtype=torch.int,
+                device=audio_embeds.device,
+            )
 
         if audio_fusion_strategy == "deep_cross_attn":
             # For Deep Fusion, do not concatenate audio embeds to embeddings.

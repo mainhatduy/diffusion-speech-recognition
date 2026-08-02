@@ -1278,6 +1278,10 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
             # Project through adapter
             batched_projected = raw_model.audio_adapter(batched_embeds) # [total_visible_chunks, tokens, D]
             
+            # Compress through Q-Former resampler
+            if hasattr(raw_model, "audio_resampler") and raw_model.audio_resampler is not None:
+                batched_projected = raw_model.audio_resampler(batched_projected)
+            
             # Split back to individual samples
             projected_splits = torch.split(batched_projected, [c for c in batch_chunk_counts if c > 0])
             

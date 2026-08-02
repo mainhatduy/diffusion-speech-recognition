@@ -88,6 +88,7 @@ class StreamingDiffusionEngine:
         backbone: torch.nn.Module,
         audio_adapter: torch.nn.Module,
         length_predictor: torch.nn.Module,
+        audio_resampler: torch.nn.Module | None = None,
     ) -> list[int]:
         """
         Process a new audio chunk.
@@ -97,6 +98,7 @@ class StreamingDiffusionEngine:
             backbone: StreamingDiffusionBackbone
             audio_adapter: StreamingAudioAdapter
             length_predictor: StreamingLengthPredictor
+            audio_resampler: Optional AudioQueryResampler (Q-Former)
 
         Returns:
             list of token IDs that were frozen (yielded as output)
@@ -105,6 +107,8 @@ class StreamingDiffusionEngine:
 
         # 1. Project audio through adapter
         audio_projected = audio_adapter(audio_embeds.unsqueeze(0))  # [1, tokens, D_text]
+        if audio_resampler is not None:
+            audio_projected = audio_resampler(audio_projected)  # [1, N=32, D_text]
         self.audio_buffer.append(audio_projected.squeeze(0))  # [tokens, D_text]
 
         # 2. Predict number of new text tokens for this chunk

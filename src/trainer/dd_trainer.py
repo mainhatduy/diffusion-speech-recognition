@@ -1304,8 +1304,12 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
         audio_embeds = torch.zeros(
             B, max_audio_len, raw_model.config.hidden_size, device=device
         )
+        audio_attention_mask = torch.zeros(
+            B, max_audio_len, dtype=torch.bool, device=device
+        )
         for b, a in enumerate(audio_embeds_list):
             audio_embeds[b, : a.shape[0]] = a
+            audio_attention_mask[b, : a.shape[0]] = True
 
         # === 2. DIFFUSION FORWARD (q_sample) ===
         # Sample timestep t ∈ {1, ..., T}
@@ -1325,13 +1329,18 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
         if task_token_ids is not None:
             task_tensor = task_token_ids.unsqueeze(1)  # [B, 1]
             model_input = torch.cat([task_tensor, x_t], dim=1)  # [B, 1 + text_len]
+            task_mask = torch.ones((B, 1), dtype=torch.bool, device=device)
+            attention_mask = torch.cat([task_mask, text_mask.bool()], dim=1)
         else:
             model_input = x_t
+            attention_mask = text_mask.bool()
 
         # === 4. FORWARD THROUGH BACKBONE ===
         logits, _ = raw_model.backbone(
             input_ids=model_input,
+            attention_mask=attention_mask,
             audio_hidden=audio_embeds,
+            audio_attention_mask=audio_attention_mask,
         )
 
         # Remove task token position from logits

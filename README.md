@@ -132,7 +132,7 @@ bash scripts/training/run_pipeline_end2end.sh --test
 ### ⚙️ Direct Custom Config Training
 To launch training directly with a specific JSON configuration file:
 ```bash
-bash scripts/training/speech_recognition_train.sh configs/vi_multitask_streaming_config.json
+bash scripts/training/speech_recognition_train.sh configs/streaming_vi_multitask.json
 ``` 
 
 ## Qualcomm Hardware Optimization and Deployment

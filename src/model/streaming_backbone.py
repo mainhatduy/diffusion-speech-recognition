@@ -222,12 +222,14 @@ class SlidingWindowAttention(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
         past_kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None,
         position_offset: int = 0,
     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Args:
             hidden_states: [B, S, D] — active tokens
+            attention_mask: [B, S] — mask for active tokens
             past_kv_cache: (K_cache, V_cache) each [B, H, cache_len, head_dim]
             position_offset: starting position for RoPE (for streaming continuity)
 
@@ -267,6 +269,13 @@ class SlidingWindowAttention(nn.Module):
         sw_mask = self._create_sliding_window_mask(S, total_key_len, cache_len, hidden_states.device)
         # Expand to [B, H, S, total_key_len] for SDPA
         attn_mask = sw_mask.unsqueeze(0).unsqueeze(0).expand(B, self.num_heads, -1, -1)
+
+        # Incorporate attention_mask (padding mask) for active tokens
+        if attention_mask is not None:
+            # attention_mask: [B, S] (True = valid, False = padding)
+            key_valid_mask = attention_mask.unsqueeze(1).unsqueeze(2).bool() # [B, 1, 1, S]
+            attn_mask = attn_mask.clone()
+            attn_mask[:, :, :, cache_len:] = attn_mask[:, :, :, cache_len:] & key_valid_mask
 
         # 5. Scaled Dot-Product Attention (flash attention when possible)
         attn_output = F.scaled_dot_product_attention(
@@ -345,15 +354,19 @@ class StreamingRobertaLayer(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
         past_kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None,
         audio_hidden: torch.Tensor | None = None,
+        audio_attention_mask: torch.Tensor | None = None,
         position_offset: int = 0,
     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Args:
             hidden_states: [B, S, D]
+            attention_mask: [B, S]
             past_kv_cache: (K, V) from frozen zone
             audio_hidden: [B, A, D] audio features for cross-attention
+            audio_attention_mask: [B, A] audio mask
             position_offset: RoPE position offset
 
         Returns:
@@ -362,16 +375,25 @@ class StreamingRobertaLayer(nn.Module):
         """
         # 1. Self-Attention + Residual + Norm (Post-LN like original RoBERTa)
         attn_out, new_kv = self.self_attn(
-            hidden_states, past_kv_cache=past_kv_cache, position_offset=position_offset
+            hidden_states,
+            attention_mask=attention_mask,
+            past_kv_cache=past_kv_cache,
+            position_offset=position_offset
         )
         hidden_states = self.self_attn_norm(hidden_states + self.self_attn_dropout(attn_out))
 
         # 2. Cross-Attention with Audio (Phase B only)
         if self.has_cross_attn and audio_hidden is not None:
+            key_padding_mask = None
+            if audio_attention_mask is not None:
+                # nn.MultiheadAttention expects True for padding (ignore) positions
+                key_padding_mask = ~audio_attention_mask.bool()
+
             cross_out, _ = self.cross_attn(
                 query=hidden_states,
                 key=audio_hidden,
                 value=audio_hidden,
+                key_padding_mask=key_padding_mask,
             )
             hidden_states = self.cross_attn_norm(
                 hidden_states + self.cross_attn_dropout(cross_out)
@@ -422,15 +444,19 @@ class StreamingDiffusionBackbone(nn.Module):
     def forward(
         self,
         input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
         past_kv_caches: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
         audio_hidden: torch.Tensor | None = None,
+        audio_attention_mask: torch.Tensor | None = None,
         position_offset: int = 0,
     ) -> tuple[torch.Tensor, list[tuple[torch.Tensor, torch.Tensor]]]:
         """
         Args:
             input_ids: [B, S] — token IDs for active zone
+            attention_mask: [B, S] — True for valid, False for padding
             past_kv_caches: list of (K, V) per layer — from frozen zone
             audio_hidden: [B, A, D] — projected audio features
+            audio_attention_mask: [B, A] — True for valid, False for padding
             position_offset: starting RoPE position for streaming continuity
 
         Returns:
@@ -450,8 +476,10 @@ class StreamingDiffusionBackbone(nn.Module):
             layer_cache = past_kv_caches[i] if past_kv_caches else None
             h, new_kv = layer(
                 h,
+                attention_mask=attention_mask,
                 past_kv_cache=layer_cache,
                 audio_hidden=audio_hidden,
+                audio_attention_mask=audio_attention_mask,
                 position_offset=position_offset,
             )
             new_kv_caches.append(new_kv)

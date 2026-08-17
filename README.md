@@ -91,9 +91,9 @@ We recommend using [uv](https://github.com/astral-sh/uv) to manage the Python vi
 
 ## Running Training
 
-The repository provides pre-configured shell scripts and datasets supporting two training modes: **Streaming Mode** (recommended to avoid disk/RAM bottlenecks) and **Local Precomputed Mode**.
+The repository provides pre-configured shell scripts and datasets supporting two data-loading modes: **Hugging Face Dataset Streaming** (recommended to avoid disk/RAM bottlenecks) and **Local Precomputed Dataset**. Dataset streaming is independent of the streaming model architecture.
 
-### 🌊 Method 1: Streaming Mode (Recommended)
+### 🌊 Method 1: Hugging Face Dataset Streaming (Recommended)
 
 Stream dataset shards directly from Hugging Face Hub during training without downloading the full dataset locally.
 
@@ -108,13 +108,13 @@ uv run python scripts/data-preprocess/merge_to_streaming.py \
 > [!TIP]
 > `--shards_per_commit 5` bundles 5 dataset shards per commit to avoid Hugging Face commit rate limit errors (128 commits/hour limit). If interrupted, the script automatically resumes from the last uploaded shard.
 
-#### Step 2: Launch Streaming Training
+#### Step 2: Launch Training with a Streamed Dataset
 ```bash
-# Run full streaming training pipeline
-CUDA_VISIBLE_DEVICES=0 bash scripts/training/run_pipeline_end2end.sh --streaming
+# Train while streaming the dataset from Hugging Face Hub
+CUDA_VISIBLE_DEVICES=0 bash scripts/training/run_pipeline_end2end.sh --stream-dataset-from-hub
 
-# Run quick 10-step validation test in streaming mode
-bash scripts/training/run_pipeline_end2end.sh --streaming --test
+# Run a quick 10-step validation while streaming the dataset from the Hub
+bash scripts/training/run_pipeline_end2end.sh --stream-dataset-from-hub --test
 ```
 
 ### 💾 Method 2: Local Precomputed Dataset Mode

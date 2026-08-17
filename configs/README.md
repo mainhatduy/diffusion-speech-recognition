@@ -62,10 +62,11 @@ Data arguments control dataset selection, pre-processing, streaming settings, RA
 | `packing` | `bool` | `false` | Whether to pack multiple short sequences into a single max-length input batch item. |
 | `task_tokens` | `list[str]` | `["<vi_en>", "<vi_zh>", "<vi_ko>"]` | Special task control tokens prepended to text prompts for multi-task speech translation. |
 | `precomputed_data_dir` | `str` | `""` | Path to local directory containing pre-computed audio embeddings and token IDs. Activates `PrecomputedMultiTaskDataset` when present. |
-| `streaming` | `bool` | `false` | Enable streaming dataset mode directly from Hugging Face Hub without local dataset downloads. |
+| `stream_dataset_from_hub` | `bool` | `false` | Stream the dataset directly from Hugging Face Hub without downloading it locally. This does not enable the streaming model architecture. |
 | `streaming_repo_id` | `str` | `"aiai-laboratory/vietspeech-train-streaming"` | Hugging Face Hub repository ID containing the streaming Parquet dataset shards. |
 | `streaming_buffer_size` | `int` | `1000` | Shuffling buffer size for HF streaming dataset. |
 | `val_streaming_size` | `int` | `500` | Fixed number of validation samples drawn when evaluating in streaming mode. |
+| `enable_streaming_architecture` | `bool` | `false` | Enable chunk augmentation, the streaming backbone, and the streaming trainer. This is independent of how the dataset is loaded. |
 | `use_ram_cache` | `bool` | `false` | Enable caching raw audio bytes in system RAM during local dataset loading. |
 | `ram_free_threshold_ratio` | `float` | `0.30` | Minimum free RAM ratio required before allowing audio preloading into RAM. |
 | `hf_token` | `str` | `None` | Hugging Face token passed explicitly to dataset loading calls. |
@@ -76,6 +77,8 @@ Data arguments control dataset selection, pre-processing, streaming settings, RA
 | `remove_wiki` | `bool` | `false` | Remove Wikipedia metadata comments from raw inputs. |
 | `remove_bracketed` | `bool` | `false` | Remove target sentences that start and end with bracketed punctuation. |
 | `dereify` | `bool` | `false` | Dereify AMR graphs (legacy). |
+
+`stream_dataset_from_hub` and `enable_streaming_architecture` are independent. The first changes only how data is loaded; the second changes augmentation, model backbone, and trainer behavior.
 
 ---
 
@@ -279,8 +282,8 @@ CUDA_VISIBLE_DEVICES=0 bash scripts/training/run_pipeline_end2end.sh [FLAGS]
 
 | Flag | Mode Triggered | Config Selected | Description |
 | :--- | :--- | :--- | :--- |
-| `--streaming` | Streaming Mode | `configs/vi_multitask_streaming_config.json` | Runs full training directly streaming shards from Hugging Face Hub. |
-| `--streaming --test` | Streaming Test | `configs/test_vi_multitask_streaming_config.json` | Runs a quick 10-step streaming validation test. |
+| `--stream-dataset-from-hub` | Hub Dataset Streaming | `configs/vi_multitask_streaming_config.json` | Runs full training while streaming shards directly from Hugging Face Hub. |
+| `--stream-dataset-from-hub --test` | Hub Dataset Streaming Test | `configs/test_vi_multitask_streaming_config.json` | Runs a quick 10-step validation while streaming the dataset from the Hub. |
 | *(None)* | Local Precomputed | `configs/vi_multitask_precomputed_config.json` | Downloads precomputed dataset if missing and runs local training. |
 | `--test` | Local Test Mode | `configs/test_vi_multitask_precomputed_config.json` | Downloads lightweight 1-shard subset and runs 10-step validation. |
 
@@ -300,7 +303,7 @@ Below is a complete, production-ready configuration file (`configs/streaming_vi_
     ],
     "max_length": 64,
     "packing": false,
-    "streaming": true,
+    "stream_dataset_from_hub": false,
     "streaming_repo_id": "aiai-laboratory/vietspeech-train-streaming",
     "streaming_buffer_size": 1000,
     "val_streaming_size": 500,
@@ -315,6 +318,7 @@ Below is a complete, production-ready configuration file (`configs/streaming_vi_
     "vocab_pad_to_multiple": 1,
     "lora": false,
     "audio_fusion_strategy": "deep_cross_attn",
+    "enable_streaming_architecture": true,
 
     "output_dir": "outputs/streaming_vi_multitask",
     "per_device_train_batch_size": 32,

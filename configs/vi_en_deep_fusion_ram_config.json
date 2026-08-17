@@ -9,7 +9,7 @@
     "max_length": 64,
     "packing": false,
     "precomputed_data_dir": "",
-    "streaming": false,
+    "stream_dataset_from_hub": false,
     "use_ram_cache": true,
     "ram_free_threshold_ratio": 0.30,
     "batch_by_tokens": false,

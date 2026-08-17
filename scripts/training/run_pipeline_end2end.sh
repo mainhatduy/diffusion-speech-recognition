@@ -2,11 +2,11 @@
 # End-to-end pipeline to train model (supports precomputed local dataset & streaming from HF Hub).
 #
 # Usage:
-#   # Run streaming training directly from Hugging Face Hub:
-#   bash scripts/training/run_pipeline_end2end.sh --streaming
+#   # Train while streaming the dataset directly from Hugging Face Hub:
+#   bash scripts/training/run_pipeline_end2end.sh --stream-dataset-from-hub
 #
-#   # Run test streaming mode (10 steps test):
-#   bash scripts/training/run_pipeline_end2end.sh --streaming --test
+#   # Run a 10-step test while streaming the dataset from the Hub:
+#   bash scripts/training/run_pipeline_end2end.sh --stream-dataset-from-hub --test
 #
 #   # Run local precomputed training (downloads full dataset if precomputed_data does not exist):
 #   bash scripts/training/run_pipeline_end2end.sh
@@ -26,7 +26,7 @@ BACKUP_DIR="${TARGET_DIR}_backup"
 
 # Default modes
 TEST_MODE=false
-STREAMING_MODE=false
+STREAM_DATASET_FROM_HUB=false
 
 # Parse arguments
 for arg in "$@"; do
@@ -34,18 +34,19 @@ for arg in "$@"; do
         --test)
             TEST_MODE=true
             ;;
-        --streaming)
-            STREAMING_MODE=true
+        --stream-dataset-from-hub)
+            STREAM_DATASET_FROM_HUB=true
             ;;
         *)
-            # Unknown option
+            echo "Unknown option: $arg" >&2
+            exit 2
             ;;
     esac
 done
 
 # Trap exit/interrupt to ensure we restore the backup directory if it exists
 cleanup() {
-    if [ "$TEST_MODE" = true ] && [ "$STREAMING_MODE" = false ] && [ -d "$BACKUP_DIR" ]; then
+    if [ "$TEST_MODE" = true ] && [ "$STREAM_DATASET_FROM_HUB" = false ] && [ -d "$BACKUP_DIR" ]; then
         echo ""
         echo "============================================================"
         echo "  Cleaning up and restoring original precomputed data..."
@@ -61,18 +62,18 @@ trap cleanup EXIT INT TERM
 
 echo "============================================================"
 echo "  Starting End-to-End Speech Recognition/Translation Pipeline"
-echo "  Streaming Mode: $STREAMING_MODE"
-echo "  Test Mode     : $TEST_MODE"
-echo "  GPUs          : $DEVICE_VISIBLE"
+echo "  Stream Dataset from Hub: $STREAM_DATASET_FROM_HUB"
+echo "  Test Mode             : $TEST_MODE"
+echo "  GPUs                  : $DEVICE_VISIBLE"
 echo "============================================================"
 
-if [ "$STREAMING_MODE" = true ]; then
+if [ "$STREAM_DATASET_FROM_HUB" = true ]; then
     if [ "$TEST_MODE" = true ]; then
         CONFIG_FILE="configs/test_vi_multitask_streaming_config.json"
-        echo "[Streaming Test Mode] Starting model training validation (10 steps)..."
+        echo "[Hub Dataset Streaming Test] Starting model training validation (10 steps)..."
     else
         CONFIG_FILE="configs/vi_multitask_streaming_config.json"
-        echo "[Streaming Mode] Starting full model streaming training..."
+        echo "[Hub Dataset Streaming] Starting full model training..."
     fi
 
     if [ ! -f "$CONFIG_FILE" ]; then

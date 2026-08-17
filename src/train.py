@@ -48,6 +48,22 @@ def parse_args():
     # Check if a config file is provided as the first argument
     if len(sys.argv) >= 2 and sys.argv[1].endswith(".json"):
         config_file = sys.argv[1]
+        with open(config_file, "r") as f:
+            config = json.load(f)
+        renamed_arguments = {
+            old_name: new_name
+            for old_name, new_name in {
+                "streaming": "stream_dataset_from_hub",
+                "streaming_augmentation": "enable_streaming_architecture",
+            }.items()
+            if old_name in config
+        }
+        if renamed_arguments:
+            migrations = ", ".join(
+                f"'{old_name}' -> '{new_name}'"
+                for old_name, new_name in renamed_arguments.items()
+            )
+            raise ValueError(f"Renamed configuration argument(s): {migrations}")
         data_args, model_args, train_args, gen_args = parser.parse_json_file(
             json_file=config_file, allow_extra_keys=True
         )
@@ -113,8 +129,10 @@ def main():
     model_args.dataset_type = data_args.dataset_type
     if hasattr(data_args, "audio_encoder_name"):
         model_args.audio_encoder_name = data_args.audio_encoder_name
-    if hasattr(data_args, "streaming_augmentation"):
-        model_args.streaming_augmentation = data_args.streaming_augmentation
+    if hasattr(data_args, "enable_streaming_architecture"):
+        model_args.enable_streaming_architecture = (
+            data_args.enable_streaming_architecture
+        )
     model, tokenizer = load_model_tokenizer(model_args, do_train=True)
 
     # load datasets
@@ -137,7 +155,7 @@ def main():
         metric = MergeRouge()
     elif train_args.eval_metric == "wer":
         metric = MergeWER()
-    if getattr(data_args, "streaming_augmentation", False):
+    if getattr(data_args, "enable_streaming_architecture", False):
         Trainer = StreamingDiffusionTrainer
     else:
         Trainer = (

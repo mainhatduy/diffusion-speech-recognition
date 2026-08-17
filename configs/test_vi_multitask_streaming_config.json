@@ -10,7 +10,7 @@
     "max_length": 128,
     "packing": false,
     "precomputed_data_dir": "",
-    "streaming": true,
+    "stream_dataset_from_hub": true,
     "streaming_repo_id": "aiai-laboratory/vietspeech-train-streaming",
     "streaming_buffer_size": 100,
     "val_streaming_size": 20,

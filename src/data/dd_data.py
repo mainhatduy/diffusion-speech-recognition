@@ -74,7 +74,7 @@ class DiscreteDiffusionDataArguments:
             "help": "Path to pre-computed audio embeddings & token IDs. If set, uses fast PrecomputedMultiTaskDataset."
         },
     )
-    streaming: bool = field(
+    stream_dataset_from_hub: bool = field(
         default=False,
         metadata={
             "help": "Stream data from Hugging Face Hub instead of downloading/loading locally."
@@ -100,9 +100,11 @@ class DiscreteDiffusionDataArguments:
         default=0.30,
         metadata={"help": "Minimum required free RAM ratio after preloading audio bytes into RAM."},
     )
-    streaming_augmentation: bool = field(
+    enable_streaming_architecture: bool = field(
         default=False,
-        metadata={"help": "Whether to use StreamingAugmentedDataset during training."}
+        metadata={
+            "help": "Enable chunk augmentation, the streaming backbone, and the streaming trainer."
+        },
     )
     curriculum_training: bool = field(
         default=False,
@@ -165,8 +167,8 @@ def load_data(
                 "audio_encoder_name",
                 "UsefulSensors/moonshine-streaming-medium",
             )
-        # Use streaming dataset if enabled
-        if getattr(data_args, "streaming", False):
+        # Stream the dataset from Hugging Face Hub if enabled.
+        if getattr(data_args, "stream_dataset_from_hub", False):
             print(
                 f"[load_data] Using StreamingPrecomputedMultiTaskDataset from HF repo '{data_args.streaming_repo_id}'"
             )
@@ -230,12 +232,14 @@ def load_data(
             f"Unknown or unsupported dataset type: {data_args.dataset_type}"
         )
 
-    # Apply Streaming Augmentation if enabled
-    use_streaming_aug = getattr(data_args, "streaming_augmentation", False)
-    
-    if use_streaming_aug and datasets[0] is not None:
+    # Apply chunk augmentation when the streaming architecture is enabled.
+    enable_streaming_architecture = getattr(
+        data_args, "enable_streaming_architecture", False
+    )
+
+    if enable_streaming_architecture and datasets[0] is not None:
         from .streaming_augmented import StreamingAugmentedDataset
-        
+
         datasets = (
             StreamingAugmentedDataset(
                 base_dataset=datasets[0],
@@ -243,13 +247,14 @@ def load_data(
                 chunk_duration=getattr(data_args, "audio_chunk_duration", 2.0),
                 overlap_duration=getattr(data_args, "audio_overlap_duration", 0.5),
             ),
-            datasets[1], # Validation typically uses full audio
-            datasets[2], # Test typically uses full audio
+            datasets[1],  # Validation typically uses full audio
+            datasets[2],  # Test typically uses full audio
         )
 
     # Build collator
-    if use_streaming_aug:
+    if enable_streaming_architecture:
         from .collator import StreamingCollator
+
         collator = StreamingCollator(pad_token_id=tokenizer.pad_token_id)
     else:
         collator = DiscreteDiffusionDataCollator(

@@ -8,7 +8,7 @@
     "max_length": 64,
     "packing": false,
     "precomputed_data_dir": "",
-    "streaming": false,
+    "stream_dataset_from_hub": false,
     "use_ram_cache": true,
     "ram_free_threshold_ratio": 0.30,
     "batch_by_tokens": false,
@@ -101,7 +101,7 @@
     "temperature": 1.0,
 
     "curriculum_training": true,
-    "streaming_augmentation": true,
+    "enable_streaming_architecture": true,
 
     "push_to_hub": false,
     "hub_model_id": "aiai-laboratory/streaming-diffusion-vi-multitask"

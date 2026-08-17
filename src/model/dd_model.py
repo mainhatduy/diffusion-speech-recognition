@@ -63,11 +63,13 @@ class DiscreteDiffusionModelArguments:
         default="prefix",
         metadata={"help": "fusion strategy: 'prefix' or 'deep_cross_attn'"},
     )
-    # Streaming backbone config fields (parsed from JSON, used to build StreamingDiffusionBackbone)
-    streaming_augmentation: bool = field(
-        default=False, init=False,
+    # Internal switch copied from data_args in train.py.
+    enable_streaming_architecture: bool = field(
+        default=False,
+        init=False,
         metadata={"help": "Set from data_args in train.py"},
     )
+    # Streaming backbone config fields (parsed from JSON)
     num_ergodic_layers: int = field(
         default=6, metadata={"help": "Number of ergodic (position-free) layers"},
     )
@@ -319,7 +321,7 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             self.audio_projector = nn.Linear(audio_hidden_size, self.config.hidden_size)
 
             # Streaming audio adapter (richer than simple projector: adds position embeddings + downsampling)
-            if getattr(args, "streaming_augmentation", False):
+            if getattr(args, "enable_streaming_architecture", False):
                 try:
                     from .streaming_audio_adapter import StreamingAudioAdapter
                 except ImportError:
@@ -408,8 +410,8 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             )
             self.model.roberta.encoder = new_encoder
 
-        # Add streaming length predictor if streaming augmentation is enabled
-        if getattr(args, "streaming_augmentation", False):
+        # Add the streaming length predictor when the streaming architecture is enabled.
+        if getattr(args, "enable_streaming_architecture", False):
             try:
                 from .streaming_length_predictor import StreamingLengthPredictor
             except ImportError:

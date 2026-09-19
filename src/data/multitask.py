@@ -1,8 +1,8 @@
 import logging
-import os
 import multiprocessing as mp
 import os
 from collections import OrderedDict
+from typing import ClassVar
 
 import numpy as np
 import torch
@@ -36,7 +36,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
     """
 
     # Mapping from full task token string to dataset column name
-    TASK_TO_FIELD: dict = {
+    TASK_TO_FIELD: ClassVar[dict[str, str]] = {
         "<vi_en>": "english",
         "<vi_zh>": "chinese",
         "<vi_ko>": "korean",
@@ -252,7 +252,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
 
         if getattr(args, "use_ram_cache", False):
             threshold_ratio = getattr(args, "ram_free_threshold_ratio", 0.30)
-            is_approved, est_gb, proj_ratio, total_examples = (
+            is_approved, est_gb, _proj_ratio, _total_examples = (
                 check_ram_capacity_for_dataset(
                     audio_repo_id,
                     hf_token=hf_token,
@@ -263,17 +263,24 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             if is_approved:
                 try:
                     import shutil
-                    import pyarrow.parquet as pq
-                    from tqdm import tqdm
-                    from huggingface_hub import HfFileSystem, hf_hub_download
                     from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                    import pyarrow.parquet as pq
+                    from huggingface_hub import HfFileSystem, hf_hub_download
+                    from tqdm import tqdm
 
                     ram_store = {}
                     fs = HfFileSystem(token=hf_token)
                     files = fs.ls(f"datasets/{audio_repo_id}/data", detail=False)
-                    parquet_files = [f.split(f"{audio_repo_id}/")[-1] for f in files if f.endswith(".parquet")]
+                    parquet_files = [
+                        f.split(f"{audio_repo_id}/")[-1]
+                        for f in files
+                        if f.endswith(".parquet")
+                    ]
 
-                    print(f"\n[RAM Cache] Bypassing slow streaming... Downloading {len(parquet_files)} parquet files to RAM disk (/dev/shm) in parallel!")
+                    print(
+                        f"\n[RAM Cache] Bypassing slow streaming... Downloading {len(parquet_files)} parquet files to RAM disk (/dev/shm) in parallel!"
+                    )
 
                     def process_parquet(filename):
                         # Use RAM disk to store temp files to maximize download speed and prevent SSD usage
@@ -293,24 +300,39 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
                             data = table.to_pylist()
                             for row in data:
                                 audio_info = row.get("audio", {})
-                                if audio_info and "path" in audio_info and "bytes" in audio_info:
-                                    local_store[audio_info["path"]] = audio_info["bytes"]
+                                if (
+                                    audio_info
+                                    and "path" in audio_info
+                                    and "bytes" in audio_info
+                                ):
+                                    local_store[audio_info["path"]] = audio_info[
+                                        "bytes"
+                                    ]
                         finally:
                             # Safely delete to free up RAM disk
                             shutil.rmtree(ram_cache_dir, ignore_errors=True)
                         return local_store
 
                     with ThreadPoolExecutor(max_workers=8) as executor:
-                        futures = {executor.submit(process_parquet, pf): pf for pf in parquet_files}
-                        for future in tqdm(as_completed(futures), total=len(parquet_files), desc="Fast Parallel Caching (Parquet Files)"):
+                        futures = {
+                            executor.submit(process_parquet, pf): pf
+                            for pf in parquet_files
+                        }
+                        for future in tqdm(
+                            as_completed(futures),
+                            total=len(parquet_files),
+                            desc="Fast Parallel Caching (Parquet Files)",
+                        ):
                             ram_store.update(future.result())
 
                     ram_audio_store = ram_store
                     print(
                         f"[RAM Cache] SUCCESS: Preloaded {len(ram_audio_store)} raw audio samples ({est_gb:.2f} GB) directly into RAM!"
                     )
-                except Exception as e:
-                    print(f"[RAM Cache] Warning: Failed to stream into RAM: {e}. Falling back to disk cache.")
+                except Exception as e:  # noqa: BLE001
+                    print(
+                        f"[RAM Cache] Warning: Failed to stream into RAM: {e}. Falling back to disk cache."
+                    )
                     ram_audio_store = None
 
         if ram_audio_store is None:
@@ -338,7 +360,9 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             for chunk in audio_column.chunks:
                 vs_paths.extend(chunk.field("path").to_pylist())
             path_to_vs_idx = {path: idx for idx, path in enumerate(vs_paths)}
-            print(f"[MultiTask] Audio dataset index built: {len(path_to_vs_idx)} entries")
+            print(
+                f"[MultiTask] Audio dataset index built: {len(path_to_vs_idx)} entries"
+            )
 
         # 5.5. Filter translated dataset to only keep samples with matching audio
         available_audio_ids = (

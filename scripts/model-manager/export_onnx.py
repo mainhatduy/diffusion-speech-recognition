@@ -170,7 +170,7 @@ def main():
             },
         )
         print(f"Successfully exported diffusion backbone to: {backbone_path}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Failed to export diffusion backbone: {e}")
         import traceback
 
@@ -207,7 +207,7 @@ def main():
                 },
             )
             print(f"Successfully exported audio encoder to: {audio_encoder_path}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Failed to export audio encoder: {e}")
             import traceback
 
@@ -247,7 +247,7 @@ def main():
                 print("Verification PASSED!")
             else:
                 print("Verification WARNING: High difference, please check precision.")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"ONNX Runtime verification failed: {e}")
             import traceback
 
@@ -275,7 +275,7 @@ def main():
                 print("Verification PASSED!")
             else:
                 print("Verification WARNING: High difference, please check precision.")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"ONNX Runtime verification failed for Audio Encoder: {e}")
 
 

@@ -70,7 +70,7 @@ def get_model_and_tokenizer():
             from safetensors.torch import load_file
 
             state_dict = load_file(weights_path, device="cpu")
-        except Exception:
+        except Exception:  # noqa: BLE001
             weights_path = hf_hub_download(
                 repo_id=repo_id, filename="pytorch_model.bin"
             )
@@ -109,7 +109,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
         waveform, sr = sf.read(path, dtype="float32", always_2d=False)
         if waveform.ndim == 2:
             waveform = waveform.mean(axis=1)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
 
     if waveform is None:
@@ -117,7 +117,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
             import librosa
 
             waveform, sr = librosa.load(path, sr=None, mono=True, dtype=np.float32)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
     if waveform is None:
@@ -129,7 +129,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
             samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
             waveform = samples / (2 ** (audio.sample_width * 8 - 1))
             sr = target_sr
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
     if waveform is None:
@@ -393,7 +393,7 @@ def run_speech_translation(audio_path, max_iterations, strategy, slow_mode_enabl
                 if slow_mode_enabled:
                     time.sleep(0.2)
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         import traceback
 
         err_msg = (

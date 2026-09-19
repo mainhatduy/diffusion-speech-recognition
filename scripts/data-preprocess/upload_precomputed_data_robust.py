@@ -23,7 +23,7 @@ def main():
     try:
         api.create_repo(repo_id=repo_id, repo_type="dataset", exist_ok=True)
         print("Dataset repository verified/created.")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Warning during repository creation: {e}")
         print("Attempting to proceed...")
 
@@ -32,7 +32,7 @@ def main():
     try:
         existing_files = set(api.list_repo_files(repo_id=repo_id, repo_type="dataset"))
         print(f"Found {len(existing_files)} files already in the repository.")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Error fetching repo files: {e}")
         existing_files = set()
 
@@ -87,7 +87,7 @@ def main():
                 elapsed = time.time() - start_time
                 print(f"Successfully uploaded {rel_path} in {elapsed:.1f}s.")
                 break
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(
                     f"Attempt {attempt}/{max_retries} failed to upload {rel_path}: {e}"
                 )

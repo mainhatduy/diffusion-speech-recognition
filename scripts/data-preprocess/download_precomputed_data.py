@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Download precomputed audio embeddings and tokenized text from Hugging Face.
 
 Usage:
@@ -98,7 +97,7 @@ def main():
             max_workers=8,
         )
         print("\nDownload completed successfully!")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"\nError during download: {e}", file=sys.stderr)
         sys.exit(1)
 

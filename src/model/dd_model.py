@@ -1,4 +1,5 @@
 import math
+import warnings
 from collections import namedtuple
 from dataclasses import dataclass, field
 
@@ -71,15 +72,18 @@ class DiscreteDiffusionModelArguments:
     )
     # Streaming backbone config fields (parsed from JSON)
     num_ergodic_layers: int = field(
-        default=6, metadata={"help": "Number of ergodic (position-free) layers"},
+        default=6,
+        metadata={"help": "Number of ergodic (position-free) layers"},
     )
     num_ergodic_cross_attn_layers: int = field(
-        default=0, metadata={"help": "Number of last ergodic layers with cross-attention"},
+        default=0,
+        metadata={"help": "Number of last ergodic layers with cross-attention"},
     )
     ergodic_window_left: int = field(default=64)
     ergodic_window_right: int = field(default=16)
     num_position_layers: int = field(
-        default=6, metadata={"help": "Number of position-aware (RoPE) layers"},
+        default=6,
+        metadata={"help": "Number of position-aware (RoPE) layers"},
     )
     position_window_left: int = field(default=128)
     position_window_right: int = field(default=32)
@@ -93,14 +97,21 @@ class DiscreteDiffusionModelArguments:
     loss_weight_unsupported: float = field(default=0.3)
     use_confidence_calibration: bool = field(default=True)
     max_chunk_tokens: int = field(default=32)
-    num_queries: int = field(default=32, metadata={"help": "Number of Q-Former query tokens"})
-    num_resampler_layers: int = field(default=2, metadata={"help": "Number of Q-Former cross-attention layers"})
-    resampler_nhead: int = field(default=8, metadata={"help": "Number of attention heads in Q-Former"})
+    num_queries: int = field(
+        default=32, metadata={"help": "Number of Q-Former query tokens"}
+    )
+    num_resampler_layers: int = field(
+        default=2, metadata={"help": "Number of Q-Former cross-attention layers"}
+    )
+    resampler_nhead: int = field(
+        default=8, metadata={"help": "Number of attention heads in Q-Former"}
+    )
 
     def __post_init__(self):
         if self.prefix_lm:
-            Warning(
-                'option prefix_lm is deprecated, use attention_strategy="prefix_lm" instead.'
+            warnings.warn(
+                'option prefix_lm is deprecated, use attention_strategy="prefix_lm" instead.',
+                stacklevel=2,
             )
             self.attention_strategy = "prefix_lm"
 
@@ -346,17 +357,26 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
 
                 # Build StreamingDiffusionBackbone for the streaming trainer
                 try:
-                    from .streaming_backbone import StreamingBackboneConfig, StreamingDiffusionBackbone
+                    from .streaming_backbone import (
+                        StreamingBackboneConfig,
+                        StreamingDiffusionBackbone,
+                    )
                 except ImportError:
-                    from streaming_backbone import StreamingBackboneConfig, StreamingDiffusionBackbone
+                    from streaming_backbone import (
+                        StreamingBackboneConfig,
+                        StreamingDiffusionBackbone,
+                    )
                 backbone_config = StreamingBackboneConfig(
                     backbone=getattr(args, "pretrained", "FacebookAI/xlm-roberta-base"),
-                    num_hidden_layers=getattr(args, "num_ergodic_layers", 6) + getattr(args, "num_position_layers", 6),
+                    num_hidden_layers=getattr(args, "num_ergodic_layers", 6)
+                    + getattr(args, "num_position_layers", 6),
                     hidden_size=self.config.hidden_size,
                     num_attention_heads=self.config.num_attention_heads,
                     intermediate_size=self.config.intermediate_size,
                     num_ergodic_layers=getattr(args, "num_ergodic_layers", 6),
-                    num_ergodic_cross_attn_layers=getattr(args, "num_ergodic_cross_attn_layers", 0),
+                    num_ergodic_cross_attn_layers=getattr(
+                        args, "num_ergodic_cross_attn_layers", 0
+                    ),
                     ergodic_window_left=getattr(args, "ergodic_window_left", 64),
                     ergodic_window_right=getattr(args, "ergodic_window_right", 16),
                     num_position_layers=getattr(args, "num_position_layers", 6),
@@ -373,10 +393,16 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                 )
 
                 # Store streaming config attributes for trainer access
-                self.num_diffusion_timesteps = getattr(args, "num_diffusion_timesteps", 50)
+                self.num_diffusion_timesteps = getattr(
+                    args, "num_diffusion_timesteps", 50
+                )
                 self.loss_weight_supported = getattr(args, "loss_weight_supported", 2.0)
-                self.loss_weight_unsupported = getattr(args, "loss_weight_unsupported", 0.3)
-                self.use_confidence_calibration = getattr(args, "use_confidence_calibration", False)
+                self.loss_weight_unsupported = getattr(
+                    args, "loss_weight_unsupported", 0.3
+                )
+                self.use_confidence_calibration = getattr(
+                    args, "use_confidence_calibration", False
+                )
 
         # length predictor
         self.length_trm = nn.TransformerEncoder(
@@ -419,7 +445,7 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             self.streaming_length_predictor = StreamingLengthPredictor(
                 hidden_size=self.config.hidden_size,
                 vocab_size=self.config.vocab_size,
-                max_output_tokens=getattr(args, "max_chunk_tokens", 32)
+                max_output_tokens=getattr(args, "max_chunk_tokens", 32),
             )
             # Free unused original model to save VRAM and avoid unused parameters in optimizer
             del self.model
@@ -442,7 +468,9 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             # Resize lm_head Linear too
             old_lm_head = self.backbone.lm_head
             new_lm_head = nn.Linear(embedding_dim, new_num_tokens, bias=False)
-            new_lm_head.weight.data[:old_vocab_size] = old_lm_head.weight.data[:old_vocab_size]
+            new_lm_head.weight.data[:old_vocab_size] = old_lm_head.weight.data[
+                :old_vocab_size
+            ]
             self.backbone.lm_head = new_lm_head
             # Re-tie weights
             self.backbone.lm_head.weight = self.backbone.word_embeddings.weight
@@ -462,9 +490,7 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         subdict2modeldict = {}
         for i in range(len(dictionary)):
             token = dictionary[i]
-            subdict2modeldict[i] = (
-                vocab[token] if token in vocab else tokenizer.unk_token_id
-            )
+            subdict2modeldict[i] = vocab.get(token, tokenizer.unk_token_id)
         ori_embedding_weight = self.model.roberta.embeddings.word_embeddings.weight
         ori_out_linaer_weight = self.model.lm_head.decoder.weight
         ori_out_linear_bias = self.model.lm_head.decoder.bias
@@ -518,9 +544,7 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             _feature, src_key_padding_mask=(1 - attention_mask).bool()
         )
         if not (~feature.isnan()).all():
-            import ipdb
-
-            ipdb.set_trace()
+            raise RuntimeError("NaN detected in length_trm features")
         length = attention_mask.sum(dim=-1)
         pooled_feature = (
             feature.masked_fill((attention_mask == 0)[:, :, None], 0).float().sum(1)

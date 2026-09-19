@@ -183,7 +183,7 @@ def main():
             sys.exit(1)
         print("[+] Compilation check passed (SUCCESS)!")
         backbone_target_model = backbone_job.get_target_model()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[!] Compilation check failed: {e}")
         sys.exit(1)
 
@@ -239,7 +239,7 @@ def main():
         # Download and extract logits
         output_data = inf_job.download_output_data()
         if isinstance(output_data, dict):
-            logits = list(output_data.values())[0]
+            logits = next(iter(output_data.values()))
             if isinstance(logits, list):
                 logits = logits[0]
         else:

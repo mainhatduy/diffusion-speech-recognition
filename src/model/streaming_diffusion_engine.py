@@ -18,13 +18,8 @@ Key operations:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import torch
 import torch.nn.functional as F
-
-if TYPE_CHECKING:
-    from transformers import PreTrainedTokenizer
 
 
 class StreamingDiffusionEngine:
@@ -106,7 +101,9 @@ class StreamingDiffusionEngine:
         self.total_audio_chunks_received += 1
 
         # 1. Project audio through adapter
-        audio_projected = audio_adapter(audio_embeds.unsqueeze(0))  # [1, tokens, D_text]
+        audio_projected = audio_adapter(
+            audio_embeds.unsqueeze(0)
+        )  # [1, tokens, D_text]
         if audio_resampler is not None:
             audio_projected = audio_resampler(audio_projected)  # [1, N=32, D_text]
         self.audio_buffer.append(audio_projected.squeeze(0))  # [tokens, D_text]
@@ -114,7 +111,9 @@ class StreamingDiffusionEngine:
         # 2. Predict number of new text tokens for this chunk
         context_ids = self.frozen_tokens[-32:] if self.frozen_tokens else None
         if context_ids is not None:
-            ctx_tensor = torch.tensor([context_ids], dtype=torch.long, device=self.device)
+            ctx_tensor = torch.tensor(
+                [context_ids], dtype=torch.long, device=self.device
+            )
         else:
             ctx_tensor = None
         num_new_tokens = length_predictor.predict_chunk(audio_projected, ctx_tensor)
@@ -131,7 +130,7 @@ class StreamingDiffusionEngine:
             force_frozen_tokens = self.active_tokens[:overflow]
             self.active_tokens = self.active_tokens[overflow:]
             self.active_confidence = self.active_confidence[overflow:]
-            
+
             # Compute KV cache and move to frozen zone
             force_frozen = self._force_freeze_tokens(force_frozen_tokens, backbone)
 
@@ -207,11 +206,13 @@ class StreamingDiffusionEngine:
             self.active_confidence = confidence
 
     @torch.no_grad()
-    def _force_freeze_tokens(self, tokens: list[int], backbone: torch.nn.Module) -> list[int]:
+    def _force_freeze_tokens(
+        self, tokens: list[int], backbone: torch.nn.Module
+    ) -> list[int]:
         """
         Force-freeze tokens and move them to the frozen zone.
         Computes KV cache for these tokens and updates the state.
-        
+
         Args:
             tokens: list of token IDs to freeze
             backbone: StreamingDiffusionBackbone
@@ -220,16 +221,14 @@ class StreamingDiffusionEngine:
         """
         if not tokens:
             return []
-            
-        frozen_ids = torch.tensor(
-            [tokens], dtype=torch.long, device=self.device
-        )
+
+        frozen_ids = torch.tensor([tokens], dtype=torch.long, device=self.device)
         _, new_kv = backbone(
             input_ids=frozen_ids,
             past_kv_caches=self.frozen_kv_caches,
             audio_hidden=None,  # Frozen tokens don't need audio anymore
         )
-        
+
         # Merge into frozen KV cache
         if self.frozen_kv_caches is None:
             self.frozen_kv_caches = new_kv
@@ -239,14 +238,12 @@ class StreamingDiffusionEngine:
                     torch.cat([old_k, new_k], dim=2),
                     torch.cat([old_v, new_v], dim=2),
                 )
-                for (old_k, old_v), (new_k, new_v) in zip(
-                    self.frozen_kv_caches, new_kv
-                )
+                for (old_k, old_v), (new_k, new_v) in zip(self.frozen_kv_caches, new_kv)
             ]
-            
+
         # Update frozen tokens list
         self.frozen_tokens.extend(tokens)
-        
+
         # Evict oldest tokens if cache exceeds max size
         max_cache = self.frozen_cache_size
         if len(self.frozen_tokens) > max_cache:
@@ -310,9 +307,7 @@ class StreamingDiffusionEngine:
                     torch.cat([old_k, new_k], dim=2),
                     torch.cat([old_v, new_v], dim=2),
                 )
-                for (old_k, old_v), (new_k, new_v) in zip(
-                    self.frozen_kv_caches, new_kv
-                )
+                for (old_k, old_v), (new_k, new_v) in zip(self.frozen_kv_caches, new_kv)
             ]
 
         # 4. Update frozen tokens list

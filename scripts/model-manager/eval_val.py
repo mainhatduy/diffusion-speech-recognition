@@ -132,7 +132,7 @@ def main():
         from safetensors.torch import load_file
 
         state_dict = load_file(weights_path, device="cpu")
-    except Exception:
+    except Exception:  # noqa: BLE001
         weights_path = hf_hub_download(
             repo_id=args.repo_id, filename="pytorch_model.bin"
         )
@@ -212,7 +212,7 @@ def main():
                 batch_waveforms.append(waveform)
                 duration = len(waveform) / 16000
                 batch_durations.append(duration)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(
                     f"\nFailed to load audio for index {batch_idx + idx}: {e}. Skipping sample."
                 )

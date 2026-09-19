@@ -1,0 +1,1643 @@
+EXE001 Shebang is present but file is not executable
+ --> scripts/data-preprocess/convert_npy_to_parquet.py:1:1
+  |
+1 | #!/usr/bin/env python3
+  | ^^^^^^^^^^^^^^^^^^^^^^
+2 | import json
+3 | import os
+  |
+
+C414 Unnecessary `list()` call within `sorted()`
+  --> scripts/data-preprocess/convert_npy_to_parquet.py:37:20
+   |
+35 |     # 2. Extract unique embed files
+36 |     print("Extracting unique embed files...")
+37 |     unique_files = sorted(list(set(entry["embed_file"] for entry in index)))
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+38 |     num_files = len(unique_files)
+39 |     print(f"Total unique embedding files: {num_files}")
+   |
+help: Remove the inner `list()` call
+
+C401 Unnecessary generator (rewrite as a set comprehension)
+  --> scripts/data-preprocess/convert_npy_to_parquet.py:37:32
+   |
+35 |     # 2. Extract unique embed files
+36 |     print("Extracting unique embed files...")
+37 |     unique_files = sorted(list(set(entry["embed_file"] for entry in index)))
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+38 |     num_files = len(unique_files)
+39 |     print(f"Total unique embedding files: {num_files}")
+   |
+help: Rewrite as a set comprehension
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/data-preprocess/convert_npy_to_parquet.py:77:16
+   |
+75 |                 "shape": list(arr.shape),
+76 |             }
+77 |         except Exception as e:
+   |                ^^^^^^^^^
+78 |             print(f"\nError reading {file_path}: {e}")
+79 |             return None
+   |
+
+EXE001 Shebang is present but file is not executable
+ --> scripts/data-preprocess/download_precomputed_data.py:1:1
+  |
+1 | #!/usr/bin/env python3
+  | ^^^^^^^^^^^^^^^^^^^^^^
+2 | """Download precomputed audio embeddings and tokenized text from Hugging Face.
+  |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/data-preprocess/download_precomputed_data.py:101:12
+    |
+ 99 |         )
+100 |         print("\nDownload completed successfully!")
+101 |     except Exception as e:
+    |            ^^^^^^^^^
+102 |         print(f"\nError during download: {e}", file=sys.stderr)
+103 |         sys.exit(1)
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/data-preprocess/extract_validation.py:102:16
+    |
+100 |             api.create_repo(repo_id=args.repo_id, repo_type="dataset", exist_ok=True)
+101 |             print("Dataset repository created/verified.")
+102 |         except Exception as e:
+    |                ^^^^^^^^^
+103 |             print(f"Warning during repository creation: {e}")
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/data-preprocess/extract_validation.py:115:16
+    |
+113 |             )
+114 |             print("Upload completed successfully!")
+115 |         except Exception as e:
+    |                ^^^^^^^^^
+116 |             print(f"Upload failed: {e}")
+    |
+
+EXE001 Shebang is present but file is not executable
+ --> scripts/data-preprocess/merge_to_streaming.py:1:1
+  |
+1 | #!/usr/bin/env python3
+  | ^^^^^^^^^^^^^^^^^^^^^^
+2 | """Merge precomputed dataset (metadata, token IDs, audio embeddings parquet)
+3 | into a unified streaming-ready Parquet dataset and push to Hugging Face Hub.
+  |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/data-preprocess/merge_to_streaming.py:106:16
+    |
+104 |             )
+105 |             print(f"Found {len(target_files)} existing files in target repo.")
+106 |         except Exception as e:
+    |                ^^^^^^^^^
+107 |             print(f"Warning/Error accessing target repo: {e}")
+    |
+
+F841 Local variable `metadata` is assigned to but never used
+   --> scripts/data-preprocess/merge_to_streaming.py:128:13
+    |
+127 |         with open(meta_path) as f:
+128 |             metadata = json.load(f)
+    |             ^^^^^^^^
+129 |
+130 |         with open(index_path) as f:
+    |
+help: Remove assignment to unused variable `metadata`
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/data-preprocess/merge_to_streaming.py:153:20
+    |
+151 |                     f"  Loaded {len(task_tokens_map[task])} token entries for '{task}'"
+152 |                 )
+153 |             except Exception as e:
+    |                    ^^^^^^^^^
+154 |                 print(f"  Warning: token_ids/{task}.json not loaded: {e}")
+    |
+
+EXE001 Shebang is present but file is not executable
+ --> scripts/data-preprocess/precompute_embeddings.py:1:1
+  |
+1 | #!/usr/bin/env python3
+  | ^^^^^^^^^^^^^^^^^^^^^^
+2 | """Pre-compute audio embeddings and tokenized text targets for fast training.
+  |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/data-preprocess/upload_precomputed_data_robust.py:26:12
+   |
+24 |         api.create_repo(repo_id=repo_id, repo_type="dataset", exist_ok=True)
+25 |         print("Dataset repository verified/created.")
+26 |     except Exception as e:
+   |            ^^^^^^^^^
+27 |         print(f"Warning during repository creation: {e}")
+28 |         print("Attempting to proceed...")
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/data-preprocess/upload_precomputed_data_robust.py:35:12
+   |
+33 |         existing_files = set(api.list_repo_files(repo_id=repo_id, repo_type="dataset"))
+34 |         print(f"Found {len(existing_files)} files already in the repository.")
+35 |     except Exception as e:
+   |            ^^^^^^^^^
+36 |         print(f"Error fetching repo files: {e}")
+37 |         existing_files = set()
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/data-preprocess/upload_precomputed_data_robust.py:90:20
+   |
+88 |                 print(f"Successfully uploaded {rel_path} in {elapsed:.1f}s.")
+89 |                 break
+90 |             except Exception as e:
+   |                    ^^^^^^^^^
+91 |                 print(
+92 |                     f"Attempt {attempt}/{max_retries} failed to upload {rel_path}: {e}"
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/app.py:73:16
+   |
+72 |             state_dict = load_file(weights_path, device="cpu")
+73 |         except Exception:
+   |                ^^^^^^^^^
+74 |             weights_path = hf_hub_download(
+75 |                 repo_id=repo_id, filename="pytorch_model.bin"
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> scripts/model-manager/app.py:112:5
+    |
+110 |           if waveform.ndim == 2:
+111 |               waveform = waveform.mean(axis=1)
+112 | /     except Exception:
+113 | |         pass
+    | |____________^
+114 |
+115 |       if waveform is None:
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/app.py:112:12
+    |
+110 |         if waveform.ndim == 2:
+111 |             waveform = waveform.mean(axis=1)
+112 |     except Exception:
+    |            ^^^^^^^^^
+113 |         pass
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> scripts/model-manager/app.py:120:9
+    |
+119 |               waveform, sr = librosa.load(path, sr=None, mono=True, dtype=np.float32)
+120 | /         except Exception:
+121 | |             pass
+    | |________________^
+122 |
+123 |       if waveform is None:
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/app.py:120:16
+    |
+119 |             waveform, sr = librosa.load(path, sr=None, mono=True, dtype=np.float32)
+120 |         except Exception:
+    |                ^^^^^^^^^
+121 |             pass
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> scripts/model-manager/app.py:132:9
+    |
+130 |               waveform = samples / (2 ** (audio.sample_width * 8 - 1))
+131 |               sr = target_sr
+132 | /         except Exception:
+133 | |             pass
+    | |________________^
+134 |
+135 |       if waveform is None:
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/app.py:132:16
+    |
+130 |             waveform = samples / (2 ** (audio.sample_width * 8 - 1))
+131 |             sr = target_sr
+132 |         except Exception:
+    |                ^^^^^^^^^
+133 |             pass
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/app.py:396:12
+    |
+394 |                     time.sleep(0.2)
+395 |
+396 |     except Exception as e:
+    |            ^^^^^^^^^
+397 |         import traceback
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/eval_val.py:135:12
+    |
+134 |         state_dict = load_file(weights_path, device="cpu")
+135 |     except Exception:
+    |            ^^^^^^^^^
+136 |         weights_path = hf_hub_download(
+137 |             repo_id=args.repo_id, filename="pytorch_model.bin"
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/eval_val.py:215:20
+    |
+213 |                 duration = len(waveform) / 16000
+214 |                 batch_durations.append(duration)
+215 |             except Exception as e:
+    |                    ^^^^^^^^^
+216 |                 print(
+217 |                     f"\nFailed to load audio for index {batch_idx + idx}: {e}. Skipping sample."
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/export_onnx.py:173:12
+    |
+171 |         )
+172 |         print(f"Successfully exported diffusion backbone to: {backbone_path}")
+173 |     except Exception as e:
+    |            ^^^^^^^^^
+174 |         print(f"Failed to export diffusion backbone: {e}")
+175 |         import traceback
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/export_onnx.py:210:16
+    |
+208 |             )
+209 |             print(f"Successfully exported audio encoder to: {audio_encoder_path}")
+210 |         except Exception as e:
+    |                ^^^^^^^^^
+211 |             print(f"Failed to export audio encoder: {e}")
+212 |             import traceback
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/export_onnx.py:250:16
+    |
+248 |             else:
+249 |                 print("Verification WARNING: High difference, please check precision.")
+250 |         except Exception as e:
+    |                ^^^^^^^^^
+251 |             print(f"ONNX Runtime verification failed: {e}")
+252 |             import traceback
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/export_onnx.py:278:16
+    |
+276 |             else:
+277 |                 print("Verification WARNING: High difference, please check precision.")
+278 |         except Exception as e:
+    |                ^^^^^^^^^
+279 |             print(f"ONNX Runtime verification failed for Audio Encoder: {e}")
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> scripts/model-manager/inference.py:38:5
+   |
+36 |           if waveform.ndim == 2:
+37 |               waveform = waveform.mean(axis=1)
+38 | /     except Exception:
+39 | |         pass
+   | |____________^
+40 |
+41 |       # 2. Try librosa (handles mp3 via audioread/ffmpeg)
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/inference.py:38:12
+   |
+36 |         if waveform.ndim == 2:
+37 |             waveform = waveform.mean(axis=1)
+38 |     except Exception:
+   |            ^^^^^^^^^
+39 |         pass
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> scripts/model-manager/inference.py:47:9
+   |
+46 |               waveform, sr = librosa.load(path, sr=None, mono=True, dtype=np.float32)
+47 | /         except Exception:
+48 | |             pass
+   | |________________^
+49 |
+50 |       # 3. Try pydub (handles mp3/aac/ogg via ffmpeg)
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/inference.py:47:16
+   |
+46 |             waveform, sr = librosa.load(path, sr=None, mono=True, dtype=np.float32)
+47 |         except Exception:
+   |                ^^^^^^^^^
+48 |             pass
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> scripts/model-manager/inference.py:60:9
+   |
+58 |               waveform = samples / (2 ** (audio.sample_width * 8 - 1))
+59 |               sr = target_sr  # already resampled by pydub
+60 | /         except Exception:
+61 | |             pass
+   | |________________^
+62 |
+63 |       # 4. Try torchaudio
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/inference.py:60:16
+   |
+58 |             waveform = samples / (2 ** (audio.sample_width * 8 - 1))
+59 |             sr = target_sr  # already resampled by pydub
+60 |         except Exception:
+   |                ^^^^^^^^^
+61 |             pass
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> scripts/model-manager/inference.py:70:9
+   |
+68 |               waveform_t, sr = torchaudio.load(path)
+69 |               waveform = waveform_t.mean(dim=0).numpy().astype(np.float32)
+70 | /         except Exception:
+71 | |             pass
+   | |________________^
+72 |
+73 |       if waveform is None:
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/inference.py:70:16
+   |
+68 |             waveform_t, sr = torchaudio.load(path)
+69 |             waveform = waveform_t.mean(dim=0).numpy().astype(np.float32)
+70 |         except Exception:
+   |                ^^^^^^^^^
+71 |             pass
+   |
+
+RUF013 PEP 484 prohibits implicit `Optional`
+   --> scripts/model-manager/inference.py:99:26
+    |
+ 97 |     max_iterations: int = 10,
+ 98 |     max_length: int = 64,
+ 99 |     canvas_len_override: int = None,
+    |                          ^^^
+100 |     strategy: str = "reparam-uncond-deterministic-cosine",
+101 |     device: str = None,
+    |
+help: Convert to `T | None`
+
+RUF013 PEP 484 prohibits implicit `Optional`
+   --> scripts/model-manager/inference.py:101:13
+    |
+ 99 |     canvas_len_override: int = None,
+100 |     strategy: str = "reparam-uncond-deterministic-cosine",
+101 |     device: str = None,
+    |             ^^^
+102 | ) -> dict:
+103 |     """
+    |
+help: Convert to `T | None`
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/inference.py:163:12
+    |
+162 |         state_dict = load_file(weights_path, device="cpu")
+163 |     except Exception:
+    |            ^^^^^^^^^
+164 |         weights_path = hf_hub_download(repo_id=repo_id, filename="pytorch_model.bin")
+165 |         state_dict = torch.load(weights_path, map_location="cpu", weights_only=True)
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/load_checkpoint.py:92:12
+   |
+90 |             )
+91 |
+92 |     except Exception as e:
+   |            ^^^^^^^^^
+93 |         print(f"\nError during download: {e}", file=sys.stderr)
+94 |         sys.exit(1)
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> scripts/model-manager/profile_hardware.py:28:5
+   |
+26 |                   if line.startswith("VmRSS:"):
+27 |                       return float(line.split()[1]) / 1024.0
+28 | /     except Exception:
+29 | |         pass
+   | |____________^
+30 |       try:
+31 |           import psutil
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/profile_hardware.py:28:12
+   |
+26 |                 if line.startswith("VmRSS:"):
+27 |                     return float(line.split()[1]) / 1024.0
+28 |     except Exception:
+   |            ^^^^^^^^^
+29 |         pass
+30 |     try:
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/profile_hardware.py:34:12
+   |
+33 |         return psutil.Process().memory_info().rss / (1024 * 1024)
+34 |     except Exception:
+   |            ^^^^^^^^^
+35 |         return 0.0
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> scripts/model-manager/profile_hardware.py:52:5
+   |
+50 |                       if "model name" in line:
+51 |                           return line.split(":", 1)[1].strip()
+52 | /     except Exception:
+53 | |         pass
+   | |____________^
+54 |       return platform.processor() or "Unknown CPU"
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/profile_hardware.py:52:12
+   |
+50 |                     if "model name" in line:
+51 |                         return line.split(":", 1)[1].strip()
+52 |     except Exception:
+   |            ^^^^^^^^^
+53 |         pass
+54 |     return platform.processor() or "Unknown CPU"
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> scripts/model-manager/profile_hardware.py:64:5
+   |
+62 |                   if line.startswith("MemTotal:"):
+63 |                       return float(line.split()[1]) / (1024.0 * 1024.0)
+64 | /     except Exception:
+65 | |         pass
+   | |____________^
+66 |       return 0.0
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/profile_hardware.py:64:12
+   |
+62 |                 if line.startswith("MemTotal:"):
+63 |                     return float(line.split()[1]) / (1024.0 * 1024.0)
+64 |     except Exception:
+   |            ^^^^^^^^^
+65 |         pass
+66 |     return 0.0
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> scripts/model-manager/profile_hardware.py:80:5
+   |
+78 |           if waveform.ndim == 2:
+79 |               waveform = waveform.mean(axis=1)
+80 | /     except Exception:
+81 | |         pass
+   | |____________^
+82 |
+83 |       if waveform is None:
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/profile_hardware.py:80:12
+   |
+78 |         if waveform.ndim == 2:
+79 |             waveform = waveform.mean(axis=1)
+80 |     except Exception:
+   |            ^^^^^^^^^
+81 |         pass
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> scripts/model-manager/profile_hardware.py:88:9
+   |
+87 |               waveform, sr = librosa.load(path, sr=None, mono=True, dtype=np.float32)
+88 | /         except Exception:
+89 | |             pass
+   | |________________^
+90 |
+91 |       if waveform is None:
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/profile_hardware.py:88:16
+   |
+87 |             waveform, sr = librosa.load(path, sr=None, mono=True, dtype=np.float32)
+88 |         except Exception:
+   |                ^^^^^^^^^
+89 |             pass
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> scripts/model-manager/profile_hardware.py:100:9
+    |
+ 98 |               waveform = samples / (2 ** (audio.sample_width * 8 - 1))
+ 99 |               sr = target_sr
+100 | /         except Exception:
+101 | |             pass
+    | |________________^
+102 |
+103 |       if waveform is None:
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/profile_hardware.py:100:16
+    |
+ 98 |             waveform = samples / (2 ** (audio.sample_width * 8 - 1))
+ 99 |             sr = target_sr
+100 |         except Exception:
+    |                ^^^^^^^^^
+101 |             pass
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/profile_hardware.py:352:12
+    |
+351 |         state_dict = load_file(weights_path, device="cpu")
+352 |     except Exception:
+    |            ^^^^^^^^^
+353 |         weights_path = hf_hub_download(
+354 |             repo_id=args.repo_id, filename="pytorch_model.bin"
+    |
+
+RUF013 PEP 484 prohibits implicit `Optional`
+  --> scripts/model-manager/push_checkpoint.py:11:73
+   |
+10 | def push_checkpoint_to_hub(
+11 |     repo_id: str, checkpoint_dir: str, repo_type: str = "model", token: str = None
+   |                                                                         ^^^
+12 | ):
+13 |     if token is None:
+   |
+help: Convert to `T | None`
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/push_checkpoint.py:120:12
+    |
+118 |     try:
+119 |         push_checkpoint_to_hub(repo_id, checkpoint_dir, repo_type)
+120 |     except Exception as e:
+    |            ^^^^^^^^^
+121 |         print(f"Error: {e}")
+122 |         sys.exit(1)
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/push_onnx_to_hub.py:27:12
+   |
+25 |         create_repo(repo_id=repo_id, repo_type="model", token=token, exist_ok=True)
+26 |         print("Repository ready.")
+27 |     except Exception as e:
+   |            ^^^^^^^^^
+28 |         print(f"Error creating/verifying repository: {e}")
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/push_onnx_to_hub.py:39:12
+   |
+37 |         tokenizer.push_to_hub(repo_id, token=token)
+38 |         print("Tokenizer uploaded successfully.")
+39 |     except Exception as e:
+   |            ^^^^^^^^^
+40 |         print(f"Failed to upload tokenizer: {e}")
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/push_onnx_to_hub.py:63:20
+   |
+61 |                 )
+62 |                 print(f"Successfully uploaded {repo_path}")
+63 |             except Exception as e:
+   |                    ^^^^^^^^^
+64 |                 print(f"Failed to upload {repo_path}: {e}")
+65 |         else:
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/model-manager/push_onnx_to_hub.py:86:20
+   |
+84 |                 )
+85 |                 print(f"Successfully uploaded {repo_path}")
+86 |             except Exception as e:
+   |                    ^^^^^^^^^
+87 |                 print(f"Failed to upload helper {repo_path}: {e}")
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/model-manager/push_onnx_to_hub.py:256:12
+    |
+254 |         )
+255 |         print("README.md uploaded successfully.")
+256 |     except Exception as e:
+    |            ^^^^^^^^^
+257 |         print(f"Failed to upload README.md: {e}")
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_full_inference.py:186:12
+    |
+184 |         print("[+] Compilation check passed (SUCCESS)!")
+185 |         backbone_target_model = backbone_job.get_target_model()
+186 |     except Exception as e:
+    |            ^^^^^^^^^
+187 |         print(f"[!] Compilation check failed: {e}")
+188 |         sys.exit(1)
+    |
+
+RUF015 Prefer `next(iter(output_data.values()))` over single element slice
+   --> scripts/qualcomm-job/inference/test_full_inference.py:242:22
+    |
+240 |         output_data = inf_job.download_output_data()
+241 |         if isinstance(output_data, dict):
+242 |             logits = list(output_data.values())[0]
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+243 |             if isinstance(logits, list):
+244 |                 logits = logits[0]
+    |
+help: Replace with `next(iter(output_data.values()))`
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:322:16
+    |
+320 |         try:
+321 |             device = hub.Device(device_name)
+322 |         except Exception:
+    |                ^^^^^^^^^
+323 |             print(f"    [!] Device '{device_name}' not found, skipping.")
+324 |             continue
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:339:16
+    |
+337 |             )
+338 |             print(f"      - audio_encoder job: {audio_job.url}")
+339 |         except Exception as e:
+    |                ^^^^^^^^^
+340 |             print(f"      [!] audio_encoder submission failed: {e}")
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:353:16
+    |
+351 |             )
+352 |             print(f"      - diffusion_backbone job: {backbone_job.url}")
+353 |         except Exception as e:
+    |                ^^^^^^^^^
+354 |             print(f"      [!] diffusion_backbone submission failed: {e}")
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:406:13
+    |
+404 |                       audio_success = True
+405 |                       audio_target_model = audio_job.get_target_model()
+406 | /             except Exception:
+407 | |                 pass
+    | |____________________^
+408 |
+409 |           backbone_success = False
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:406:20
+    |
+404 |                     audio_success = True
+405 |                     audio_target_model = audio_job.get_target_model()
+406 |             except Exception:
+    |                    ^^^^^^^^^
+407 |                 pass
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:417:13
+    |
+415 |                       backbone_success = True
+416 |                       backbone_target_model = backbone_job.get_target_model()
+417 | /             except Exception:
+418 | |                 pass
+    | |____________________^
+419 |
+420 |           eval_jobs[device_name] = {
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:417:20
+    |
+415 |                     backbone_success = True
+416 |                     backbone_target_model = backbone_job.get_target_model()
+417 |             except Exception:
+    |                    ^^^^^^^^^
+418 |                 pass
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:457:20
+    |
+455 |                     name=f"audio_inf_{device_name[:20]}",
+456 |                 )
+457 |             except Exception as e:
+    |                    ^^^^^^^^^
+458 |                 eval_jobs[device_name]["errors"].append(
+459 |                     f"Audio inference submission failed: {e}"
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:470:20
+    |
+468 |                     name=f"audio_prof_{device_name[:20]}",
+469 |                 )
+470 |             except Exception as e:
+    |                    ^^^^^^^^^
+471 |                 eval_jobs[device_name]["errors"].append(
+472 |                     f"Audio profiling submission failed: {e}"
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:500:20
+    |
+498 |                     name=f"backbone_inf_{device_name[:20]}",
+499 |                 )
+500 |             except Exception as e:
+    |                    ^^^^^^^^^
+501 |                 eval_jobs[device_name]["errors"].append(
+502 |                     f"Backbone inference submission failed: {e}"
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:513:20
+    |
+511 |                     name=f"backbone_prof_{device_name[:20]}",
+512 |                 )
+513 |             except Exception as e:
+    |                    ^^^^^^^^^
+514 |                 eval_jobs[device_name]["errors"].append(
+515 |                     f"Backbone profiling submission failed: {e}"
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:581:20
+    |
+579 |                         f"audio_encoder inference failed: {status.message}"
+580 |                     )
+581 |             except Exception as e:
+    |                    ^^^^^^^^^
+582 |                 result["audio_encoder"]["inference"] = "ERROR"
+583 |                 result["errors"].append(f"audio_encoder inference error: {e}")
+    |
+
+RUF015 Prefer `next(iter(backbone_output.values()))` over single element slice
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:596:34
+    |
+594 |                     backbone_output = info["backbone_inf"].download_output_data()
+595 |                     if isinstance(backbone_output, dict):
+596 |                         logits = list(backbone_output.values())[0]
+    |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+597 |                         if isinstance(logits, list):
+598 |                             logits = logits[0]
+    |
+help: Replace with `next(iter(backbone_output.values()))`
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:612:20
+    |
+610 |                         f"diffusion_backbone inference failed: {status.message}"
+611 |                     )
+612 |             except Exception as e:
+    |                    ^^^^^^^^^
+613 |                 result["diffusion_backbone"]["inference"] = "ERROR"
+614 |                 result["errors"].append(f"diffusion_backbone inference error: {e}")
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:628:20
+    |
+626 |                 else:
+627 |                     result["audio_encoder"]["profile"] = f"FAILED: {status.message}"
+628 |             except Exception as e:
+    |                    ^^^^^^^^^
+629 |                 result["audio_encoder"]["profile"] = f"ERROR: {e}"
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:642:20
+    |
+640 |                         f"FAILED: {status.message}"
+641 |                     )
+642 |             except Exception as e:
+    |                    ^^^^^^^^^
+643 |                 result["diffusion_backbone"]["profile"] = f"ERROR: {e}"
+    |
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> scripts/qualcomm-job/inference/test_inference_multi_chipset.py:684:30
+    |
+682 |         json.dump(
+683 |             {
+684 |                 "timestamp": datetime.now().isoformat(),
+    |                              ^^^^^^^^^^^^^^
+685 |                 "audio_file": args.audio,
+686 |                 "runtime": args.runtime,
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/patches/decompose_asinh.py:101:12
+    |
+ 99 |         onnx.checker.check_model(model)
+100 |         print("[+] ONNX check passed!")
+101 |     except Exception as e:
+    |            ^^^^^^^^^
+102 |         print(f"[!] ONNX check failed: {e}")
+103 |         return
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/patches/decompose_sign.py:257:12
+    |
+255 |         onnx.checker.check_model(model)
+256 |         print("[+] ONNX check passed!")
+257 |     except Exception as e:
+    |            ^^^^^^^^^
+258 |         print(f"[!] ONNX check failed (may be expected for large models): {e}")
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/patches/fix_bool_ops.py:252:16
+    |
+250 |             onnx.checker.check_model(model)
+251 |             print("[+] ONNX check passed!")
+252 |         except Exception as e:
+    |                ^^^^^^^^^
+253 |             print(
+254 |                 f"[!] ONNX check failed (may be expected for large models with external weights): {e}"
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> scripts/qualcomm-job/patches/fix_gathernd_rank.py:64:5
+   |
+62 |       try:
+63 |           model = shape_inference.infer_shapes(model)
+64 | /     except Exception:
+65 | |         pass
+   | |____________^
+66 |
+67 |       graph = model.graph
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/qualcomm-job/patches/fix_gathernd_rank.py:64:12
+   |
+62 |     try:
+63 |         model = shape_inference.infer_shapes(model)
+64 |     except Exception:
+   |            ^^^^^^^^^
+65 |         pass
+   |
+
+B023 Function definition does not bind loop variable `del_names`
+   --> scripts/qualcomm-job/patches/fix_gathernd_rank.py:142:13
+    |
+140 |             visited.add(name)
+141 |             n = out_map[name]
+142 |             del_names.add(n.name)
+    |             ^^^^^^^^^
+143 |             for inp in n.input:
+144 |                 collect_ancestors(inp, stop_at, visited)
+    |
+
+C401 Unnecessary generator (rewrite as a set comprehension)
+   --> scripts/qualcomm-job/patches/fix_gathernd_rank.py:264:20
+    |
+263 |     # Quick validation: check no undefined inputs
+264 |     all_produced = set(i.name for i in graph.initializer) | set(
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+265 |         i.name for i in graph.input
+266 |     )
+    |
+help: Rewrite as a set comprehension
+
+C401 Unnecessary generator (rewrite as a set comprehension)
+   --> scripts/qualcomm-job/patches/fix_gathernd_rank.py:264:61
+    |
+263 |       # Quick validation: check no undefined inputs
+264 |       all_produced = set(i.name for i in graph.initializer) | set(
+    |  _____________________________________________________________^
+265 | |         i.name for i in graph.input
+266 | |     )
+    | |_____^
+267 |       bad = []
+268 |       for n in graph.node:
+    |
+help: Rewrite as a set comprehension
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/patches/fix_gathernd_rank.py:302:12
+    |
+300 |         out = sess.run(None, {"audio_features": audio, "audio_attention_mask": mask})
+301 |         print(f"[+] OnnxRuntime OK. Output shape: {out[0].shape}")
+302 |     except Exception as e:
+    |            ^^^^^^^^^
+303 |         print(f"[!] OnnxRuntime verification FAILED: {e}")
+304 |         if os.path.exists(tmp):
+    |
+
+PLW1510 `subprocess.run` without explicit `check` argument
+  --> scripts/qualcomm-job/patches/run_all_patches.py:27:14
+   |
+25 |     print(f"\n[*] Running: {desc}...")
+26 |     print(f"    Command: {' '.join(cmd)}")
+27 |     result = subprocess.run(cmd, capture_output=True, text=True)
+   |              ^^^^^^^^^^^^^^
+28 |     if result.returncode != 0:
+29 |         print(f"[!] Error: {desc} failed!")
+   |
+help: Add explicit `check=False`
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/qualcomm-job/submission/submit_qualcomm_job.py:51:12
+   |
+49 |         device = hub.Device(args.device)
+50 |         print(f"[+] Target device selected: {device.name}")
+51 |     except Exception as e:
+   |            ^^^^^^^^^
+52 |         print(f"[!] Error selecting device '{args.device}': {e}")
+53 |         sys.exit(1)
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/qualcomm-job/submission/submit_qualcomm_job.py:73:16
+   |
+71 |                 data_name="diffusion_backbone.data",
+72 |             )
+73 |         except Exception as e:
+   |                ^^^^^^^^^
+74 |             print(f"[!] Repackaging failed: {e}")
+75 |             sys.exit(1)
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/submission/submit_qualcomm_job.py:106:12
+    |
+104 |         compile_jobs["audio_encoder"] = audio_compile_job
+105 |         print(f"[+] Audio Encoder job submitted: {audio_compile_job.url}")
+106 |     except Exception as e:
+    |            ^^^^^^^^^
+107 |         print(f"[!] Failed to submit Audio Encoder compilation: {e}")
+108 |         sys.exit(1)
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/submission/submit_qualcomm_job.py:127:12
+    |
+125 |         compile_jobs["diffusion_backbone"] = backbone_compile_job
+126 |         print(f"[+] Diffusion Backbone job submitted: {backbone_compile_job.url}")
+127 |     except Exception as e:
+    |            ^^^^^^^^^
+128 |         print(f"[!] Failed to submit Diffusion Backbone compilation: {e}")
+129 |         sys.exit(1)
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/submission/submit_qualcomm_job.py:161:16
+    |
+159 |             profile_jobs[name] = profile_job
+160 |             print(f"    -> Profile job submitted: {profile_job.url}")
+161 |         except Exception as e:
+    |                ^^^^^^^^^
+162 |             print(f"    [!] Failed to submit profile job: {e}")
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> scripts/qualcomm-job/submission/submit_qualcomm_job.py:194:16
+    |
+192 |             layers = profile.get("layer_info", [])
+193 |             print(f"  - Total layers profiled: {len(layers)}")
+194 |         except Exception as e:
+    |                ^^^^^^^^^
+195 |             print(f"\n[!] Failed to extract profiling metrics for {name}: {e}")
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/qualcomm-job/submission/test_submit.py:37:12
+   |
+35 |         print(f"Audio encoder compile job submitted: {job.url}")
+36 |         print("Status:", job.get_status())
+37 |     except Exception as e:
+   |            ^^^^^^^^^
+38 |         print(f"Failed to submit audio_encoder: {e}")
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> scripts/qualcomm-job/submission/test_submit.py:56:12
+   |
+54 |         print(f"Diffusion backbone compile job submitted: {job_backbone.url}")
+55 |         print("Status:", job_backbone.get_status())
+56 |     except Exception as e:
+   |            ^^^^^^^^^
+57 |         print(f"Failed to submit diffusion_backbone: {e}")
+   |
+
+RUF013 PEP 484 prohibits implicit `Optional`
+  --> scripts/qualcomm-job/utils.py:72:14
+   |
+70 |     audio_embeds: np.ndarray,
+71 |     audio_len: int,
+72 |     mask_id: int = None,
+   |              ^^^
+73 |     eos_id: int = None,
+74 |     seq_len: int = MAX_SEQ_LEN,
+   |
+help: Convert to `T | None`
+
+RUF013 PEP 484 prohibits implicit `Optional`
+  --> scripts/qualcomm-job/utils.py:73:13
+   |
+71 |     audio_len: int,
+72 |     mask_id: int = None,
+73 |     eos_id: int = None,
+   |             ^^^
+74 |     seq_len: int = MAX_SEQ_LEN,
+75 | ) -> dict:
+   |
+help: Convert to `T | None`
+
+BLE001 Do not catch blind exception: `Exception`
+  --> src/data/bilingual.py:86:16
+   |
+84 |             )
+85 |             datasets = datasets.shuffle(seed=42)
+86 |         except Exception as e:
+   |                ^^^^^^^^^
+87 |             print(f"Error loading dataset: {e}")
+88 |             # Try loading from disk as fallback
+   |
+
+RUF059 Unpacked variable `est_gb` is never used
+   --> src/data/dd_data.py:212:30
+    |
+210 |                     getattr(data_args, "data_path", None) or "NhutP/VietSpeech"
+211 |                 )
+212 |                 is_approved, est_gb, proj_ratio, total_examples = (
+    |                              ^^^^^^
+213 |                     check_ram_capacity_for_dataset(
+214 |                         audio_repo_id,
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+RUF059 Unpacked variable `total_examples` is never used
+   --> src/data/dd_data.py:212:50
+    |
+210 |                     getattr(data_args, "data_path", None) or "NhutP/VietSpeech"
+211 |                 )
+212 |                 is_approved, est_gb, proj_ratio, total_examples = (
+    |                                                  ^^^^^^^^^^^^^^
+213 |                     check_ram_capacity_for_dataset(
+214 |                         audio_repo_id,
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+RUF012 Mutable default value for class attribute
+  --> src/data/multitask.py:38:27
+   |
+37 |       # Mapping from full task token string to dataset column name
+38 |       TASK_TO_FIELD: dict = {
+   |  ___________________________^
+39 | |         "<vi_en>": "english",
+40 | |         "<vi_zh>": "chinese",
+41 | |         "<vi_ko>": "korean",
+42 | |     }
+   | |_____^
+43 |
+44 |       def __init__(
+   |
+help: Consider initializing in `__init__` or annotating with `typing.ClassVar`
+
+RUF059 Unpacked variable `proj_ratio` is never used
+   --> src/data/multitask.py:254:34
+    |
+252 |         if getattr(args, "use_ram_cache", False):
+253 |             threshold_ratio = getattr(args, "ram_free_threshold_ratio", 0.30)
+254 |             is_approved, est_gb, proj_ratio, total_examples = (
+    |                                  ^^^^^^^^^^
+255 |                 check_ram_capacity_for_dataset(
+256 |                     audio_repo_id,
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+RUF059 Unpacked variable `total_examples` is never used
+   --> src/data/multitask.py:254:46
+    |
+252 |         if getattr(args, "use_ram_cache", False):
+253 |             threshold_ratio = getattr(args, "ram_free_threshold_ratio", 0.30)
+254 |             is_approved, est_gb, proj_ratio, total_examples = (
+    |                                              ^^^^^^^^^^^^^^
+255 |                 check_ram_capacity_for_dataset(
+256 |                     audio_repo_id,
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+BLE001 Do not catch blind exception: `Exception`
+   --> src/data/multitask.py:331:24
+    |
+329 | …             f"[RAM Cache] SUCCESS: Preloaded {len(ram_audio_store)} raw audio samples ({est_gb:.2f} GB) directly into RAM!"
+330 | …         )
+331 | …     except Exception as e:
+    |              ^^^^^^^^^
+332 | …         print(
+333 | …             f"[RAM Cache] Warning: Failed to stream into RAM: {e}. Falling back to disk cache."
+    |
+
+RUF012 Mutable default value for class attribute
+  --> src/data/precomputed_multitask.py:19:21
+   |
+17 |     """
+18 |
+19 |     TASK_TO_FIELD = {"<vi_en>": "english", "<vi_zh>": "chinese", "<vi_ko>": "korean"}
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+20 |
+21 |     def __init__(
+   |
+help: Consider initializing in `__init__` or annotating with `typing.ClassVar`
+
+RUF059 Unpacked variable `proj_ratio` is never used
+   --> src/data/speech.py:136:34
+    |
+134 |         if getattr(args, "use_ram_cache", False):
+135 |             threshold_ratio = getattr(args, "ram_free_threshold_ratio", 0.30)
+136 |             is_approved, est_gb, proj_ratio, total_examples = (
+    |                                  ^^^^^^^^^^
+137 |                 check_ram_capacity_for_dataset(
+138 |                     args.data_path,
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+RUF059 Unpacked variable `total_examples` is never used
+   --> src/data/speech.py:136:46
+    |
+134 |         if getattr(args, "use_ram_cache", False):
+135 |             threshold_ratio = getattr(args, "ram_free_threshold_ratio", 0.30)
+136 |             is_approved, est_gb, proj_ratio, total_examples = (
+    |                                              ^^^^^^^^^^^^^^
+137 |                 check_ram_capacity_for_dataset(
+138 |                     args.data_path,
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+BLE001 Do not catch blind exception: `Exception`
+   --> src/data/speech.py:210:24
+    |
+208 | …             f"[RAM Cache] SUCCESS: Preloaded {len(ram_audio_store)} raw audio samples ({est_gb:.2f} GB) directly into RAM!"
+209 | …         )
+210 | …     except Exception as e:
+    |              ^^^^^^^^^
+211 | …         print(
+212 | …             f"[RAM Cache] Warning: Failed to stream into RAM: {e}. Falling back to disk cache."
+    |
+
+RUF012 Mutable default value for class attribute
+  --> src/data/streaming_precomputed_multitask.py:19:21
+   |
+17 |     """
+18 |
+19 |     TASK_TO_FIELD = {"<vi_en>": "english", "<vi_zh>": "chinese", "<vi_ko>": "korean"}
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+20 |
+21 |     def __init__(
+   |
+help: Consider initializing in `__init__` or annotating with `typing.ClassVar`
+
+SIM113 Use `enumerate()` for index variable `sample_counter` in `for` loop
+   --> src/data/streaming_precomputed_multitask.py:126:13
+    |
+125 |         for row in dataset_stream:
+126 |             sample_counter += 1
+    |             ^^^^^^^^^^^^^^^^^^^
+127 |             for sample in self._process_row(row, sample_counter):
+128 |                 yield sample
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> src/data/streaming_precomputed_multitask.py:159:16
+    |
+157 |                 metadata = json.load(f)
+158 |             save_dtype_str = metadata.get("save_dtype", "float16")
+159 |         except Exception as e:
+    |                ^^^^^^^^^
+160 |             print(
+161 |                 f"[StreamingPrecomputedMultiTask] Warning: metadata.json fetch failed ({e}). Defaulting float16."
+    |
+
+SIM115 Use a context manager for opening files
+  --> src/data/utils.py:12:9
+   |
+10 |     """Decode raw WAV bytes to float32 numpy array using python's built-in wave module.
+11 |     This avoids dependency on torchcodec/soundfile/librosa."""
+12 |     f = wave.open(io.BytesIO(wav_bytes), "rb")
+   |         ^^^^^^^^^
+13 |     n_channels = f.getnchannels()
+14 |     sampwidth = f.getsampwidth()
+   |
+
+PIE810 Call `startswith` once with a `tuple`
+  --> src/data/utils.py:50:12
+   |
+48 |     for char in normalized_text:
+49 |         cat = unicodedata.category(char)
+50 |         if cat.startswith("P") or cat.startswith("S"):
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+51 |             chars.append(" ")
+52 |         else:
+   |
+help: Merge into a single `startswith` call
+
+BLE001 Do not catch blind exception: `Exception`
+  --> src/data/utils.py:89:12
+   |
+87 |                 s.num_examples for s in info.splits.values() if s.num_examples
+88 |             )
+89 |     except Exception as e:
+   |            ^^^^^^^^^
+90 |         logger.warning(
+91 |             f"[RAM Pre-Check] Could not fetch metadata for '{repo_id}': {e}. Skipping RAM pre-check."
+   |
+
+T100 Import for `ipdb` found
+  --> src/dd_generator.py:51:9
+   |
+49 |         assert (~(cutoff_len == 0).all()) | (~masking).all()
+50 |     except AssertionError:
+51 |         import ipdb
+   |         ^^^^^^^^^^^
+52 |
+53 |         ipdb.set_trace()
+   |
+
+T100 Trace found: `ipdb.set_trace` used
+  --> src/dd_generator.py:53:9
+   |
+51 |         import ipdb
+52 |
+53 |         ipdb.set_trace()
+   |         ^^^^^^^^^^^^^^^^
+54 |     return masking
+   |
+
+RUF059 Unpacked variable `train_set` is never used
+   --> src/evaluate.py:136:14
+    |
+134 |             data_item_args_dict["data_path"] = data_path
+135 |             data_item_args = DiscreteDiffusionDataArguments(**data_item_args_dict)
+136 |             (train_set, valid_set, testset), collator = load_data(
+    |              ^^^^^^^^^
+137 |                 data_item_args,
+138 |                 model_args,
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+RUF059 Unpacked variable `valid_set` is never used
+   --> src/evaluate.py:136:25
+    |
+134 |             data_item_args_dict["data_path"] = data_path
+135 |             data_item_args = DiscreteDiffusionDataArguments(**data_item_args_dict)
+136 |             (train_set, valid_set, testset), collator = load_data(
+    |                         ^^^^^^^^^
+137 |                 data_item_args,
+138 |                 model_args,
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+B006 Do not use mutable data structures for argument defaults
+  --> src/model/configuration_dlm.py:15:29
+   |
+13 |         vocab_pad_to_multiple=1,
+14 |         lora=False,
+15 |         lora_target_modules=["query", "value"],
+   |                             ^^^^^^^^^^^^^^^^^^
+16 |         lora_alpha=16,
+17 |         lora_rank=16,
+   |
+help: Replace with `None`; initialize within function
+
+PLW0133 Missing `raise` statement on exception
+   --> src/model/dd_model.py:111:13
+    |
+109 |       def __post_init__(self):
+110 |           if self.prefix_lm:
+111 | /             Warning(
+112 | |                 'option prefix_lm is deprecated, use attention_strategy="prefix_lm" instead.'
+113 | |             )
+    | |_____________^
+114 |               self.attention_strategy = "prefix_lm"
+    |
+help: Add `raise` keyword
+
+SIM401 Use `vocab.get(token, tokenizer.unk_token_id)` instead of an `if` block
+   --> src/model/dd_model.py:492:17
+    |
+490 |             token = dictionary[i]
+491 |             subdict2modeldict[i] = (
+492 |                 vocab[token] if token in vocab else tokenizer.unk_token_id
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+493 |             )
+494 |         ori_embedding_weight = self.model.roberta.embeddings.word_embeddings.weight
+    |
+help: Replace with `vocab.get(token, tokenizer.unk_token_id)`
+
+T100 Import for `ipdb` found
+   --> src/model/dd_model.py:547:13
+    |
+545 |         )
+546 |         if not (~feature.isnan()).all():
+547 |             import ipdb
+    |             ^^^^^^^^^^^
+548 |
+549 |             ipdb.set_trace()
+    |
+
+T100 Trace found: `ipdb.set_trace` used
+   --> src/model/dd_model.py:549:13
+    |
+547 |             import ipdb
+548 |
+549 |             ipdb.set_trace()
+    |             ^^^^^^^^^^^^^^^^
+550 |         length = attention_mask.sum(dim=-1)
+551 |         pooled_feature = (
+    |
+
+RUF012 Mutable default value for class attribute
+  --> src/model/modeling_dlm.py:58:39
+   |
+56 |   class DiscreteDiffusionModel(PreTrainedModel):
+57 |       config_class = DiscreteDiffusionConfig
+58 |       _keys_to_ignore_on_load_missing = [
+   |  _______________________________________^
+59 | |         "fake_layer",
+60 | |         "length_trm",
+61 | |         "length_predictor",
+62 | |         "model.lm_head.decoder.weight",
+63 | |         "model.lm_head.decoder.bias",
+64 | |     ]
+   | |_____^
+65 |       _tied_weights_keys = {
+66 |           "model.lm_head.decoder.weight": "model.roberta.embeddings.word_embeddings.weight"
+   |
+help: Consider initializing in `__init__` or annotating with `typing.ClassVar`
+
+RUF012 Mutable default value for class attribute
+  --> src/model/modeling_dlm.py:65:26
+   |
+63 |           "model.lm_head.decoder.bias",
+64 |       ]
+65 |       _tied_weights_keys = {
+   |  __________________________^
+66 | |         "model.lm_head.decoder.weight": "model.roberta.embeddings.word_embeddings.weight"
+67 | |     }
+   | |_____^
+68 |
+69 |       def __init__(self, config: DiscreteDiffusionConfig):
+   |
+help: Consider initializing in `__init__` or annotating with `typing.ClassVar`
+
+RUF059 Unpacked variable `B` is never used
+  --> src/model/streaming_audio_adapter.py:84:9
+   |
+82 |                              T' = T // 2 if downsample, else T
+83 |         """
+84 |         B, T, D = audio_hidden.shape
+   |         ^
+85 |
+86 |         # 1. Project to text hidden size
+   |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+RUF059 Unpacked variable `D` is never used
+  --> src/model/streaming_audio_adapter.py:84:15
+   |
+82 |                              T' = T // 2 if downsample, else T
+83 |         """
+84 |         B, T, D = audio_hidden.shape
+   |               ^
+85 |
+86 |         # 1. Project to text hidden size
+   |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+RUF059 Unpacked variable `B` is never used
+   --> src/model/streaming_backbone.py:504:9
+    |
+502 |             new_kv_caches: list of (K, V) per layer — for this forward pass
+503 |         """
+504 |         B, S = input_ids.shape
+    |         ^
+505 |
+506 |         # 1. Embeddings (NO position embeddings)
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+RUF059 Unpacked variable `S` is never used
+   --> src/model/streaming_backbone.py:504:12
+    |
+502 |             new_kv_caches: list of (K, V) per layer — for this forward pass
+503 |         """
+504 |         B, S = input_ids.shape
+    |            ^
+505 |
+506 |         # 1. Embeddings (NO position embeddings)
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+SIM102 Use a single `if` statement instead of nested `if` statements
+  --> src/train.py:81:5
+   |
+79 |           )
+80 |
+81 | /     if train_args.resume_from_checkpoint is None:
+82 | |         if os.path.exists(train_args.output_dir):
+   | |_________________________________________________^
+83 |               train_args.resume_from_checkpoint = get_last_checkpoint(
+84 |                   train_args.output_dir
+   |
+help: Combine `if` statements using `and`
+
+RUF059 Unpacked variable `test_set` is never used
+   --> src/train.py:139:28
+    |
+138 |     # load datasets
+139 |     (train_set, valid_set, test_set), collator = load_data(
+    |                            ^^^^^^^^
+140 |         data_args, model_args, tokenizer
+141 |     )
+    |
+help: Prefix it with an underscore or any other dummy variable pattern
+
+TRY201 Use `raise` without specifying exception name
+   --> src/trainer/dd_trainer.py:158:23
+    |
+156 |             except Exception as e:
+157 |                 print(f"\n[HF Push Warning] Failed to import push_checkpoint: {e}")
+158 |                 raise e
+    |                       ^
+159 |
+160 |             # 5. Trigger asynchronous upload
+    |
+help: Remove exception name
+
+BLE001 Do not catch blind exception: `Exception`
+   --> src/trainer/dd_trainer.py:174:24
+    |
+172 | …             f"\n[HF Push] Successfully uploaded checkpoint and code to Hugging Face repository '{hub_model_id}' at step {state.glob…
+173 | …         )
+174 | …     except Exception as ex:
+    |              ^^^^^^^^^
+175 | …         print(
+176 | …             f"\n[HF Push Warning] Failed to upload output to Hugging Face: {ex}"
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> src/trainer/dd_trainer.py:182:16
+    |
+180 |             self._upload_thread.start()
+181 |
+182 |         except Exception as ex:
+    |                ^^^^^^^^^
+183 |             print(
+184 |                 f"\n[HF Push Warning] Failed to prepare files for Hugging Face upload: {ex}"
+    |
+
+SIM115 Use a context manager for opening files
+   --> src/trainer/dd_trainer.py:403:25
+    |
+401 |             file_name = prediction_write_to
+402 |         self.prediction_write_to = prediction_write_to
+403 |         self.write_to = open(file_name, "w")
+    |                         ^^^^
+404 |
+405 |     def end_write_prediction(self):
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> src/trainer/dd_trainer.py:917:20
+    |
+916 |                         self.has_printed_sample = True
+917 |             except Exception as e:
+    |                    ^^^^^^^^^
+918 |                 print(f"Failed to print validation sample: {e}")
+919 |                 try:
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+    --> src/trainer/dd_trainer.py:1071:24
+     |
+1069 |                         print("=" * 80 + "\n")
+1070 |                         self.has_printed_sample = True
+1071 |                 except Exception as e2:
+     |                        ^^^^^^^^^
+1072 |                     print(f"Fallback failed too: {e2}")
+     |
+
+F841 Local variable `support_ratios` is assigned to but never used
+    --> src/trainer/dd_trainer.py:1241:9
+     |
+1239 |         text_ids = inputs["text_ids"]  # [B, text_len]
+1240 |         text_mask = inputs["text_mask"]  # [B, text_len]
+1241 |         support_ratios = inputs["support_ratios"]  # [B]
+     |         ^^^^^^^^^^^^^^
+1242 |         supported_lens = inputs["supported_lens"]  # [B]
+1243 |         total_chunks = inputs.get("total_chunks")  # [B] or None
+     |
+help: Remove assignment to unused variable `support_ratios`
+
+UP007 Use `X | Y` for type annotations
+  --> src/utils.py:51:42
+   |
+49 |         arg_list = []
+50 |         for item in arguments:
+51 |             if isinstance(item, get_args(Union[int, float, str])):
+   |                                          ^^^^^^^^^^^^^^^^^^^^^^
+52 |                 arg_list.append(item)
+53 |             elif isinstance(item, get_args(list)):
+   |
+help: Convert to `X | Y`
+
+UP007 Use `X | Y` for type annotations
+  --> src/utils.py:60:43
+   |
+58 |         for key, value in arguments.items():
+59 |             assert isinstance(key, str)
+60 |             if isinstance(value, get_args(Union[int, float, str])):
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^
+61 |                 arg_dict[key] = value
+62 |             elif isinstance(value, get_args(Union[dict, list])):
+   |
+help: Convert to `X | Y`
+
+UP007 Use `X | Y` for type annotations
+  --> src/utils.py:62:45
+   |
+60 |             if isinstance(value, get_args(Union[int, float, str])):
+61 |                 arg_dict[key] = value
+62 |             elif isinstance(value, get_args(Union[dict, list])):
+   |                                             ^^^^^^^^^^^^^^^^^
+63 |                 arg_dict[key] = argument_filter(value)
+64 |         return arg_dict
+   |
+help: Convert to `X | Y`
+
+C408 Unnecessary `dict()` call (rewrite as a literal)
+   --> src/utils.py:100:42
+    |
+ 98 | def _get_missing_special_tokens(tokenizer, tokenizer_pad_to_multiple):
+ 99 |     # add special tokens
+100 |     special_token_dict, padding_tokens = dict(), []
+    |                                          ^^^^^^
+101 |     if tokenizer.pad_token is None:
+102 |         special_token_dict["pad_token"] = "<pad>"
+    |
+help: Rewrite as a literal
+
+BLE001 Do not catch blind exception: `Exception`
+  --> transfer_hf_dataset.py:44:12
+   |
+42 |         print("Hoàn tất! Dữ liệu đã được đẩy thành công.")
+43 |
+44 |     except Exception as e:
+   |            ^^^^^^^^^
+45 |         print(f"Lỗi: {e}")
+46 |         sys.exit(1)
+   |
+
+Found 148 errors.
+No fixes available (32 hidden fixes can be enabled with the `--unsafe-fixes` option).

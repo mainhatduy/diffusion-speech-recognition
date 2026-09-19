@@ -249,7 +249,7 @@ def fix_model_file(model_path):
         try:
             onnx.checker.check_model(model)
             print("[+] ONNX check passed!")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(
                 f"[!] ONNX check failed (may be expected for large models with external weights): {e}"
             )

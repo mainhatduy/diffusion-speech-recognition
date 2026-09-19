@@ -25,13 +25,13 @@ def get_current_rss():
             for line in f:
                 if line.startswith("VmRSS:"):
                     return float(line.split()[1]) / 1024.0
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
     try:
         import psutil
 
         return psutil.Process().memory_info().rss / (1024 * 1024)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return 0.0
 
 
@@ -49,7 +49,7 @@ def get_cpu_info():
                 for line in f:
                     if "model name" in line:
                         return line.split(":", 1)[1].strip()
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
     return platform.processor() or "Unknown CPU"
 
@@ -61,7 +61,7 @@ def get_system_ram():
             for line in f:
                 if line.startswith("MemTotal:"):
                     return float(line.split()[1]) / (1024.0 * 1024.0)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
     return 0.0
 
@@ -77,7 +77,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
         waveform, sr = sf.read(path, dtype="float32", always_2d=False)
         if waveform.ndim == 2:
             waveform = waveform.mean(axis=1)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
 
     if waveform is None:
@@ -85,7 +85,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
             import librosa
 
             waveform, sr = librosa.load(path, sr=None, mono=True, dtype=np.float32)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
     if waveform is None:
@@ -97,7 +97,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
             samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
             waveform = samples / (2 ** (audio.sample_width * 8 - 1))
             sr = target_sr
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
     if waveform is None:
@@ -349,7 +349,7 @@ def main():
         from safetensors.torch import load_file
 
         state_dict = load_file(weights_path, device="cpu")
-    except Exception:
+    except Exception:  # noqa: BLE001
         weights_path = hf_hub_download(
             repo_id=args.repo_id, filename="pytorch_model.bin"
         )

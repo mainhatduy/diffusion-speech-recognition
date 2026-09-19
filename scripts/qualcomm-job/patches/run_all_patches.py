@@ -24,7 +24,7 @@ from onnx import TensorProto, helper
 def run_command(cmd, desc):
     print(f"\n[*] Running: {desc}...")
     print(f"    Command: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         print(f"[!] Error: {desc} failed!")
         print(f"    stdout: {result.stdout}")

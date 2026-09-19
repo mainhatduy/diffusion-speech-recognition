@@ -94,11 +94,15 @@ class DiscreteDiffusionDataArguments:
     )
     use_ram_cache: bool = field(
         default=False,
-        metadata={"help": "Whether to cache raw audio bytes in RAM if free RAM > threshold_ratio."},
+        metadata={
+            "help": "Whether to cache raw audio bytes in RAM if free RAM > threshold_ratio."
+        },
     )
     ram_free_threshold_ratio: float = field(
         default=0.30,
-        metadata={"help": "Minimum required free RAM ratio after preloading audio bytes into RAM."},
+        metadata={
+            "help": "Minimum required free RAM ratio after preloading audio bytes into RAM."
+        },
     )
     enable_streaming_architecture: bool = field(
         default=False,
@@ -108,15 +112,21 @@ class DiscreteDiffusionDataArguments:
     )
     curriculum_training: bool = field(
         default=False,
-        metadata={"help": "Whether to enable curriculum training for streaming augmentation."}
+        metadata={
+            "help": "Whether to enable curriculum training for streaming augmentation."
+        },
     )
     audio_chunk_duration: float = field(
         default=2.0,
-        metadata={"help": "Audio chunk duration in seconds for streaming augmentation."}
+        metadata={
+            "help": "Audio chunk duration in seconds for streaming augmentation."
+        },
     )
     audio_overlap_duration: float = field(
         default=0.5,
-        metadata={"help": "Audio overlap duration in seconds for streaming augmentation."}
+        metadata={
+            "help": "Audio overlap duration in seconds for streaming augmentation."
+        },
     )
 
 
@@ -196,8 +206,10 @@ def load_data(
                 from .utils import check_ram_capacity_for_dataset
 
                 hf_token = data_args.hf_token or os.getenv("HF_TOKEN")
-                audio_repo_id = getattr(data_args, "data_path", None) or "NhutP/VietSpeech"
-                is_approved, est_gb, proj_ratio, total_examples = (
+                audio_repo_id = (
+                    getattr(data_args, "data_path", None) or "NhutP/VietSpeech"
+                )
+                is_approved, _est_gb, proj_ratio, _total_examples = (
                     check_ram_capacity_for_dataset(
                         audio_repo_id,
                         hf_token=hf_token,

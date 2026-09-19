@@ -69,8 +69,8 @@ def prepare_audio_inputs(audio: np.ndarray, stride: int = 80) -> dict:
 def prepare_backbone_inputs(
     audio_embeds: np.ndarray,
     audio_len: int,
-    mask_id: int = None,
-    eos_id: int = None,
+    mask_id: int | None = None,
+    eos_id: int | None = None,
     seq_len: int = MAX_SEQ_LEN,
 ) -> dict:
     """Prepare precomputed audio embeddings/mask, and optionally initial input tokens for compile/inference."""

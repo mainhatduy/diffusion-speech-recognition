@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Pre-compute audio embeddings and tokenized text targets for fast training.
 
 Usage:

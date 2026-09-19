@@ -45,12 +45,7 @@ def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
     cutoff = sorted_index.gather(dim=-1, index=cutoff_len)  # + 1e-10
     # cutoff_len = k -> select k + 1 tokens
     masking = _scores < cutoff
-    try:
-        assert (~(cutoff_len == 0).all()) | (~masking).all()
-    except AssertionError:
-        import ipdb
-
-        ipdb.set_trace()
+    assert (~(cutoff_len == 0).all()) | (~masking).all()
     return masking
 
 

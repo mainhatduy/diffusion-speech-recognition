@@ -99,7 +99,7 @@ def main():
         try:
             api.create_repo(repo_id=args.repo_id, repo_type="dataset", exist_ok=True)
             print("Dataset repository created/verified.")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Warning during repository creation: {e}")
 
         print("Uploading parquet file...")
@@ -112,7 +112,7 @@ def main():
                 commit_message="Add validation split parquet file with audio",
             )
             print("Upload completed successfully!")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Upload failed: {e}")
 
 

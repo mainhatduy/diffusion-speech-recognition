@@ -1,12 +1,12 @@
 import torch
-import torch.nn as nn
-from typing import Optional
+from torch import nn
 
 
 class ResamplerCrossAttentionLayer(nn.Module):
     """
     Cross-attention layer where queries attend to key/values (audio features).
     """
+
     def __init__(
         self,
         hidden_size: int = 768,
@@ -41,12 +41,12 @@ class ResamplerCrossAttentionLayer(nn.Module):
         self,
         queries: torch.Tensor,
         audio_hidden: torch.Tensor,
-        audio_mask: Optional[torch.Tensor] = None,
+        audio_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
 
         key_padding_mask = None
         if audio_mask is not None:
-            key_padding_mask = (audio_mask == 0)
+            key_padding_mask = audio_mask == 0
 
         attn_out, _ = self.cross_attn(
             query=queries,
@@ -65,9 +65,10 @@ class ResamplerCrossAttentionLayer(nn.Module):
 
 class AudioQueryResampler(nn.Module):
     """
-    Q-Former style module to compress variable length audio features 
+    Q-Former style module to compress variable length audio features
     into a fixed number of query tokens.
     """
+
     def __init__(
         self,
         hidden_size: int = 768,
@@ -82,19 +83,21 @@ class AudioQueryResampler(nn.Module):
         self.query_tokens = nn.Parameter(
             torch.randn(1, num_queries, hidden_size) * 0.02
         )
-        self.layers = nn.ModuleList([
-            ResamplerCrossAttentionLayer(
-                hidden_size=hidden_size,
-                nhead=nhead,
-                dropout=dropout,
-            )
-            for _ in range(num_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                ResamplerCrossAttentionLayer(
+                    hidden_size=hidden_size,
+                    nhead=nhead,
+                    dropout=dropout,
+                )
+                for _ in range(num_layers)
+            ]
+        )
 
     def forward(
         self,
         audio_hidden: torch.Tensor,
-        audio_mask: Optional[torch.Tensor] = None,
+        audio_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Args:

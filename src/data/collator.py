@@ -168,8 +168,8 @@ class StreamingCollator:
             "total_chunks": total_chunks,
             "task_token_ids": task_token_ids,
         }
-        
+
         if batch[0].get("is_precomputed"):
             out["is_precomputed"] = True
-            
+
         return out

@@ -155,7 +155,7 @@ class HuggingFacePushCallback(TrainerCallback):
                 push_checkpoint_to_hub = push_checkpoint_module.push_checkpoint_to_hub
             except Exception as e:
                 print(f"\n[HF Push Warning] Failed to import push_checkpoint: {e}")
-                raise e
+                raise
 
             # 5. Trigger asynchronous upload
             token = os.getenv("HF_TOKEN")
@@ -171,7 +171,7 @@ class HuggingFacePushCallback(TrainerCallback):
                     print(
                         f"\n[HF Push] Successfully uploaded checkpoint and code to Hugging Face repository '{hub_model_id}' at step {state.global_step}"
                     )
-                except Exception as ex:
+                except Exception as ex:  # noqa: BLE001
                     print(
                         f"\n[HF Push Warning] Failed to upload output to Hugging Face: {ex}"
                     )
@@ -179,7 +179,7 @@ class HuggingFacePushCallback(TrainerCallback):
             self._upload_thread = threading.Thread(target=upload_task, daemon=True)
             self._upload_thread.start()
 
-        except Exception as ex:
+        except Exception as ex:  # noqa: BLE001
             print(
                 f"\n[HF Push Warning] Failed to prepare files for Hugging Face upload: {ex}"
             )
@@ -255,7 +255,10 @@ class DiscreteDiffusionTrainer(Trainer):
             pin_memory=self.args.dataloader_pin_memory,
             worker_init_fn=seed_worker,
             prefetch_factor=prefetch_factor,
-            persistent_workers=getattr(self.args, "dataloader_persistent_workers", False) and self.args.dataloader_num_workers > 0,
+            persistent_workers=getattr(
+                self.args, "dataloader_persistent_workers", False
+            )
+            and self.args.dataloader_num_workers > 0,
         )
         return dataloader
 
@@ -397,7 +400,7 @@ class DiscreteDiffusionTrainer(Trainer):
         else:
             file_name = prediction_write_to
         self.prediction_write_to = prediction_write_to
-        self.write_to = open(file_name, "w")
+        self.write_to = open(file_name, "w")  # noqa: SIM115
 
     def end_write_prediction(self):
         if not hasattr(self, "write_to"):
@@ -911,7 +914,7 @@ class DiscreteDiffusionTrainer(Trainer):
                         print("=" * 80 + "\n")
 
                         self.has_printed_sample = True
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(f"Failed to print validation sample: {e}")
                 try:
                     tokenizer = self.generator.tokenizer
@@ -1065,7 +1068,7 @@ class DiscreteDiffusionTrainer(Trainer):
                         print("PRED:", hyp_str)
                         print("=" * 80 + "\n")
                         self.has_printed_sample = True
-                except Exception as e2:
+                except Exception as e2:  # noqa: BLE001
                     print(f"Fallback failed too: {e2}")
 
         if hasattr(self, "write_to") or not prediction_loss_only:
@@ -1206,7 +1209,11 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
         """Use the standard collator for evaluation since eval data isn't streaming-augmented."""
         from data.collator import DiscreteDiffusionDataCollator
 
-        tokenizer = self.model.module.tokenizer if hasattr(self.model, "module") else self.model.tokenizer
+        tokenizer = (
+            self.model.module.tokenizer
+            if hasattr(self.model, "module")
+            else self.model.tokenizer
+        )
         original_collator = self.data_collator
         self.data_collator = DiscreteDiffusionDataCollator(
             bos_id=tokenizer.bos_token_id,
@@ -1221,17 +1228,19 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
         # During evaluation, inputs come in standard format (no audio_chunks).
         # Delegate to the parent's compute_loss which handles standard format.
         if "audio_chunks" not in inputs:
-            return DiscreteDiffusionTrainer.compute_loss(self, model, inputs, return_outputs=return_outputs, **kwargs)
+            return DiscreteDiffusionTrainer.compute_loss(
+                self, model, inputs, return_outputs=return_outputs, **kwargs
+            )
 
         raw_model = model.module if hasattr(model, "module") else model
 
-        audio_chunks = inputs["audio_chunks"]       # [B, num_chunks, chunk_samples]
-        audio_mask = inputs["audio_mask"]            # [B, num_chunks]
-        text_ids = inputs["text_ids"]                # [B, text_len]
-        text_mask = inputs["text_mask"]              # [B, text_len]
-        support_ratios = inputs["support_ratios"]    # [B]
-        supported_lens = inputs["supported_lens"]    # [B]
-        total_chunks = inputs.get("total_chunks")    # [B] or None
+        audio_chunks = inputs["audio_chunks"]  # [B, num_chunks, chunk_samples]
+        audio_mask = inputs["audio_mask"]  # [B, num_chunks]
+        text_ids = inputs["text_ids"]  # [B, text_len]
+        text_mask = inputs["text_mask"]  # [B, text_len]
+        _support_ratios = inputs["support_ratios"]  # [B]
+        supported_lens = inputs["supported_lens"]  # [B]
+        total_chunks = inputs.get("total_chunks")  # [B] or None
         task_token_ids = inputs.get("task_token_ids")  # [B] or None
 
         B, T_len = text_ids.shape
@@ -1249,24 +1258,26 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
         # === 1. ENCODE AUDIO (batched across chunks) ===
         audio_embeds_list = []
         last_chunk_embeds_list = []
-        
+
         # Gather all visible chunks across the batch
         all_visible_chunks = []
         batch_chunk_counts = []
-        
+
         for b in range(B):
             visible_mask = audio_mask[b]
             visible_chunks = audio_chunks[b][visible_mask]
-            
+
             if visible_chunks.shape[0] == 0:
                 batch_chunk_counts.append(0)
             else:
                 all_visible_chunks.append(visible_chunks)
                 batch_chunk_counts.append(visible_chunks.shape[0])
-                
+
         if len(all_visible_chunks) > 0:
-            batched_chunks = torch.cat(all_visible_chunks, dim=0) # [total_visible_chunks, chunk_samples]
-            
+            batched_chunks = torch.cat(
+                all_visible_chunks, dim=0
+            )  # [total_visible_chunks, chunk_samples]
+
             if inputs.get("is_precomputed", False):
                 batched_embeds = batched_chunks
             else:
@@ -1274,21 +1285,30 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
                     batched_embeds = raw_model.audio_encoder(batched_chunks)
                     if hasattr(batched_embeds, "last_hidden_state"):
                         batched_embeds = batched_embeds.last_hidden_state
-                        
+
             # Project through adapter
-            batched_projected = raw_model.audio_adapter(batched_embeds) # [total_visible_chunks, tokens, D]
-            
+            batched_projected = raw_model.audio_adapter(
+                batched_embeds
+            )  # [total_visible_chunks, tokens, D]
+
             # Compress through Q-Former resampler
-            if hasattr(raw_model, "audio_resampler") and raw_model.audio_resampler is not None:
+            if (
+                hasattr(raw_model, "audio_resampler")
+                and raw_model.audio_resampler is not None
+            ):
                 batched_projected = raw_model.audio_resampler(batched_projected)
-            
+
             # Split back to individual samples
-            projected_splits = torch.split(batched_projected, [c for c in batch_chunk_counts if c > 0])
-            
+            projected_splits = torch.split(
+                batched_projected, [c for c in batch_chunk_counts if c > 0]
+            )
+
             split_idx = 0
             for b in range(B):
                 if batch_chunk_counts[b] == 0:
-                    audio_embeds_list.append(torch.zeros(1, raw_model.config.hidden_size, device=device))
+                    audio_embeds_list.append(
+                        torch.zeros(1, raw_model.config.hidden_size, device=device)
+                    )
                 else:
                     projected = projected_splits[split_idx]
                     last_chunk_embeds_list.append(projected[-1])
@@ -1297,7 +1317,9 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
         else:
             # Fallback if ALL chunks in batch are empty
             for b in range(B):
-                audio_embeds_list.append(torch.zeros(1, raw_model.config.hidden_size, device=device))
+                audio_embeds_list.append(
+                    torch.zeros(1, raw_model.config.hidden_size, device=device)
+                )
 
         # Pad audio embeddings to same length
         max_audio_len = max(a.shape[0] for a in audio_embeds_list)
@@ -1392,10 +1414,13 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
             loss = loss + 0.1 * cal_loss
 
         # === 7. Length Predictor Loss ===
-        if hasattr(raw_model, "streaming_length_predictor") and total_chunks is not None:
+        if (
+            hasattr(raw_model, "streaming_length_predictor")
+            and total_chunks is not None
+        ):
             # Predict for the last chunk
-            last_chunk_embeds = torch.stack(last_chunk_embeds_list) # [B, tokens, D]
-            
+            last_chunk_embeds = torch.stack(last_chunk_embeds_list)  # [B, tokens, D]
+
             # Context: roughly last 32 tokens from supported length
             # Note: During training, we simplify context since it's hard to extract precisely
             context_ids = []
@@ -1407,20 +1432,22 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
                 if ctx.shape[0] < 32:
                     ctx = F.pad(ctx, (32 - ctx.shape[0], 0), value=mask_id)
                 context_ids.append(ctx)
-            context_ids = torch.stack(context_ids) # [B, 32]
-            
+            context_ids = torch.stack(context_ids)  # [B, 32]
+
             # Forward length predictor
-            length_logits = raw_model.streaming_length_predictor(last_chunk_embeds, context_ids)
-            
+            length_logits = raw_model.streaming_length_predictor(
+                last_chunk_embeds, context_ids
+            )
+
             # Ground truth: N / total_chunks
             N = text_mask.sum(dim=1).float()
             gt_lengths = (N / total_chunks.float()).round().long()
             max_tokens = raw_model.streaming_length_predictor.max_output_tokens
             gt_lengths = gt_lengths.clamp(min=0, max=max_tokens)
-            
+
             # Length loss
             length_loss = F.cross_entropy(length_logits, gt_lengths)
-            
+
             # Add to total loss
             loss = loss + 0.2 * length_loss
 

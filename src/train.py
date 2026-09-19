@@ -78,11 +78,10 @@ def parse_args():
             parser.parse_args_into_dataclasses()
         )
 
-    if train_args.resume_from_checkpoint is None:
-        if os.path.exists(train_args.output_dir):
-            train_args.resume_from_checkpoint = get_last_checkpoint(
-                train_args.output_dir
-            )
+    if train_args.resume_from_checkpoint is None and os.path.exists(
+        train_args.output_dir
+    ):
+        train_args.resume_from_checkpoint = get_last_checkpoint(train_args.output_dir)
 
     # dump the arguments
     if is_master():
@@ -136,7 +135,7 @@ def main():
     model, tokenizer = load_model_tokenizer(model_args, do_train=True)
 
     # load datasets
-    (train_set, valid_set, test_set), collator = load_data(
+    (train_set, valid_set, _test_set), collator = load_data(
         data_args, model_args, tokenizer
     )
     generator = DiscreteDiffusionGenerator(gen_args, tokenizer=tokenizer)

@@ -19,7 +19,7 @@ audio tokens. Moonshine produces translation-invariant features; this adapter
 from __future__ import annotations
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from .streaming_backbone import StreamingBackboneConfig
 
@@ -81,7 +81,7 @@ class StreamingAudioAdapter(nn.Module):
             audio_projected: [B, T', D_text] — with position, normalized
                              T' = T // 2 if downsample, else T
         """
-        B, T, D = audio_hidden.shape
+        _B, T, _D = audio_hidden.shape
 
         # 1. Project to text hidden size
         x = self.proj(audio_hidden)  # [B, T, D_text]
@@ -104,7 +104,9 @@ class StreamingAudioAdapter(nn.Module):
         return x  # [B, T', D_text]
 
     @classmethod
-    def from_config(cls, config: StreamingBackboneConfig, audio_hidden_size: int = 512) -> "StreamingAudioAdapter":
+    def from_config(
+        cls, config: StreamingBackboneConfig, audio_hidden_size: int = 512
+    ) -> StreamingAudioAdapter:
         """Create adapter from backbone config."""
         return cls(
             audio_hidden_size=audio_hidden_size,

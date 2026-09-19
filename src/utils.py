@@ -1,6 +1,5 @@
 import math
 import os
-from typing import Union, get_args
 
 import torch
 import torch.distributed as dist
@@ -48,18 +47,18 @@ def argument_filter(arguments):
     if isinstance(arguments, list):
         arg_list = []
         for item in arguments:
-            if isinstance(item, get_args(Union[int, float, str])):
+            if isinstance(item, (int, float, str)):
                 arg_list.append(item)
-            elif isinstance(item, get_args(list)):
+            elif isinstance(item, list):
                 arg_list.append(argument_filter(item))
         return arg_list
     elif isinstance(arguments, dict):
         arg_dict = {}
         for key, value in arguments.items():
             assert isinstance(key, str)
-            if isinstance(value, get_args(Union[int, float, str])):
+            if isinstance(value, (int, float, str)):
                 arg_dict[key] = value
-            elif isinstance(value, get_args(Union[dict, list])):
+            elif isinstance(value, (dict, list)):
                 arg_dict[key] = argument_filter(value)
         return arg_dict
 
@@ -97,7 +96,7 @@ def load_ckpt(model, ckpt_path, do_train=False):
 
 def _get_missing_special_tokens(tokenizer, tokenizer_pad_to_multiple):
     # add special tokens
-    special_token_dict, padding_tokens = dict(), []
+    special_token_dict, padding_tokens = {}, []
     if tokenizer.pad_token is None:
         special_token_dict["pad_token"] = "<pad>"
     if tokenizer.bos_token is None:

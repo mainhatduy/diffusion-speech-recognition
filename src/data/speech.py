@@ -16,7 +16,14 @@ class SpeechDataset(PromptDataset):
     Uses NhutP/VietSpeech or similar datasets with 'audio' and 'transcription' columns.
     """
 
-    def __init__(self, args, raw_data, tokenizer, feature_extractor, ram_audio_store: dict | None = None):
+    def __init__(
+        self,
+        args,
+        raw_data,
+        tokenizer,
+        feature_extractor,
+        ram_audio_store: dict | None = None,
+    ):
         super().__init__(args, raw_data, tokenizer)
         self.feature_extractor = feature_extractor
         self.target_sample_rate = 16000  # MMS expects 16kHz
@@ -126,7 +133,7 @@ class SpeechDataset(PromptDataset):
 
         if getattr(args, "use_ram_cache", False):
             threshold_ratio = getattr(args, "ram_free_threshold_ratio", 0.30)
-            is_approved, est_gb, proj_ratio, total_examples = (
+            is_approved, est_gb, _proj_ratio, _total_examples = (
                 check_ram_capacity_for_dataset(
                     args.data_path,
                     hf_token=hf_token,
@@ -137,17 +144,24 @@ class SpeechDataset(PromptDataset):
             if is_approved:
                 try:
                     import shutil
-                    import pyarrow.parquet as pq
-                    from tqdm import tqdm
-                    from huggingface_hub import HfFileSystem, hf_hub_download
                     from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                    import pyarrow.parquet as pq
+                    from huggingface_hub import HfFileSystem, hf_hub_download
+                    from tqdm import tqdm
 
                     ram_store = {}
                     fs = HfFileSystem(token=hf_token)
                     files = fs.ls(f"datasets/{args.data_path}/data", detail=False)
-                    parquet_files = [f.split(f"{args.data_path}/")[-1] for f in files if f.endswith(".parquet")]
+                    parquet_files = [
+                        f.split(f"{args.data_path}/")[-1]
+                        for f in files
+                        if f.endswith(".parquet")
+                    ]
 
-                    print(f"\n[RAM Cache] Bypassing slow streaming... Downloading {len(parquet_files)} parquet files to RAM disk (/dev/shm) in parallel!")
+                    print(
+                        f"\n[RAM Cache] Bypassing slow streaming... Downloading {len(parquet_files)} parquet files to RAM disk (/dev/shm) in parallel!"
+                    )
 
                     def process_parquet(filename):
                         ram_cache_dir = f"/dev/shm/hf_cache_{os.getpid()}_{filename.replace('/', '_')}"
@@ -165,23 +179,38 @@ class SpeechDataset(PromptDataset):
                             data = table.to_pylist()
                             for row in data:
                                 audio_info = row.get("audio", {})
-                                if audio_info and "path" in audio_info and "bytes" in audio_info:
-                                    local_store[audio_info["path"]] = audio_info["bytes"]
+                                if (
+                                    audio_info
+                                    and "path" in audio_info
+                                    and "bytes" in audio_info
+                                ):
+                                    local_store[audio_info["path"]] = audio_info[
+                                        "bytes"
+                                    ]
                         finally:
                             shutil.rmtree(ram_cache_dir, ignore_errors=True)
                         return local_store
 
                     with ThreadPoolExecutor(max_workers=8) as executor:
-                        futures = {executor.submit(process_parquet, pf): pf for pf in parquet_files}
-                        for future in tqdm(as_completed(futures), total=len(parquet_files), desc="Fast Parallel Caching (Parquet Files)"):
+                        futures = {
+                            executor.submit(process_parquet, pf): pf
+                            for pf in parquet_files
+                        }
+                        for future in tqdm(
+                            as_completed(futures),
+                            total=len(parquet_files),
+                            desc="Fast Parallel Caching (Parquet Files)",
+                        ):
                             ram_store.update(future.result())
 
                     ram_audio_store = ram_store
                     print(
                         f"[RAM Cache] SUCCESS: Preloaded {len(ram_audio_store)} raw audio samples ({est_gb:.2f} GB) directly into RAM!"
                     )
-                except Exception as e:
-                    print(f"[RAM Cache] Warning: Failed to stream into RAM: {e}. Falling back to disk cache.")
+                except Exception as e:  # noqa: BLE001
+                    print(
+                        f"[RAM Cache] Warning: Failed to stream into RAM: {e}. Falling back to disk cache."
+                    )
                     ram_audio_store = None
 
         print(f"Loading speech dataset from {args.data_path}")

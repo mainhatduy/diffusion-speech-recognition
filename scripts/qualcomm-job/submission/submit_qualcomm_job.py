@@ -48,7 +48,7 @@ def main():
     try:
         device = hub.Device(args.device)
         print(f"[+] Target device selected: {device.name}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[!] Error selecting device '{args.device}': {e}")
         sys.exit(1)
 
@@ -70,7 +70,7 @@ def main():
                 model_name="diffusion_backbone.onnx",
                 data_name="diffusion_backbone.data",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"[!] Repackaging failed: {e}")
             sys.exit(1)
 
@@ -103,7 +103,7 @@ def main():
         )
         compile_jobs["audio_encoder"] = audio_compile_job
         print(f"[+] Audio Encoder job submitted: {audio_compile_job.url}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[!] Failed to submit Audio Encoder compilation: {e}")
         sys.exit(1)
 
@@ -124,7 +124,7 @@ def main():
         )
         compile_jobs["diffusion_backbone"] = backbone_compile_job
         print(f"[+] Diffusion Backbone job submitted: {backbone_compile_job.url}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[!] Failed to submit Diffusion Backbone compilation: {e}")
         sys.exit(1)
 
@@ -158,7 +158,7 @@ def main():
             )
             profile_jobs[name] = profile_job
             print(f"    -> Profile job submitted: {profile_job.url}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"    [!] Failed to submit profile job: {e}")
 
     # Monitor profiling
@@ -191,7 +191,7 @@ def main():
             # Print breakdown if available
             layers = profile.get("layer_info", [])
             print(f"  - Total layers profiled: {len(layers)}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"\n[!] Failed to extract profiling metrics for {name}: {e}")
 
     print("\n" + "=" * 70)

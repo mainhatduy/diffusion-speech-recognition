@@ -12,7 +12,7 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         attention_strategy="full",
         vocab_pad_to_multiple=1,
         lora=False,
-        lora_target_modules=["query", "value"],
+        lora_target_modules=None,
         lora_alpha=16,
         lora_rank=16,
         lora_bias="none",
@@ -51,7 +51,11 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         self.attention_strategy = attention_strategy
         self.vocab_pad_to_multiple = vocab_pad_to_multiple
         self.lora = lora
-        self.lora_target_modules = lora_target_modules
+        self.lora_target_modules = (
+            lora_target_modules
+            if lora_target_modules is not None
+            else ["query", "value"]
+        )
         self.lora_alpha = lora_alpha
         self.lora_rank = lora_rank
         self.lora_bias = lora_bias

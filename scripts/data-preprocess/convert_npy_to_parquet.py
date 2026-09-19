@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import json
 import os
 import shutil
@@ -34,7 +33,7 @@ def main():
 
     # 2. Extract unique embed files
     print("Extracting unique embed files...")
-    unique_files = sorted(list(set(entry["embed_file"] for entry in index)))
+    unique_files = sorted({entry["embed_file"] for entry in index})
     num_files = len(unique_files)
     print(f"Total unique embedding files: {num_files}")
 
@@ -74,7 +73,7 @@ def main():
                 "embedding_bytes": arr.tobytes(),
                 "shape": list(arr.shape),
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"\nError reading {file_path}: {e}")
             return None
 

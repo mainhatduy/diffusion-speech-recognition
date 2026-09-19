@@ -24,7 +24,7 @@ def main():
     try:
         create_repo(repo_id=repo_id, repo_type="model", token=token, exist_ok=True)
         print("Repository ready.")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Error creating/verifying repository: {e}")
 
     # 1. Upload Tokenizer
@@ -36,7 +36,7 @@ def main():
         )
         tokenizer.push_to_hub(repo_id, token=token)
         print("Tokenizer uploaded successfully.")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Failed to upload tokenizer: {e}")
 
     # 2. Upload ONNX Files
@@ -60,7 +60,7 @@ def main():
                     commit_message=f"Upload {repo_path}",
                 )
                 print(f"Successfully uploaded {repo_path}")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(f"Failed to upload {repo_path}: {e}")
         else:
             print(f"Warning: local file {local_path} not found.")
@@ -83,7 +83,7 @@ def main():
                     commit_message=f"Upload {repo_path} helper",
                 )
                 print(f"Successfully uploaded {repo_path}")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(f"Failed to upload helper {repo_path}: {e}")
 
     # 4. Upload README.md
@@ -253,7 +253,7 @@ for label, task_token in tasks.items():
             commit_message="Add ONNX model README",
         )
         print("README.md uploaded successfully.")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Failed to upload README.md: {e}")
 
     if os.path.exists(temp_readme):

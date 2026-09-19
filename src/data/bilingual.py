@@ -83,7 +83,7 @@ class BilingualDataset(PromptDataset):
                 num_proc=num_proc,
             )
             datasets = datasets.shuffle(seed=42)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Error loading dataset: {e}")
             # Try loading from disk as fallback
             datasets = load_from_disk(args.data_path)

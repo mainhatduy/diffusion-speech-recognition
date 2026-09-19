@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
@@ -55,14 +57,14 @@ def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
 
 class DiscreteDiffusionModel(PreTrainedModel):
     config_class = DiscreteDiffusionConfig
-    _keys_to_ignore_on_load_missing = [
+    _keys_to_ignore_on_load_missing: ClassVar[list[str]] = [
         "fake_layer",
         "length_trm",
         "length_predictor",
         "model.lm_head.decoder.weight",
         "model.lm_head.decoder.bias",
     ]
-    _tied_weights_keys = {
+    _tied_weights_keys: ClassVar[dict[str, str]] = {
         "model.lm_head.decoder.weight": "model.roberta.embeddings.word_embeddings.weight"
     }
 

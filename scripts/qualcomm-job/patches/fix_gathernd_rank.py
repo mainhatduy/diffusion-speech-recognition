@@ -61,7 +61,7 @@ def fix_gathernd_in_model(model_path):
     model = onnx.load(model_path)
     try:
         model = shape_inference.infer_shapes(model)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
 
     graph = model.graph
@@ -132,19 +132,20 @@ def fix_gathernd_in_model(model_path):
         )
 
         # Collect all nodes to delete
-        def collect_ancestors(name, stop_at, visited=None):
+        del_names = set()
+
+        def collect_ancestors(name, stop_at, visited=None, del_set=del_names):
             if visited is None:
                 visited = set()
             if name in visited or name == stop_at or name not in out_map:
                 return visited
             visited.add(name)
             n = out_map[name]
-            del_names.add(n.name)
+            del_set.add(n.name)
             for inp in n.input:
-                collect_ancestors(inp, stop_at, visited)
+                collect_ancestors(inp, stop_at, visited, del_set)
             return visited
 
-        del_names = set()
         del_names.add(gnd_node.name)  # GatherND itself
         if cast_out_node is not None:
             del_names.add(cast_out_node.name)  # Cast after GatherND
@@ -261,9 +262,7 @@ def fix_gathernd_in_model(model_path):
         print(f"  Inserted {len(new_nodes)} replacement nodes.")
 
     # Quick validation: check no undefined inputs
-    all_produced = set(i.name for i in graph.initializer) | set(
-        i.name for i in graph.input
-    )
+    all_produced = {i.name for i in graph.initializer} | {i.name for i in graph.input}
     bad = []
     for n in graph.node:
         for inp in n.input:
@@ -299,7 +298,7 @@ def main():
         mask = np.ones((1, 2400), dtype=np.int64)
         out = sess.run(None, {"audio_features": audio, "audio_attention_mask": mask})
         print(f"[+] OnnxRuntime OK. Output shape: {out[0].shape}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[!] OnnxRuntime verification FAILED: {e}")
         if os.path.exists(tmp):
             os.remove(tmp)

@@ -23,7 +23,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -319,7 +319,7 @@ def main():
     for device_name in device_names:
         try:
             device = hub.Device(device_name)
-        except Exception:
+        except Exception:  # noqa: BLE001
             print(f"    [!] Device '{device_name}' not found, skipping.")
             continue
 
@@ -336,7 +336,7 @@ def main():
                 name=f"audio_enc_{device_name[:20]}_{runtime}",
             )
             print(f"      - audio_encoder job: {audio_job.url}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"      [!] audio_encoder submission failed: {e}")
 
         # Backbone Compile Job
@@ -350,7 +350,7 @@ def main():
                 name=f"backbone_{device_name[:20]}_{runtime}",
             )
             print(f"      - diffusion_backbone job: {backbone_job.url}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"      [!] diffusion_backbone submission failed: {e}")
 
         compile_jobs[device_name] = {
@@ -403,7 +403,7 @@ def main():
                 if status.code == "SUCCESS":
                     audio_success = True
                     audio_target_model = audio_job.get_target_model()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
         backbone_success = False
@@ -414,7 +414,7 @@ def main():
                 if status.code == "SUCCESS":
                     backbone_success = True
                     backbone_target_model = backbone_job.get_target_model()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
         eval_jobs[device_name] = {
@@ -454,7 +454,7 @@ def main():
                     inputs=inf_inputs,
                     name=f"audio_inf_{device_name[:20]}",
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 eval_jobs[device_name]["errors"].append(
                     f"Audio inference submission failed: {e}"
                 )
@@ -467,7 +467,7 @@ def main():
                     device=device,
                     name=f"audio_prof_{device_name[:20]}",
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 eval_jobs[device_name]["errors"].append(
                     f"Audio profiling submission failed: {e}"
                 )
@@ -497,7 +497,7 @@ def main():
                     inputs=backbone_inf_inputs,
                     name=f"backbone_inf_{device_name[:20]}",
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 eval_jobs[device_name]["errors"].append(
                     f"Backbone inference submission failed: {e}"
                 )
@@ -510,7 +510,7 @@ def main():
                     device=device,
                     name=f"backbone_prof_{device_name[:20]}",
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 eval_jobs[device_name]["errors"].append(
                     f"Backbone profiling submission failed: {e}"
                 )
@@ -578,7 +578,7 @@ def main():
                     result["errors"].append(
                         f"audio_encoder inference failed: {status.message}"
                     )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 result["audio_encoder"]["inference"] = "ERROR"
                 result["errors"].append(f"audio_encoder inference error: {e}")
         else:
@@ -593,7 +593,7 @@ def main():
                     result["diffusion_backbone"]["inference"] = "SUCCESS"
                     backbone_output = info["backbone_inf"].download_output_data()
                     if isinstance(backbone_output, dict):
-                        logits = list(backbone_output.values())[0]
+                        logits = next(iter(backbone_output.values()))
                         if isinstance(logits, list):
                             logits = logits[0]
                     else:
@@ -609,7 +609,7 @@ def main():
                     result["errors"].append(
                         f"diffusion_backbone inference failed: {status.message}"
                     )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 result["diffusion_backbone"]["inference"] = "ERROR"
                 result["errors"].append(f"diffusion_backbone inference error: {e}")
         else:
@@ -625,7 +625,7 @@ def main():
                     result["audio_encoder"]["profile"] = profile_data
                 else:
                     result["audio_encoder"]["profile"] = f"FAILED: {status.message}"
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 result["audio_encoder"]["profile"] = f"ERROR: {e}"
 
         # Backbone Profile
@@ -639,7 +639,7 @@ def main():
                     result["diffusion_backbone"]["profile"] = (
                         f"FAILED: {status.message}"
                     )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 result["diffusion_backbone"]["profile"] = f"ERROR: {e}"
 
         # Final Status
@@ -681,7 +681,7 @@ def main():
     with open(args.output, "w") as f:
         json.dump(
             {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "audio_file": args.audio,
                 "runtime": args.runtime,
                 "results": sanitize_for_json(results),

@@ -9,13 +9,12 @@ import numpy as np
 def _decode_wav_bytes(wav_bytes: bytes):
     """Decode raw WAV bytes to float32 numpy array using python's built-in wave module.
     This avoids dependency on torchcodec/soundfile/librosa."""
-    f = wave.open(io.BytesIO(wav_bytes), "rb")
-    n_channels = f.getnchannels()
-    sampwidth = f.getsampwidth()
-    n_frames = f.getnframes()
-    sample_rate = f.getframerate()
-    raw_frames = f.readframes(n_frames)
-    f.close()
+    with wave.open(io.BytesIO(wav_bytes), "rb") as f:
+        n_channels = f.getnchannels()
+        sampwidth = f.getsampwidth()
+        n_frames = f.getnframes()
+        sample_rate = f.getframerate()
+        raw_frames = f.readframes(n_frames)
 
     if sampwidth == 2:
         dtype = np.int16
@@ -47,7 +46,7 @@ def normalize_text(text: str) -> str:
     chars = []
     for char in normalized_text:
         cat = unicodedata.category(char)
-        if cat.startswith("P") or cat.startswith("S"):
+        if cat.startswith(("P", "S")):
             chars.append(" ")
         else:
             chars.append(char)
@@ -64,6 +63,7 @@ def check_ram_capacity_for_dataset(
         (is_approved, estimated_size_gb, projected_free_ratio, total_examples)
     """
     import logging
+
     import psutil
     from datasets import load_dataset_builder
 
@@ -82,8 +82,10 @@ def check_ram_capacity_for_dataset(
         if info.splits and "train" in info.splits:
             total_examples = info.splits["train"].num_examples
         elif info.splits:
-            total_examples = sum(s.num_examples for s in info.splits.values() if s.num_examples)
-    except Exception as e:
+            total_examples = sum(
+                s.num_examples for s in info.splits.values() if s.num_examples
+            )
+    except Exception as e:  # noqa: BLE001
         logger.warning(
             f"[RAM Pre-Check] Could not fetch metadata for '{repo_id}': {e}. Skipping RAM pre-check."
         )
@@ -116,5 +118,3 @@ def check_ram_capacity_for_dataset(
             f"  Safely bypassing RAM cache to prevent OOM/memory overflow!\n"
         )
         return False, est_gb, proj_free_ratio, total_examples
-
-

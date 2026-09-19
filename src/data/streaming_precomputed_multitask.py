@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from typing import ClassVar
 
 import numpy as np
 import torch
@@ -16,7 +17,11 @@ class StreamingPrecomputedMultiTaskDataset(IterableDataset):
     Yields individual task samples without downloading or loading full dataset into memory.
     """
 
-    TASK_TO_FIELD = {"<vi_en>": "english", "<vi_zh>": "chinese", "<vi_ko>": "korean"}
+    TASK_TO_FIELD: ClassVar[dict[str, str]] = {
+        "<vi_en>": "english",
+        "<vi_zh>": "chinese",
+        "<vi_ko>": "korean",
+    }
 
     def __init__(
         self,
@@ -119,11 +124,9 @@ class StreamingPrecomputedMultiTaskDataset(IterableDataset):
         if self.max_samples is not None:
             dataset_stream = dataset_stream.take(self.max_samples)
 
-        sample_counter = 0
         yielded_count = 0
 
-        for row in dataset_stream:
-            sample_counter += 1
+        for sample_counter, row in enumerate(dataset_stream, 1):
             for sample in self._process_row(row, sample_counter):
                 yield sample
                 yielded_count += 1
@@ -156,7 +159,7 @@ class StreamingPrecomputedMultiTaskDataset(IterableDataset):
             with open(meta_file) as f:
                 metadata = json.load(f)
             save_dtype_str = metadata.get("save_dtype", "float16")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(
                 f"[StreamingPrecomputedMultiTask] Warning: metadata.json fetch failed ({e}). Defaulting float16."
             )

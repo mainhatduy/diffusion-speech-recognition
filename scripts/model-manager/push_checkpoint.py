@@ -8,7 +8,10 @@ load_dotenv()
 
 
 def push_checkpoint_to_hub(
-    repo_id: str, checkpoint_dir: str, repo_type: str = "model", token: str = None
+    repo_id: str,
+    checkpoint_dir: str,
+    repo_type: str = "model",
+    token: str | None = None,
 ):
     if token is None:
         token = os.getenv("HF_TOKEN")
@@ -117,7 +120,7 @@ def main():
 
     try:
         push_checkpoint_to_hub(repo_id, checkpoint_dir, repo_type)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Error: {e}")
         sys.exit(1)
 

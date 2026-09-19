@@ -97,7 +97,7 @@ def main():
                 data_item_args_dict["task_tokens"] = [task_token]
                 data_item_args = DiscreteDiffusionDataArguments(**data_item_args_dict)
 
-                (train_set, valid_set, testset), collator = load_data(
+                (_train_set, _valid_set, testset), collator = load_data(
                     data_item_args,
                     model_args,
                     tokenizer,
@@ -133,7 +133,7 @@ def main():
             data_item_args_dict = deepcopy(data_args.__dict__)
             data_item_args_dict["data_path"] = data_path
             data_item_args = DiscreteDiffusionDataArguments(**data_item_args_dict)
-            (train_set, valid_set, testset), collator = load_data(
+            (_train_set, _valid_set, testset), collator = load_data(
                 data_item_args,
                 model_args,
                 tokenizer,

@@ -14,14 +14,11 @@ Key design decisions:
 
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-
+from torch import nn
 
 # =============================================================================
 # Configuration
@@ -47,7 +44,9 @@ class StreamingBackboneConfig:
     ergodic_window_left: int = 64
     ergodic_window_right: int = 16
     ergodic_use_rope: bool = True
-    num_ergodic_cross_attn_layers: int = 0  # Number of last Phase A layers with cross-attention
+    num_ergodic_cross_attn_layers: int = (
+        0  # Number of last Phase A layers with cross-attention
+    )
 
     # Phase B: Position-Aware layers (RoPE, wider sliding window, cross-attention)
     num_position_layers: int = 6
@@ -97,8 +96,12 @@ class RotaryEmbedding(nn.Module):
         t = torch.arange(seq_len, dtype=self.inv_freq.dtype)
         freqs = torch.outer(t, self.inv_freq)  # [seq_len, dim/2]
         emb = torch.cat([freqs, freqs], dim=-1)  # [seq_len, dim]
-        self.register_buffer("cos_cached", emb.cos(), persistent=False)  # [seq_len, dim]
-        self.register_buffer("sin_cached", emb.sin(), persistent=False)  # [seq_len, dim]
+        self.register_buffer(
+            "cos_cached", emb.cos(), persistent=False
+        )  # [seq_len, dim]
+        self.register_buffer(
+            "sin_cached", emb.sin(), persistent=False
+        )  # [seq_len, dim]
 
     def forward(self, positions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -161,7 +164,9 @@ class SlidingWindowAttention(nn.Module):
     - Configurable per-layer window sizes
     """
 
-    def __init__(self, config: StreamingBackboneConfig, layer_idx: int, use_rope: bool = False):
+    def __init__(
+        self, config: StreamingBackboneConfig, layer_idx: int, use_rope: bool = False
+    ):
         super().__init__()
         self.num_heads = config.num_attention_heads
         self.head_dim = config.head_dim
@@ -240,9 +245,21 @@ class SlidingWindowAttention(nn.Module):
         B, S, D = hidden_states.shape
 
         # 1. Compute Q, K, V
-        Q = self.q_proj(hidden_states).view(B, S, self.num_heads, self.head_dim).transpose(1, 2)
-        K = self.k_proj(hidden_states).view(B, S, self.num_heads, self.head_dim).transpose(1, 2)
-        V = self.v_proj(hidden_states).view(B, S, self.num_heads, self.head_dim).transpose(1, 2)
+        Q = (
+            self.q_proj(hidden_states)
+            .view(B, S, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+        K = (
+            self.k_proj(hidden_states)
+            .view(B, S, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+        V = (
+            self.v_proj(hidden_states)
+            .view(B, S, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
         # Q, K, V: [B, H, S, head_dim]
 
         # 2. Apply RoPE to Q, K (if enabled)
@@ -266,20 +283,28 @@ class SlidingWindowAttention(nn.Module):
 
         # 4. Create sliding window mask
         total_key_len = K.shape[2]
-        sw_mask = self._create_sliding_window_mask(S, total_key_len, cache_len, hidden_states.device)
+        sw_mask = self._create_sliding_window_mask(
+            S, total_key_len, cache_len, hidden_states.device
+        )
         # Expand to [B, H, S, total_key_len] for SDPA
         attn_mask = sw_mask.unsqueeze(0).unsqueeze(0).expand(B, self.num_heads, -1, -1)
 
         # Incorporate attention_mask (padding mask) for active tokens
         if attention_mask is not None:
             # attention_mask: [B, S] (True = valid, False = padding)
-            key_valid_mask = attention_mask.unsqueeze(1).unsqueeze(2).bool() # [B, 1, 1, S]
+            key_valid_mask = (
+                attention_mask.unsqueeze(1).unsqueeze(2).bool()
+            )  # [B, 1, 1, S]
             attn_mask = attn_mask.clone()
-            attn_mask[:, :, :, cache_len:] = attn_mask[:, :, :, cache_len:] & key_valid_mask
+            attn_mask[:, :, :, cache_len:] = (
+                attn_mask[:, :, :, cache_len:] & key_valid_mask
+            )
 
         # 5. Scaled Dot-Product Attention (flash attention when possible)
         attn_output = F.scaled_dot_product_attention(
-            Q, K, V,
+            Q,
+            K,
+            V,
             attn_mask=attn_mask,
             dropout_p=self.dropout_p if self.training else 0.0,
         )
@@ -312,21 +337,28 @@ class StreamingRobertaLayer(nn.Module):
     def __init__(self, config: StreamingBackboneConfig, layer_idx: int):
         super().__init__()
 
-        use_rope = config.position_use_rope if layer_idx >= config.num_ergodic_layers else config.ergodic_use_rope
+        use_rope = (
+            config.position_use_rope
+            if layer_idx >= config.num_ergodic_layers
+            else config.ergodic_use_rope
+        )
 
         # Self-Attention
         self.self_attn = SlidingWindowAttention(config, layer_idx, use_rope=use_rope)
-        self.self_attn_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.self_attn_norm = nn.LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps
+        )
         self.self_attn_dropout = nn.Dropout(config.hidden_dropout_prob)
 
         # Cross-Attention with Audio
         is_phase_b = layer_idx >= config.num_ergodic_layers
         is_late_ergodic = (
-            not is_phase_b 
-            and layer_idx >= config.num_ergodic_layers - config.num_ergodic_cross_attn_layers
+            not is_phase_b
+            and layer_idx
+            >= config.num_ergodic_layers - config.num_ergodic_cross_attn_layers
         )
         self.has_cross_attn = is_phase_b or is_late_ergodic
-        
+
         if self.has_cross_attn:
             self.cross_attn = nn.MultiheadAttention(
                 config.hidden_size,
@@ -334,7 +366,9 @@ class StreamingRobertaLayer(nn.Module):
                 dropout=config.attention_probs_dropout_prob,
                 batch_first=True,
             )
-            self.cross_attn_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+            self.cross_attn_norm = nn.LayerNorm(
+                config.hidden_size, eps=config.layer_norm_eps
+            )
             self.cross_attn_dropout = nn.Dropout(config.hidden_dropout_prob)
             # Near-zero init so residual initially passes through unchanged
             nn.init.xavier_uniform_(self.cross_attn.out_proj.weight, gain=0.01)
@@ -378,9 +412,11 @@ class StreamingRobertaLayer(nn.Module):
             hidden_states,
             attention_mask=attention_mask,
             past_kv_cache=past_kv_cache,
-            position_offset=position_offset
+            position_offset=position_offset,
         )
-        hidden_states = self.self_attn_norm(hidden_states + self.self_attn_dropout(attn_out))
+        hidden_states = self.self_attn_norm(
+            hidden_states + self.self_attn_dropout(attn_out)
+        )
 
         # 2. Cross-Attention with Audio (Phase B only)
         if self.has_cross_attn and audio_hidden is not None:
@@ -432,10 +468,12 @@ class StreamingDiffusionBackbone(nn.Module):
         self.embed_dropout = nn.Dropout(config.hidden_dropout_prob)
 
         # Transformer layers
-        self.layers = nn.ModuleList([
-            StreamingRobertaLayer(config, layer_idx=i)
-            for i in range(config.num_hidden_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                StreamingRobertaLayer(config, layer_idx=i)
+                for i in range(config.num_hidden_layers)
+            ]
+        )
 
         # LM Head (predict vocabulary)
         self.lm_head = nn.Linear(config.hidden_size, vocab_size, bias=False)
@@ -463,7 +501,7 @@ class StreamingDiffusionBackbone(nn.Module):
             logits: [B, S, vocab_size]
             new_kv_caches: list of (K, V) per layer — for this forward pass
         """
-        B, S = input_ids.shape
+        _B, _S = input_ids.shape
 
         # 1. Embeddings (NO position embeddings)
         h = self.word_embeddings(input_ids)
@@ -495,7 +533,7 @@ class StreamingDiffusionBackbone(nn.Module):
         config: StreamingBackboneConfig,
         vocab_size: int,
         cache_dir: str | None = None,
-    ) -> "StreamingDiffusionBackbone":
+    ) -> StreamingDiffusionBackbone:
         """
         Initialize from XLM-RoBERTa pretrained weights.
 
@@ -505,7 +543,9 @@ class StreamingDiffusionBackbone(nn.Module):
         """
         from transformers import XLMRobertaForMaskedLM
 
-        xlmr = XLMRobertaForMaskedLM.from_pretrained(config.backbone, cache_dir=cache_dir)
+        xlmr = XLMRobertaForMaskedLM.from_pretrained(
+            config.backbone, cache_dir=cache_dir
+        )
         xlmr_roberta = xlmr.roberta
         xlmr_lm_head = xlmr.lm_head
 
@@ -518,7 +558,9 @@ class StreamingDiffusionBackbone(nn.Module):
         tgt_embed[:copy_size] = src_embed[:copy_size].clone()
 
         # --- Copy Embed LayerNorm ---
-        model.embed_norm.weight.data = xlmr_roberta.embeddings.LayerNorm.weight.data.clone()
+        model.embed_norm.weight.data = (
+            xlmr_roberta.embeddings.LayerNorm.weight.data.clone()
+        )
         model.embed_norm.bias.data = xlmr_roberta.embeddings.LayerNorm.bias.data.clone()
 
         # --- Copy Layer Weights ---
@@ -526,27 +568,51 @@ class StreamingDiffusionBackbone(nn.Module):
             zip(xlmr_roberta.encoder.layer, model.layers)
         ):
             # Self-attention Q, K, V, O
-            dst_layer.self_attn.q_proj.weight.data = src_layer.attention.self.query.weight.data.clone()
-            dst_layer.self_attn.q_proj.bias.data = src_layer.attention.self.query.bias.data.clone()
-            dst_layer.self_attn.k_proj.weight.data = src_layer.attention.self.key.weight.data.clone()
-            dst_layer.self_attn.k_proj.bias.data = src_layer.attention.self.key.bias.data.clone()
-            dst_layer.self_attn.v_proj.weight.data = src_layer.attention.self.value.weight.data.clone()
-            dst_layer.self_attn.v_proj.bias.data = src_layer.attention.self.value.bias.data.clone()
-            dst_layer.self_attn.o_proj.weight.data = src_layer.attention.output.dense.weight.data.clone()
-            dst_layer.self_attn.o_proj.bias.data = src_layer.attention.output.dense.bias.data.clone()
+            dst_layer.self_attn.q_proj.weight.data = (
+                src_layer.attention.self.query.weight.data.clone()
+            )
+            dst_layer.self_attn.q_proj.bias.data = (
+                src_layer.attention.self.query.bias.data.clone()
+            )
+            dst_layer.self_attn.k_proj.weight.data = (
+                src_layer.attention.self.key.weight.data.clone()
+            )
+            dst_layer.self_attn.k_proj.bias.data = (
+                src_layer.attention.self.key.bias.data.clone()
+            )
+            dst_layer.self_attn.v_proj.weight.data = (
+                src_layer.attention.self.value.weight.data.clone()
+            )
+            dst_layer.self_attn.v_proj.bias.data = (
+                src_layer.attention.self.value.bias.data.clone()
+            )
+            dst_layer.self_attn.o_proj.weight.data = (
+                src_layer.attention.output.dense.weight.data.clone()
+            )
+            dst_layer.self_attn.o_proj.bias.data = (
+                src_layer.attention.output.dense.bias.data.clone()
+            )
 
             # Self-attention LayerNorm
-            dst_layer.self_attn_norm.weight.data = src_layer.attention.output.LayerNorm.weight.data.clone()
-            dst_layer.self_attn_norm.bias.data = src_layer.attention.output.LayerNorm.bias.data.clone()
+            dst_layer.self_attn_norm.weight.data = (
+                src_layer.attention.output.LayerNorm.weight.data.clone()
+            )
+            dst_layer.self_attn_norm.bias.data = (
+                src_layer.attention.output.LayerNorm.bias.data.clone()
+            )
 
             # FFN: intermediate dense → output dense
-            dst_layer.ffn[0].weight.data = src_layer.intermediate.dense.weight.data.clone()
+            dst_layer.ffn[
+                0
+            ].weight.data = src_layer.intermediate.dense.weight.data.clone()
             dst_layer.ffn[0].bias.data = src_layer.intermediate.dense.bias.data.clone()
             dst_layer.ffn[3].weight.data = src_layer.output.dense.weight.data.clone()
             dst_layer.ffn[3].bias.data = src_layer.output.dense.bias.data.clone()
 
             # FFN LayerNorm
-            dst_layer.ffn_norm.weight.data = src_layer.output.LayerNorm.weight.data.clone()
+            dst_layer.ffn_norm.weight.data = (
+                src_layer.output.LayerNorm.weight.data.clone()
+            )
             dst_layer.ffn_norm.bias.data = src_layer.output.LayerNorm.bias.data.clone()
 
             # Cross-attention layers (Phase B): already initialized near-zero in __init__

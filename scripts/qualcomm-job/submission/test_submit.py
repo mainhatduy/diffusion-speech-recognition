@@ -34,7 +34,7 @@ def main():
         )
         print(f"Audio encoder compile job submitted: {job.url}")
         print("Status:", job.get_status())
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Failed to submit audio_encoder: {e}")
 
     print("\nTesting submission for diffusion_backbone...")
@@ -53,7 +53,7 @@ def main():
         )
         print(f"Diffusion backbone compile job submitted: {job_backbone.url}")
         print("Status:", job_backbone.get_status())
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Failed to submit diffusion_backbone: {e}")
 
 

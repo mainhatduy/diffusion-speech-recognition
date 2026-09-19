@@ -89,7 +89,7 @@ def main():
                 f"  python src/train.py <config_path> --resume_from_checkpoint {args.target_dir}"
             )
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"\nError during download: {e}", file=sys.stderr)
         sys.exit(1)
 

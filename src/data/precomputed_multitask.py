@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from typing import ClassVar
 
 import numpy as np
 import torch
@@ -16,7 +17,11 @@ class PrecomputedMultiTaskDataset(PromptDataset):
     numpy files depending on what is available.
     """
 
-    TASK_TO_FIELD = {"<vi_en>": "english", "<vi_zh>": "chinese", "<vi_ko>": "korean"}
+    TASK_TO_FIELD: ClassVar[dict[str, str]] = {
+        "<vi_en>": "english",
+        "<vi_zh>": "chinese",
+        "<vi_ko>": "korean",
+    }
 
     def __init__(
         self,

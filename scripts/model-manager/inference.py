@@ -35,7 +35,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
         waveform, sr = sf.read(path, dtype="float32", always_2d=False)
         if waveform.ndim == 2:
             waveform = waveform.mean(axis=1)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
 
     # 2. Try librosa (handles mp3 via audioread/ffmpeg)
@@ -44,7 +44,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
             import librosa
 
             waveform, sr = librosa.load(path, sr=None, mono=True, dtype=np.float32)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
     # 3. Try pydub (handles mp3/aac/ogg via ffmpeg)
@@ -57,7 +57,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
             samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
             waveform = samples / (2 ** (audio.sample_width * 8 - 1))
             sr = target_sr  # already resampled by pydub
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
     # 4. Try torchaudio
@@ -67,7 +67,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
 
             waveform_t, sr = torchaudio.load(path)
             waveform = waveform_t.mean(dim=0).numpy().astype(np.float32)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
     if waveform is None:
@@ -96,9 +96,9 @@ def translate(
     repo_id: str = "aiai-laboratory/diffusion-speech-translation-from-vi-v1",
     max_iterations: int = 10,
     max_length: int = 64,
-    canvas_len_override: int = None,
+    canvas_len_override: int | None = None,
     strategy: str = "reparam-uncond-deterministic-cosine",
-    device: str = None,
+    device: str | None = None,
 ) -> dict:
     """
     Translate a Vietnamese audio file into English, Chinese, and Korean.
@@ -160,7 +160,7 @@ def translate(
         from safetensors.torch import load_file
 
         state_dict = load_file(weights_path, device="cpu")
-    except Exception:
+    except Exception:  # noqa: BLE001
         weights_path = hf_hub_download(repo_id=repo_id, filename="pytorch_model.bin")
         state_dict = torch.load(weights_path, map_location="cpu", weights_only=True)
 

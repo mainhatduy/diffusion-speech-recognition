@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Merge precomputed dataset (metadata, token IDs, audio embeddings parquet)
 into a unified streaming-ready Parquet dataset and push to Hugging Face Hub.
 
@@ -103,7 +102,7 @@ def main():
                 )
             )
             print(f"Found {len(target_files)} existing files in target repo.")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Warning/Error accessing target repo: {e}")
 
     # 1. Download metadata, index, and token_ids JSONs (lightweight)
@@ -125,7 +124,7 @@ def main():
         )
 
         with open(meta_path) as f:
-            metadata = json.load(f)
+            _metadata = json.load(f)
 
         with open(index_path) as f:
             index_data = json.load(f)
@@ -150,7 +149,7 @@ def main():
                 print(
                     f"  Loaded {len(task_tokens_map[task])} token entries for '{task}'"
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(f"  Warning: token_ids/{task}.json not loaded: {e}")
 
         # Upload metadata.json to target repo if not present and not dry run

@@ -1,5 +1,4 @@
-"""
-Streaming Diffusion Engine — 3-Zone Management.
+"""Streaming Diffusion Engine — 3-Zone Management.
 
 Manages the entire streaming diffusion process with three zones:
 
@@ -23,8 +22,7 @@ import torch.nn.functional as F
 
 
 class StreamingDiffusionEngine:
-    """
-    Manages the 3-zone streaming diffusion process.
+    """Manages the 3-zone streaming diffusion process.
 
     This class is stateful — it tracks frozen/active zones across audio chunks.
     Call reset() between samples.
@@ -46,6 +44,19 @@ class StreamingDiffusionEngine:
         # Device
         device: torch.device | str = "cpu",
     ):
+        """Initialize StreamingDiffusionEngine.
+
+        Args:
+            mask_id: Mask token ID.
+            eos_id: End-of-sequence token ID.
+            pad_id: Padding token ID.
+            active_window_size: Window size for active tokens.
+            frozen_cache_size: Cache size for frozen tokens.
+            streaming_denoise_steps: Denoising steps per streaming step.
+            freeze_confidence_threshold: Confidence threshold to freeze tokens.
+            remask_confidence_threshold: Confidence threshold to remask tokens.
+            device: Execution device.
+        """
         self.mask_id = mask_id
         self.eos_id = eos_id
         self.pad_id = pad_id
@@ -85,8 +96,7 @@ class StreamingDiffusionEngine:
         length_predictor: torch.nn.Module,
         audio_resampler: torch.nn.Module | None = None,
     ) -> list[int]:
-        """
-        Process a new audio chunk.
+        """Process a new audio chunk.
 
         Args:
             audio_embeds: [frames, D_audio] — from Moonshine encoder
@@ -154,8 +164,7 @@ class StreamingDiffusionEngine:
 
     @torch.no_grad()
     def _denoise_active_zone(self, backbone: torch.nn.Module):
-        """
-        Run K denoise steps on the active zone only.
+        """Run K denoise steps on the active zone only.
 
         Uses KV cache from frozen zone for context.
         Remasking: bottom 30% confidence tokens → MASK (except on last step).
@@ -209,13 +218,14 @@ class StreamingDiffusionEngine:
     def _force_freeze_tokens(
         self, tokens: list[int], backbone: torch.nn.Module
     ) -> list[int]:
-        """
-        Force-freeze tokens and move them to the frozen zone.
+        """Force-freeze tokens and move them to the frozen zone.
+
         Computes KV cache for these tokens and updates the state.
 
         Args:
             tokens: list of token IDs to freeze
             backbone: StreamingDiffusionBackbone
+
         Returns:
             list of frozen token IDs
         """
@@ -261,8 +271,7 @@ class StreamingDiffusionEngine:
 
     @torch.no_grad()
     def _freeze_confident_tokens(self, backbone: torch.nn.Module) -> list[int]:
-        """
-        Freeze tokens that exceed confidence threshold θ.
+        """Freeze tokens that exceed confidence threshold θ.
 
         Strategy: monotonic_left — only freeze from left, stop at first uncertain token.
         This prevents outputting tokens out of order.
@@ -330,8 +339,7 @@ class StreamingDiffusionEngine:
 
     @torch.no_grad()
     def flush(self, backbone: torch.nn.Module) -> list[int]:
-        """
-        End-of-stream: denoise remaining active tokens with more steps.
+        """End-of-stream: denoise remaining active tokens with more steps.
 
         Called when audio stream ends. Uses 10 denoise steps (offline quality)
         and freezes everything regardless of confidence.

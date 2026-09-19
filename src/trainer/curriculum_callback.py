@@ -1,5 +1,4 @@
-"""
-Curriculum Training Callback for Streaming Diffusion.
+"""Curriculum Training Callback for Streaming Diffusion.
 
 Implements a 4-stage curriculum that progressively increases the difficulty
 of streaming training by allowing more audio chunks to be visible:
@@ -21,8 +20,7 @@ from transformers.trainer_callback import TrainerCallback
 
 
 class CurriculumCallback(TrainerCallback):
-    """
-    Adjusts the StreamingAugmentedDataset's curriculum_step each training step.
+    """Adjusts the StreamingAugmentedDataset's curriculum_step each training step.
 
     The dataset uses curriculum_step to limit max_visible_chunks,
     progressively allowing more audio context during training.

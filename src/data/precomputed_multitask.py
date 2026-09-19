@@ -1,3 +1,5 @@
+"""Precomputed multitask dataset loading audio embeddings and tokenized text."""
+
 import json
 import logging
 import os
@@ -36,6 +38,7 @@ class PrecomputedMultiTaskDataset(PromptDataset):
         embed_dataset=None,
         embed_file_to_row=None,
     ):
+        """Initialize precomputed multitask dataset."""
         # PromptDataset expects raw_data; pass index as raw_data
         super().__init__(args, index, tokenizer)
         self.index = index  # list of {"idx", "wav_id", "embed_file"}
@@ -49,9 +52,11 @@ class PrecomputedMultiTaskDataset(PromptDataset):
         self.embed_file_to_row = embed_file_to_row
 
     def __len__(self):
+        """Return total samples across all translation tasks."""
         return len(self.index) * self.n_tasks
 
     def __getitem__(self, flat_index):
+        """Load precomputed audio embedding and token sequence for the indexed task."""
         sample_idx = flat_index // self.n_tasks
         task_idx = flat_index % self.n_tasks
         tgt_field, task_token_id = self.task_configs[task_idx]

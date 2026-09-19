@@ -1,3 +1,5 @@
+"""Submit Speech Translation models to Qualcomm AI Hub for compilation and profiling."""
+
 import argparse
 import os
 import sys
@@ -9,12 +11,14 @@ from utils import monitor_jobs, repackage_model, setup_qualcomm_token
 
 
 def print_banner():
+    """Print edge compilation and benchmarking system banner."""
     print("=" * 70)
     print("      QUALCOMM AI HUB - EDGE COMPILATION & BENCHMARKING SYSTEM")
     print("=" * 70)
 
 
 def main():
+    """Submit speech translation models to Qualcomm AI Hub for edge profiling."""
     print_banner()
 
     parser = argparse.ArgumentParser(

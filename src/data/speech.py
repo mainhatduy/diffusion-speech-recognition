@@ -1,3 +1,5 @@
+"""Speech recognition dataset implementation mapping audio to text transcriptions."""
+
 import logging
 import multiprocessing as mp
 import os
@@ -13,6 +15,7 @@ from .utils import _decode_wav_bytes, check_ram_capacity_for_dataset
 
 class SpeechDataset(PromptDataset):
     """Dataset for speech recognition: audio -> text transcription.
+
     Uses NhutP/VietSpeech or similar datasets with 'audio' and 'transcription' columns.
     """
 
@@ -24,12 +27,14 @@ class SpeechDataset(PromptDataset):
         feature_extractor,
         ram_audio_store: dict | None = None,
     ):
+        """Initialize speech recognition dataset."""
         super().__init__(args, raw_data, tokenizer)
         self.feature_extractor = feature_extractor
         self.target_sample_rate = 16000  # MMS expects 16kHz
         self.ram_audio_store = ram_audio_store
 
     def __getitem__(self, index):
+        """Decode audio waveform, encode transcription, and prepare diffusion inputs."""
         item = self.raw_data[index]
 
         # Decode audio from raw bytes (dataset loaded with decode=False)
@@ -102,6 +107,7 @@ class SpeechDataset(PromptDataset):
 
     @staticmethod
     def load_data(args, tokenizer, train=True, valid=True, test=False):
+        """Load and split speech recognition dataset."""
         tokenizer.model_max_length = args.max_length
         logging.getLogger("transformers.tokenization_utils_base").setLevel(
             logging.ERROR

@@ -1,3 +1,5 @@
+"""Discrete diffusion language model implementation."""
+
 from typing import ClassVar
 
 import torch
@@ -36,12 +38,16 @@ decoder_out_t = namedtuple(
 
 
 def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
-    """
-    scores: [b, n]
-    cutoff_len: [b, 1]
-    stochastic: bool, whether to add noise to select top_k or not
-    returns:
-        mask: [b, n], with 1 if the token is in top-k lowest scores, 0 otherwise
+    """Select top-k lowest score tokens for masking.
+
+    Args:
+        scores: [b, n] tensor of scores.
+        cutoff_len: [b, 1] cutoff indices.
+        stochastic: bool, whether to add noise to select top_k or not.
+        temp: Temperature for stochastic sampling.
+
+    Returns:
+        mask: [b, n], with 1 if the token is in top-k lowest scores, 0 otherwise.
     """
     if stochastic:
         gumbel_noise = -torch.log(-torch.log(torch.rand_like(scores) + 1e-8) + 1e-8)
@@ -56,6 +62,8 @@ def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
 
 
 class DiscreteDiffusionModel(PreTrainedModel):
+    """Discrete diffusion model for speech recognition and translation."""
+
     config_class = DiscreteDiffusionConfig
     _keys_to_ignore_on_load_missing: ClassVar[list[str]] = [
         "fake_layer",
@@ -69,6 +77,11 @@ class DiscreteDiffusionModel(PreTrainedModel):
     }
 
     def __init__(self, config: DiscreteDiffusionConfig):
+        """Initialize DiscreteDiffusionModel.
+
+        Args:
+            config: Model configuration object.
+        """
         super().__init__(config)
         self.config = config
         self.args = config  # Alias for compatibility with existing code
@@ -217,9 +230,11 @@ class DiscreteDiffusionModel(PreTrainedModel):
             self.model.roberta.encoder = new_encoder
 
     def add_fake_layer(self):
+        """Add a fake parameter layer to ensure proper gradient flow in certain setups."""
         self.fake_layer = nn.Parameter(torch.zeros((self.config.hidden_size,)))
 
     def gradient_checkpointing_enable(self):
+        """Enable gradient checkpointing on the underlying backbone model."""
         self.model.gradient_checkpointing_enable()
 
     def _tie_weights(self):
@@ -238,6 +253,17 @@ class DiscreteDiffusionModel(PreTrainedModel):
         self._tie_weights()
 
     def q_sample_coupled(self, x_0, t1, t2, maskable_mask):
+        """Sample coupled noisy states at timesteps t1 and t2.
+
+        Args:
+            x_0: Clean token tensor.
+            t1: First timestep tensor.
+            t2: Second timestep tensor.
+            maskable_mask: Boolean mask indicating which tokens may be masked.
+
+        Returns:
+            Dictionary containing noisy sequences, timesteps, and mask indicators.
+        """
         # ... copy from DiscreteDiffusionBase ...
         assert self.config.diffusion_type == "absorbing", (
             "we only support absorbing diffusion temporarily"
@@ -274,6 +300,19 @@ class DiscreteDiffusionModel(PreTrainedModel):
         length_beam=1,
         mbr=1,
     ):
+        """Initialize decode samples and canvas for diffusion generation.
+
+        Args:
+            tokens: Source and prompt tokens.
+            partial_masks: Mask indicating unmasked prefix/context tokens.
+            prefix_masks: Prefix token indicators.
+            oracle_length: Whether to use ground-truth sequence length.
+            length_beam: Number of length candidates to beam search over.
+            mbr: Minimum Bayes Risk sample size.
+
+        Returns:
+            Namedtuple decoder_out_t representing initial decode state.
+        """
         # ... copy from DiscreteDiffusionBase ...
         if tokens is None:
             raise NotImplementedError
@@ -382,6 +421,14 @@ class DiscreteDiffusionModel(PreTrainedModel):
             )
 
     def forward_length(self, input_ids):
+        """Predict target sequence length logits from input token representations.
+
+        Args:
+            input_ids: Input token tensor.
+
+        Returns:
+            Logits over possible target sequence lengths.
+        """
         attention_mask = input_ids.ne(self.pad_id).int()
         with torch.no_grad():
             _feature = self.model.roberta(input_ids, attention_mask=attention_mask)[0]
@@ -408,6 +455,22 @@ class DiscreteDiffusionModel(PreTrainedModel):
         precomputed_audio_embeds=None,
         precomputed_audio_mask=None,
     ):
+        """Execute forward pass of the discrete diffusion model.
+
+        Args:
+            prev_output_tokens: Corrupted/input tokens tensor.
+            partial_mask: Mask of non-maskable prefix tokens.
+            attention_mask: Padding attention mask.
+            loss_mask: Mask for loss calculation.
+            cache: KV cache for generation if supported.
+            audio_features: Raw audio features.
+            audio_attention_mask: Attention mask for audio features.
+            precomputed_audio_embeds: Precomputed audio embeddings.
+            precomputed_audio_mask: Attention mask for precomputed audio embeddings.
+
+        Returns:
+            Logits tensor over vocabulary for each token position.
+        """
         input_ids = prev_output_tokens
         if attention_mask is None:
             attention_mask = prev_output_tokens.ne(self.pad_id).int()
@@ -662,6 +725,19 @@ class DiscreteDiffusionModel(PreTrainedModel):
         audio_features=None,
         audio_attention_mask=None,
     ):
+        """Execute a single diffusion denoising step.
+
+        Args:
+            decoder_out: Current decoder state namedtuple.
+            partial_masks: Mask of context/prefix tokens.
+            temperature: Sampling temperature.
+            strategy: Reparameterization / scheduling strategy.
+            audio_features: Audio features for conditioning.
+            audio_attention_mask: Audio attention mask.
+
+        Returns:
+            Updated decoder state namedtuple.
+        """
         output_tokens = decoder_out.output_tokens
         output_scores = decoder_out.output_scores
         prev_step, cur_step = decoder_out.step, decoder_out.step + 1
@@ -781,6 +857,21 @@ class DiscreteDiffusionModel(PreTrainedModel):
         max_length=128,  # Fixed generation length hyperparameter (like LLaDA)
         **kwargs,
     ):
+        """Generate text using iterative discrete diffusion.
+
+        Args:
+            input_ids: Input conditioning tokens.
+            attention_mask: Optional attention mask.
+            max_iterations: Maximum number of diffusion denoising iterations.
+            strategy: Diffusion sampling strategy.
+            temperature: Sampling temperature.
+            return_history: Whether to return token trajectories across steps.
+            max_length: Maximum generation length.
+            **kwargs: Additional generation arguments.
+
+        Returns:
+            Generated token IDs tensor or dictionary with history.
+        """
         # Prepare inputs
         src_tokens = input_ids
 

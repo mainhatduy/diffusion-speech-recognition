@@ -1,5 +1,4 @@
-"""
-Decompose the ONNX `Sign` operator into supported primitives for Qualcomm NPU.
+"""Decompose the ONNX `Sign` operator into supported primitives for Qualcomm NPU.
 
 The QNN HTP compiler does not support the `Sign` operator.
 We decompose it mathematically:
@@ -232,6 +231,7 @@ def decompose_sign_nodes(graph):
 
 
 def main():
+    """Find and decompose all Sign nodes in audio_encoder ONNX graph."""
     model_path = "onnx/audio_encoder.onnx"
     print(f"[*] Loading ONNX model: {model_path}")
     model = onnx.load(model_path)

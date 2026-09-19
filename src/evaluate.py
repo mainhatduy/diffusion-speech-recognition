@@ -1,3 +1,5 @@
+"""Evaluation script for discrete diffusion speech models."""
+
 import dataclasses
 import json
 import os
@@ -29,6 +31,8 @@ from utils import load_ckpt, load_model_tokenizer
 
 @dataclass
 class DiscreteDiffusionEvalArguments:
+    """Arguments controlling evaluation checkpoint loading and output paths."""
+
     ckpt_args_file: str = field(
         default="", metadata={"help": "args file to load config"}
     )
@@ -40,10 +44,13 @@ class DiscreteDiffusionEvalArguments:
 
 @dataclass
 class DiscreteDiffusionEvalDataArguments(DiscreteDiffusionDataArguments):
+    """Data arguments extended with multiple evaluation dataset paths."""
+
     data_path: list[str] = field(default_factory=list)
 
 
 def main():
+    """Run discrete diffusion evaluation loop across evaluation datasets."""
     load_dotenv()
     parser = transformers.HfArgumentParser(
         (

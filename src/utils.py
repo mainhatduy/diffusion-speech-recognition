@@ -1,3 +1,5 @@
+"""General utility functions and model checkpoint loading routines."""
+
 import math
 import os
 
@@ -13,10 +15,13 @@ logger = logging.get_logger(__name__)
 
 
 def is_master():
+    """Check if current process is rank 0 or non-distributed."""
     return (not dist.is_initialized()) or (dist.get_rank() == 0)
 
 
 def serialized_func(enable=False):
+    """Decorator to serialize function execution across distributed ranks."""
+
     def _serialized_func(func):
         def wrapped_func(*args, **kwargs):
             local_rank = int(os.environ["LOCAL_RANK"]) if dist.is_initialized() else 0
@@ -38,12 +43,14 @@ def serialized_func(enable=False):
 
 
 def mean_ds(x, dim=None):
+    """Compute mean in float precision while preserving output tensor dtype."""
     return (
         x.float().mean().type_as(x) if dim is None else x.float().mean(dim).type_as(x)
     )
 
 
 def argument_filter(arguments):
+    """Filter arguments to keep only primitive types (int, float, str, list, dict)."""
     if isinstance(arguments, list):
         arg_list = []
         for item in arguments:
@@ -65,6 +72,7 @@ def argument_filter(arguments):
 
 @serialized_func()
 def load_ckpt(model, ckpt_path, do_train=False):
+    """Load model checkpoint weights from PyTorch, LoRA, or DeepSpeed ZeRO."""
     files = os.listdir(ckpt_path)
     # lora
     if "adapter_model.bin" in files:
@@ -129,6 +137,7 @@ TASK_SPECIAL_TOKENS = ["<vi_en>", "<vi_zh>", "<vi_ko>"] + RAINBOW_PAD_TOKENS
 
 # @serialized_func
 def load_model_tokenizer(model_args, do_train):
+    """Load pretrained backbone model and tokenizer configured with task tokens."""
     pretrained, config = model_args.pretrained, model_args.config
     model_type = pretrained if pretrained is not None else config
     model_type = "xlm-roberta"

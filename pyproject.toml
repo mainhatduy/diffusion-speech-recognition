@@ -54,6 +54,13 @@ per_rule_ignores = { DEP002 = "wandb" }
 python-dotenv = "dotenv"
 py-rouge = "rouge"
 
+[tool.ruff.lint]
+extend-select = ["D"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [tool.ruff.lint.per-file-ignores]
 "scripts/**/*.py" = ["E402"]
 "src/train.py" = ["E402"]

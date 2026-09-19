@@ -1,3 +1,5 @@
+"""Evaluate Diffusion Speech Translation model on validation split with BLEU/WER metrics."""
+
 import argparse
 import io
 import json
@@ -39,6 +41,7 @@ def load_audio_from_bytes(raw_bytes: bytes, target_sr: int = 16000) -> np.ndarra
 
 
 def main():
+    """Run batched validation evaluation and compute corpus-level translation metrics."""
     parser = argparse.ArgumentParser(
         description="Evaluate Diffusion Speech Translation model with batching."
     )

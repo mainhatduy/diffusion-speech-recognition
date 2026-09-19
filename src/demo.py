@@ -1,3 +1,5 @@
+"""Streamlit demo application for interactive diffusion language generation."""
+
 import streamlit as st
 
 from interactive import InteractiveDiffusion
@@ -16,6 +18,7 @@ model_ckpt = st.sidebar.text_input(
 
 
 def get_engine(model_args, model_ckpt):
+    """Load interactive diffusion engine and store in session state."""
     with st.spinner("Loading model"):
         # if hasattr(st.session_state, "engine"):
         #     del st.session_state.engine
@@ -46,6 +49,7 @@ strategy = st.sidebar.selectbox(
 
 
 def show_results(prompt):
+    """Run diffusion sampling loop on user prompt and display intermediate outputs."""
     for i, output in enumerate(
         st.session_state.engine.sample(
             prompt,

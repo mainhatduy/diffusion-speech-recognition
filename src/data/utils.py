@@ -1,3 +1,5 @@
+"""Utility helpers for audio decoding, text normalization, and dataset operations."""
+
 import io
 import re
 import unicodedata
@@ -8,7 +10,9 @@ import numpy as np
 
 def _decode_wav_bytes(wav_bytes: bytes):
     """Decode raw WAV bytes to float32 numpy array using python's built-in wave module.
-    This avoids dependency on torchcodec/soundfile/librosa."""
+
+    This avoids dependency on torchcodec/soundfile/librosa.
+    """
     with wave.open(io.BytesIO(wav_bytes), "rb") as f:
         n_channels = f.getnchannels()
         sampwidth = f.getsampwidth()

@@ -1,6 +1,5 @@
-"""
-Multi-Chipset Inference Test for Diffusion Speech Translation Model (Asynchronous)
-==================================================================================
+"""Multi-Chipset Inference Test for Diffusion Speech Translation Model (Asynchronous).
+
 This script tests end-to-end inference of the Vietnamese speech translation model
 on multiple Qualcomm chipsets via the AI Hub Workbench.
 
@@ -68,6 +67,7 @@ def format_duration(seconds: float) -> str:
 
 
 def print_banner():
+    """Print benchmark banner and model information."""
     print("=" * 75)
     print("  QUALCOMM AI HUB — ASYNC MULTI-CHIPSET INFERENCE BENCHMARK")
     print("  Model: aiai-laboratory/onnx-diffusion-speech-translation-from-vi-v1")
@@ -139,6 +139,7 @@ def print_results_table(results: list):
 
 
 def main():
+    """Run multi-chipset benchmark suite on Qualcomm AI Hub."""
     print_banner()
 
     parser = argparse.ArgumentParser(

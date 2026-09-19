@@ -1,5 +1,4 @@
-"""
-Streaming Backbone for Discrete Diffusion Speech Recognition.
+"""Streaming Backbone for Discrete Diffusion Speech Recognition.
 
 Replaces the standard XLM-RoBERTa backbone with a hybrid architecture:
 - Phase A (Layers 1–6): Ergodic — NO position embedding, sliding window attention
@@ -61,6 +60,7 @@ class StreamingBackboneConfig:
 
     @property
     def head_dim(self) -> int:
+        """Return the dimension of each attention head."""
         return self.hidden_size // self.num_attention_heads
 
 
@@ -70,8 +70,7 @@ class StreamingBackboneConfig:
 
 
 class RotaryEmbedding(nn.Module):
-    """
-    Rotary Position Embedding (RoPE).
+    """Rotary Position Embedding (RoPE).
 
     Applied to Query and Key in attention to inject relative position
     information without absolute position embeddings.
@@ -80,6 +79,13 @@ class RotaryEmbedding(nn.Module):
     """
 
     def __init__(self, dim: int, max_seq_len: int = 8192, theta: float = 10000.0):
+        """Initialize RotaryEmbedding.
+
+        Args:
+            dim: Dimension of embeddings to rotate.
+            max_seq_len: Maximum sequence length to precompute cache.
+            theta: Base period for frequency calculation.
+        """
         super().__init__()
         self.dim = dim
         self.max_seq_len = max_seq_len
@@ -104,9 +110,11 @@ class RotaryEmbedding(nn.Module):
         )  # [seq_len, dim]
 
     def forward(self, positions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """
+        """Compute cosine and sine embeddings for positions.
+
         Args:
-            positions: [seq_len] — position indices (can be non-contiguous)
+            positions: [seq_len] — position indices (can be non-contiguous).
+
         Returns:
             cos, sin: [1, 1, seq_len, head_dim] — ready for broadcasting
         """
@@ -135,14 +143,16 @@ def apply_rotary_pos_emb(
     cos: torch.Tensor,
     sin: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Apply RoPE rotation to Q and K.
+    """Apply RoPE rotation to Q and K.
 
     Args:
-        q, k: [B, H, S, D]
-        cos, sin: [1, 1, S, D]
+        q: Query tensor of shape [B, H, S, D].
+        k: Key tensor of shape [B, H, S, D].
+        cos: Cosine tensor of shape [1, 1, S, D].
+        sin: Sine tensor of shape [1, 1, S, D].
+
     Returns:
-        q_rotated, k_rotated: [B, H, S, D]
+        Tuple of (q_rotated, k_rotated) of shape [B, H, S, D].
     """
     q_rotated = q * cos + _rotate_half(q) * sin
     k_rotated = k * cos + _rotate_half(k) * sin
@@ -155,8 +165,7 @@ def apply_rotary_pos_emb(
 
 
 class SlidingWindowAttention(nn.Module):
-    """
-    Multi-Head Attention with Sliding Window.
+    """Multi-Head Attention with Sliding Window.
 
     Supports:
     - RoPE (optional, only for Phase B layers)
@@ -167,6 +176,13 @@ class SlidingWindowAttention(nn.Module):
     def __init__(
         self, config: StreamingBackboneConfig, layer_idx: int, use_rope: bool = False
     ):
+        """Initialize SlidingWindowAttention.
+
+        Args:
+            config: Model architecture configuration.
+            layer_idx: Layer index in the backbone.
+            use_rope: Whether to apply rotary position embeddings.
+        """
         super().__init__()
         self.num_heads = config.num_attention_heads
         self.head_dim = config.head_dim
@@ -200,8 +216,7 @@ class SlidingWindowAttention(nn.Module):
     def _create_sliding_window_mask(
         self, query_len: int, key_len: int, cache_len: int, device: torch.device
     ) -> torch.Tensor:
-        """
-        Create sliding window attention mask.
+        """Create sliding window attention mask.
 
         For active tokens (query), the mask allows:
         - Full attention to ALL cached (frozen) tokens
@@ -231,12 +246,13 @@ class SlidingWindowAttention(nn.Module):
         past_kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None,
         position_offset: int = 0,
     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
-        """
+        """Compute sliding window self-attention for hidden states.
+
         Args:
             hidden_states: [B, S, D] — active tokens
             attention_mask: [B, S] — mask for active tokens
             past_kv_cache: (K_cache, V_cache) each [B, H, cache_len, head_dim]
-            position_offset: starting position for RoPE (for streaming continuity)
+            position_offset: starting position for RoPE (for streaming continuity).
 
         Returns:
             output: [B, S, D]
@@ -323,8 +339,7 @@ class SlidingWindowAttention(nn.Module):
 
 
 class StreamingRobertaLayer(nn.Module):
-    """
-    A single RoBERTa layer modified for streaming.
+    """A single RoBERTa layer modified for streaming.
 
     Components:
     - Self-Attention with Sliding Window (+ optional RoPE)
@@ -335,6 +350,12 @@ class StreamingRobertaLayer(nn.Module):
     """
 
     def __init__(self, config: StreamingBackboneConfig, layer_idx: int):
+        """Initialize StreamingRobertaLayer.
+
+        Args:
+            config: Model architecture configuration.
+            layer_idx: Layer index in the backbone.
+        """
         super().__init__()
 
         use_rope = (
@@ -394,14 +415,15 @@ class StreamingRobertaLayer(nn.Module):
         audio_attention_mask: torch.Tensor | None = None,
         position_offset: int = 0,
     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
-        """
+        """Execute forward pass for streaming layer.
+
         Args:
             hidden_states: [B, S, D]
             attention_mask: [B, S]
             past_kv_cache: (K, V) from frozen zone
             audio_hidden: [B, A, D] audio features for cross-attention
             audio_attention_mask: [B, A] audio mask
-            position_offset: RoPE position offset
+            position_offset: RoPE position offset.
 
         Returns:
             hidden_states: [B, S, D]
@@ -448,8 +470,7 @@ class StreamingRobertaLayer(nn.Module):
 
 
 class StreamingDiffusionBackbone(nn.Module):
-    """
-    Streaming Diffusion Backbone — replaces standard XLM-RoBERTa.
+    """Streaming Diffusion Backbone — replaces standard XLM-RoBERTa.
 
     Architecture:
     - Word Embeddings (from XLM-R pretrained, NO position embeddings)
@@ -459,6 +480,12 @@ class StreamingDiffusionBackbone(nn.Module):
     """
 
     def __init__(self, config: StreamingBackboneConfig, vocab_size: int):
+        """Initialize StreamingDiffusionBackbone.
+
+        Args:
+            config: Model architecture configuration.
+            vocab_size: Size of the vocabulary.
+        """
         super().__init__()
         self.config = config
 
@@ -488,14 +515,15 @@ class StreamingDiffusionBackbone(nn.Module):
         audio_attention_mask: torch.Tensor | None = None,
         position_offset: int = 0,
     ) -> tuple[torch.Tensor, list[tuple[torch.Tensor, torch.Tensor]]]:
-        """
+        """Execute forward pass through streaming backbone.
+
         Args:
             input_ids: [B, S] — token IDs for active zone
             attention_mask: [B, S] — True for valid, False for padding
             past_kv_caches: list of (K, V) per layer — from frozen zone
             audio_hidden: [B, A, D] — projected audio features
             audio_attention_mask: [B, A] — True for valid, False for padding
-            position_offset: starting RoPE position for streaming continuity
+            position_offset: starting RoPE position for streaming continuity.
 
         Returns:
             logits: [B, S, vocab_size]
@@ -534,8 +562,7 @@ class StreamingDiffusionBackbone(nn.Module):
         vocab_size: int,
         cache_dir: str | None = None,
     ) -> StreamingDiffusionBackbone:
-        """
-        Initialize from XLM-RoBERTa pretrained weights.
+        """Initialize from XLM-RoBERTa pretrained weights.
 
         Copies: word embeddings, self-attention Q/K/V/O, FFN, LayerNorms.
         Discards: position_embeddings (replaced by RoPE in Phase B).

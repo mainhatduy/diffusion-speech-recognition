@@ -1,3 +1,5 @@
+"""Utility helpers for Qualcomm AI Hub job submission, inference, and model repackaging."""
+
 import os
 import sys
 import time

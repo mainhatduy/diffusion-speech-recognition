@@ -1,3 +1,5 @@
+"""Dataset implementation for bilingual text-to-text translation tasks."""
+
 import logging
 import multiprocessing as mp
 import os
@@ -9,9 +11,10 @@ from .base import PromptDataset
 
 
 class BilingualDataset(PromptDataset):
-    """Dataset for bilingual data with two columns (e.g., en and vi) from Hugging Face"""
+    """Dataset for bilingual data with two columns (e.g., en and vi) from Hugging Face."""
 
     def __getitem__(self, index):
+        """Tokenize source and target text pair and format concatenated sequence."""
         item = self.raw_data[index]
         src_text = item[self.args.src_column]
         tgt_text = item[self.args.tgt_column]
@@ -53,6 +56,7 @@ class BilingualDataset(PromptDataset):
 
     @staticmethod
     def load_data(args, tokenizer, train=True, valid=True, test=False):
+        """Load bilingual dataset from Hugging Face Hub or local disk."""
         # Set tokenizer model_max_length from config and suppress warnings during filtering
         tokenizer.model_max_length = args.max_length
         logging.getLogger("transformers.tokenization_utils_base").setLevel(

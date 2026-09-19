@@ -1,6 +1,5 @@
-"""
-Full Iterative Inference on Qualcomm Chipset via AI Hub
-======================================================
+"""Full Iterative Inference on Qualcomm Chipset via AI Hub.
+
 This script runs the full diffusion denoising loop on the Qualcomm S25 chipset
 by submitting step-by-step backbone inference requests to Qualcomm AI Hub.
 """
@@ -35,6 +34,7 @@ DEFAULT_DEVICE = "Samsung Galaxy S25 (Family)"
 
 
 def main():
+    """Run full iterative speech translation inference on Qualcomm chipset."""
     parser = argparse.ArgumentParser(
         description="Run end-to-end full iterative speech translation inference on Qualcomm chipset"
     )

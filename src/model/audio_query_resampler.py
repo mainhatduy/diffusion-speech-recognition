@@ -1,11 +1,11 @@
+"""Audio query resampler modules for compressing audio representations."""
+
 import torch
 from torch import nn
 
 
 class ResamplerCrossAttentionLayer(nn.Module):
-    """
-    Cross-attention layer where queries attend to key/values (audio features).
-    """
+    """Cross-attention layer where queries attend to key/values (audio features)."""
 
     def __init__(
         self,
@@ -13,6 +13,13 @@ class ResamplerCrossAttentionLayer(nn.Module):
         nhead: int = 8,
         dropout: float = 0.1,
     ):
+        """Initialize ResamplerCrossAttentionLayer.
+
+        Args:
+            hidden_size: Hidden dimension size.
+            nhead: Number of attention heads.
+            dropout: Dropout probability.
+        """
         super().__init__()
         self.cross_attn = nn.MultiheadAttention(
             embed_dim=hidden_size,
@@ -43,7 +50,16 @@ class ResamplerCrossAttentionLayer(nn.Module):
         audio_hidden: torch.Tensor,
         audio_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        """Cross-attend queries to audio hidden features.
 
+        Args:
+            queries: Query tensor of shape [B, num_queries, D].
+            audio_hidden: Audio features of shape [B, T_audio, D].
+            audio_mask: Optional mask of shape [B, T_audio].
+
+        Returns:
+            Updated queries tensor of shape [B, num_queries, D].
+        """
         key_padding_mask = None
         if audio_mask is not None:
             key_padding_mask = audio_mask == 0
@@ -64,9 +80,9 @@ class ResamplerCrossAttentionLayer(nn.Module):
 
 
 class AudioQueryResampler(nn.Module):
-    """
-    Q-Former style module to compress variable length audio features
-    into a fixed number of query tokens.
+    """Q-Former style module to compress variable length audio features.
+
+    Compresses variable-length features into a fixed number of query tokens.
     """
 
     def __init__(
@@ -77,6 +93,15 @@ class AudioQueryResampler(nn.Module):
         nhead: int = 8,
         dropout: float = 0.1,
     ):
+        """Initialize AudioQueryResampler.
+
+        Args:
+            hidden_size: Hidden dimension size.
+            num_queries: Number of query tokens.
+            num_layers: Number of cross-attention layers.
+            nhead: Number of attention heads.
+            dropout: Dropout probability.
+        """
         super().__init__()
         self.hidden_size = hidden_size
         self.num_queries = num_queries
@@ -99,10 +124,12 @@ class AudioQueryResampler(nn.Module):
         audio_hidden: torch.Tensor,
         audio_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """
+        """Compress variable length audio features into fixed query tokens.
+
         Args:
             audio_hidden: [B, T_audio, D]
-            audio_mask: Optional [B, T_audio] (1 for valid, 0 for pad)
+            audio_mask: Optional [B, T_audio] (1 for valid, 0 for pad).
+
         Returns:
             compressed_audio: [B, num_queries, D]
         """

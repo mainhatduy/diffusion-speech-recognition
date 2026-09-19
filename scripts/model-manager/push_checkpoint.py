@@ -1,3 +1,5 @@
+"""Push training checkpoints and experiment state to Hugging Face Hub."""
+
 import os
 import sys
 
@@ -13,6 +15,7 @@ def push_checkpoint_to_hub(
     repo_type: str = "model",
     token: str | None = None,
 ):
+    """Upload checkpoint directory and associated training metadata to Hugging Face Hub."""
     if token is None:
         token = os.getenv("HF_TOKEN")
     if not token:
@@ -90,6 +93,7 @@ def push_checkpoint_to_hub(
 
 
 def main():
+    """Parse CLI arguments and push training checkpoint to Hugging Face Hub."""
     if len(sys.argv) < 2:
         print(
             "Usage: python scripts/model-manager/push_checkpoint.py <repo_id> [checkpoint_dir] [repo_type]"

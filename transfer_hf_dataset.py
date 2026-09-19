@@ -1,3 +1,5 @@
+"""Script to transfer Hugging Face dataset shards to a target repository."""
+
 import os
 import sys
 
@@ -6,6 +8,7 @@ from huggingface_hub import login
 
 
 def load_env():
+    """Load environment variables from local .env file if it exists."""
     if os.path.exists(".env"):
         with open(".env", "r") as f:
             for line in f:
@@ -16,6 +19,7 @@ def load_env():
 
 
 def main():
+    """Transfer dataset shard from source repository to target Hugging Face repository."""
     try:
         # Tải biến môi trường từ .env
         load_env()

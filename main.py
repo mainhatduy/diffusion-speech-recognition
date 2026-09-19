@@ -1,4 +1,8 @@
+"""Main entry point for the diffusion-speech-recognition package."""
+
+
 def main():
+    """Print welcome message."""
     print("Hello from diffusion-speech-recognition!")
 
 

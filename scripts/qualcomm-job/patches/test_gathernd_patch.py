@@ -1,3 +1,5 @@
+"""Test script for constructing GatherND patch nodes."""
+
 import os
 
 import onnx
@@ -5,6 +7,7 @@ from onnx import TensorProto, helper
 
 
 def test_patch():
+    """Verify construction of dynamic GatherND test patch nodes."""
     model_path = "onnx/diffusion_backbone.onnx"
     if not os.path.exists(model_path):
         print("Model file not found")

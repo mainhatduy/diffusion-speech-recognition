@@ -1,3 +1,5 @@
+"""Translated speech recognition dataset mapping Vietnamese audio to target language translations."""
+
 import logging
 import multiprocessing as mp
 import os
@@ -13,6 +15,7 @@ from .utils import _decode_wav_bytes, normalize_text
 
 class TranslatedSpeechDataset(PromptDataset):
     """Dataset for translated speech recognition: audio -> translated text.
+
     Loads translations from aiai-laboratory/vietspeech-train-translated
     and maps them to audio files from NhutP/VietSpeech.
     """
@@ -27,6 +30,7 @@ class TranslatedSpeechDataset(PromptDataset):
         tokenizer,
         feature_extractor,
     ):
+        """Initialize translated speech dataset."""
         super().__init__(args, raw_data, tokenizer)
         self.vietspeech_dataset = vietspeech_dataset
         self.path_to_vs_idx = path_to_vs_idx
@@ -35,6 +39,7 @@ class TranslatedSpeechDataset(PromptDataset):
         self.target_sample_rate = 16000  # MMS expects 16kHz
 
     def __getitem__(self, index):
+        """Fetch translated sample, match audio waveform, and prepare diffusion tokens."""
         # raw_data is the translated dataset
         translated_item = self.raw_data[index]
         wav_id = translated_item["id"]
@@ -107,6 +112,18 @@ class TranslatedSpeechDataset(PromptDataset):
 
     @staticmethod
     def load_data(args, tokenizer, train=True, valid=True, test=False):
+        """Load and preprocess the translated speech dataset.
+
+        Args:
+            args: Command-line or training arguments.
+            tokenizer: Tokenizer instance for text processing.
+            train: Whether to load the training split.
+            valid: Whether to load the validation split.
+            test: Whether to load the test split.
+
+        Returns:
+            Dictionary containing the requested dataset splits.
+        """
         tokenizer.model_max_length = args.max_length
         logging.getLogger("transformers.tokenization_utils_base").setLevel(
             logging.ERROR

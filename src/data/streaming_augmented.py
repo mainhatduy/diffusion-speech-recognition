@@ -1,5 +1,4 @@
-"""
-Streaming Augmented Dataset.
+"""Streaming Augmented Dataset.
 
 Wraps existing (full_audio, full_text) datasets to simulate streaming conditions
 during training:
@@ -25,8 +24,7 @@ from torch.utils.data import Dataset
 
 
 class StreamingAugmentedDataset(Dataset):
-    """
-    Wraps a base dataset to produce streaming-augmented training samples.
+    """Wraps a base dataset to produce streaming-augmented training samples.
 
     Each call to __getitem__ randomly selects a "streaming moment" —
     how many audio chunks the model has seen so far — producing
@@ -53,6 +51,7 @@ class StreamingAugmentedDataset(Dataset):
         curriculum_step: int = -1,
         total_curriculum_steps: int = 100000,
     ):
+        """Initialize streaming chunk augmented dataset wrapper."""
         self.base = base_dataset
         self.tokenizer = tokenizer
         self.chunk_duration = chunk_duration
@@ -77,9 +76,11 @@ class StreamingAugmentedDataset(Dataset):
         self.total_curriculum_steps = total_curriculum_steps
 
     def __len__(self):
+        """Return length of underlying base dataset."""
         return len(self.base)
 
     def __getitem__(self, idx):
+        """Sample audio chunks according to curriculum support ratio and prepare streaming targets."""
         sample = self.base[idx]
 
         # Extract data

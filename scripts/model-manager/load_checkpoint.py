@@ -1,3 +1,5 @@
+"""Download training checkpoints from Hugging Face Hub."""
+
 import argparse
 import os
 import sys
@@ -7,6 +9,7 @@ from huggingface_hub import snapshot_download
 
 
 def parse_args():
+    """Parse command-line arguments for downloading checkpoint."""
     parser = argparse.ArgumentParser(
         description="Download a full training checkpoint (including training state, optimizer, etc.) from Hugging Face Hub."
     )
@@ -37,6 +40,7 @@ def parse_args():
 
 
 def main():
+    """Download checkpoint snapshot from Hugging Face to local directory."""
     args = parse_args()
     load_dotenv()
 

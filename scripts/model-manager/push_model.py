@@ -1,3 +1,5 @@
+"""Export and push DiscreteDiffusionModel artifacts and tokenizer to Hugging Face Hub."""
+
 import json
 import os
 import sys
@@ -17,6 +19,7 @@ from model.modeling_dlm import DiscreteDiffusionModel
 
 
 def main():
+    """Package model checkpoint, generate model card, and push to Hugging Face Hub."""
     if len(sys.argv) < 2:
         print(
             "Usage: python scripts/model-manager/push_model.py <repo_id> [experiment_dir] [checkpoint_dir]"

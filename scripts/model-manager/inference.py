@@ -1,5 +1,4 @@
-"""
-inference.py — Speech translation inference for the diffusion model.
+"""inference.py — Speech translation inference for the diffusion model.
 
 Loads aiai-laboratory/diffusion-speech-translation-from-vi-v1 from HuggingFace Hub
 and translates Vietnamese speech audio into 3 target languages: English, Chinese, Korean.
@@ -100,8 +99,7 @@ def translate(
     strategy: str = "reparam-uncond-deterministic-cosine",
     device: str | None = None,
 ) -> dict:
-    """
-    Translate a Vietnamese audio file into English, Chinese, and Korean.
+    """Translate a Vietnamese audio file into English, Chinese, and Korean.
 
     Args:
         audio_path: Path to a .wav / .mp3 / .flac file (Vietnamese speech).
@@ -336,6 +334,7 @@ def translate(
 
 
 def main():
+    """Run CLI speech translation pipeline from input audio file."""
     parser = argparse.ArgumentParser(
         description="Translate Vietnamese speech to EN / ZH / KO using the diffusion model."
     )

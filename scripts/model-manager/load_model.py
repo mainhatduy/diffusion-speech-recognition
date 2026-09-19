@@ -1,3 +1,5 @@
+"""Script to test loading discrete diffusion model checkpoints locally or from Hugging Face."""
+
 import json
 import os
 import sys
@@ -19,6 +21,7 @@ from model.modeling_dlm import DiscreteDiffusionModel
 
 
 def main():
+    """Load model checkpoint and perform inference verification on sample audio."""
     if len(sys.argv) < 2:
         print(
             "Usage: python scripts/model-manager/load_model.py <model_path_or_repo_id> [audio_path] [json_path]"

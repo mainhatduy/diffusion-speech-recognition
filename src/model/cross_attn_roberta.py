@@ -1,3 +1,5 @@
+"""Cross-attention enabled RoBERTa layer and encoder implementations."""
+
 import torch
 from torch import nn
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
@@ -6,7 +8,15 @@ from transformers.pytorch_utils import apply_chunking_to_forward
 
 
 class CrossAttnRobertaLayer(RobertaLayer):
+    """RoBERTa layer augmented with a cross-attention block for conditioning."""
+
     def __init__(self, config, layer_idx=None):
+        """Initialize CrossAttnRobertaLayer.
+
+        Args:
+            config: RoBERTa configuration.
+            layer_idx: Optional layer index.
+        """
         super().__init__(config, layer_idx=layer_idx)
 
         # New Cross-Attention block
@@ -39,6 +49,19 @@ class CrossAttnRobertaLayer(RobertaLayer):
         past_key_values: tuple | None = None,
         **kwargs,
     ) -> torch.Tensor:
+        """Execute forward pass of the cross-attention RoBERTa layer.
+
+        Args:
+            hidden_states: Input hidden states.
+            attention_mask: Attention mask for self-attention.
+            encoder_hidden_states: Cross-attention conditioning hidden states.
+            encoder_attention_mask: Attention mask for cross-attention.
+            past_key_values: Past key-value states for caching.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Output hidden states tensor.
+        """
         # 1. Self-Attention
         self_attention_output, _ = self.attention(
             hidden_states,
@@ -82,7 +105,14 @@ class CrossAttnRobertaLayer(RobertaLayer):
 
 
 class CrossAttnRobertaEncoder(RobertaEncoder):
+    """RoBERTa encoder comprising layers with cross-attention capability."""
+
     def __init__(self, config):
+        """Initialize CrossAttnRobertaEncoder.
+
+        Args:
+            config: RoBERTa configuration.
+        """
         super().__init__(config)
         # Re-initialize the layers as CrossAttnRobertaLayer
         self.layer = nn.ModuleList(
@@ -102,6 +132,20 @@ class CrossAttnRobertaEncoder(RobertaEncoder):
         use_cache: bool | None = None,
         **kwargs,
     ) -> tuple[torch.Tensor] | BaseModelOutputWithPastAndCrossAttentions:
+        """Execute forward pass across all encoder layers.
+
+        Args:
+            hidden_states: Input hidden states.
+            attention_mask: Mask for self-attention.
+            encoder_hidden_states: Cross-attention conditioning states.
+            encoder_attention_mask: Mask for cross-attention.
+            past_key_values: Past key-values for caching.
+            use_cache: Whether to return cached key-values.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            BaseModelOutputWithPastAndCrossAttentions or tuple containing last hidden states.
+        """
         for i, layer_module in enumerate(self.layer):
             hidden_states = layer_module(
                 hidden_states,

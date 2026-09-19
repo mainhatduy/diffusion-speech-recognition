@@ -1,3 +1,5 @@
+"""Export PyTorch discrete diffusion speech translation models to ONNX format."""
+
 import os
 import sys
 
@@ -18,6 +20,7 @@ orig_pretrained_config_from_pretrained = PretrainedConfig.from_pretrained
 
 
 def patched_auto_config_from_pretrained(*args, **kwargs):
+    """Wrap AutoConfig.from_pretrained to force eager attention implementation."""
     kwargs["attn_implementation"] = "eager"
     config = orig_auto_config_from_pretrained(*args, **kwargs)
     if isinstance(config, tuple):
@@ -30,6 +33,7 @@ def patched_auto_config_from_pretrained(*args, **kwargs):
 
 
 def patched_pretrained_config_from_pretrained(cls, *args, **kwargs):
+    """Wrap PretrainedConfig.from_pretrained to force eager attention implementation."""
     kwargs["attn_implementation"] = "eager"
     config = orig_pretrained_config_from_pretrained.__func__(cls, *args, **kwargs)
     if isinstance(config, tuple):
@@ -48,13 +52,17 @@ PretrainedConfig.from_pretrained = classmethod(
 
 
 class DiscreteDiffusionONNXWrapper(torch.nn.Module):
+    """Wrapper module for exporting DiscreteDiffusionModel backbone to ONNX."""
+
     def __init__(self, model):
+        """Initialize wrapper with diffusion model."""
         super().__init__()
         self.model = model
 
     def forward(
         self, prev_output_tokens, precomputed_audio_embeds, precomputed_audio_mask
     ):
+        """Forward pass exposing explicit fixed input tensors for ONNX tracing."""
         return self.model(
             prev_output_tokens=prev_output_tokens,
             partial_mask=None,
@@ -64,11 +72,15 @@ class DiscreteDiffusionONNXWrapper(torch.nn.Module):
 
 
 class AudioEncoderONNXWrapper(torch.nn.Module):
+    """Wrapper module for exporting audio encoder to ONNX."""
+
     def __init__(self, audio_encoder):
+        """Initialize wrapper with audio encoder."""
         super().__init__()
         self.audio_encoder = audio_encoder
 
     def forward(self, audio_features, audio_attention_mask):
+        """Forward pass extracting last hidden state representation."""
         outputs = self.audio_encoder(
             audio_features, attention_mask=audio_attention_mask
         )
@@ -76,6 +88,7 @@ class AudioEncoderONNXWrapper(torch.nn.Module):
 
 
 def main():
+    """Export audio encoder and diffusion backbone models to ONNX."""
     repo_id = "aiai-laboratory/diffusion-speech-translation-from-vi-v1"
     os.makedirs("onnx", exist_ok=True)
 

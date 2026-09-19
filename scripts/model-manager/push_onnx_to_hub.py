@@ -1,3 +1,5 @@
+"""Upload ONNX speech translation model artifacts and documentation to Hugging Face Hub."""
+
 import os
 import sys
 
@@ -9,6 +11,7 @@ load_dotenv()
 
 
 def main():
+    """Upload ONNX models, runtime packages, tokenizer, and README to Hub."""
     repo_id = "aiai-laboratory/onnx-diffusion-speech-translation-from-vi-v1"
     token = os.getenv("HF_TOKEN")
 

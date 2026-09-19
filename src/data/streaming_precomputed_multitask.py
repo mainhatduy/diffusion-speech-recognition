@@ -1,3 +1,5 @@
+"""Streaming iterable dataset loading precomputed parquet shards from Hugging Face Hub."""
+
 import json
 import logging
 import os
@@ -34,6 +36,7 @@ class StreamingPrecomputedMultiTaskDataset(IterableDataset):
         buffer_size=10000,
         max_samples=None,
     ):
+        """Initialize streaming precomputed multitask iterable dataset."""
         super().__init__()
         self.args = args
         self.hf_dataset = hf_dataset
@@ -115,6 +118,7 @@ class StreamingPrecomputedMultiTaskDataset(IterableDataset):
             }
 
     def __iter__(self):
+        """Iterate over streaming dataset rows and yield individual task samples."""
         dataset_stream = self.hf_dataset
         if self.is_train and self.buffer_size > 0:
             dataset_stream = dataset_stream.shuffle(

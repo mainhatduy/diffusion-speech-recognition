@@ -1,3 +1,5 @@
+"""Unit tests for deep fusion audio models and dataset padding."""
+
 from unittest.mock import MagicMock, patch
 
 import torch
@@ -11,16 +13,24 @@ from model.modeling_dlm import DiscreteDiffusionModel
 
 
 class MockAudioConfig:
+    """Mock configuration for audio encoder."""
+
     def __init__(self):
+        """Initialize mock audio configuration with dummy hidden size."""
         self.hidden_size = 64
 
 
 class MockAudioEncoder(nn.Module):
+    """Mock audio encoder module for tests."""
+
     def __init__(self, *args, **kwargs):
+        """Initialize mock audio encoder with mock configuration."""
         super().__init__()
         self.config = MockAudioConfig()
 
     def forward(self, x, attention_mask=None):
+        """Forward pass returning mock hidden state output."""
+
         class Output:
             last_hidden_state = torch.zeros(x.size(0), 10, 64, device=x.device)
 
@@ -36,11 +46,15 @@ class MockAudioEncoder(nn.Module):
 
 
 class MockMoonshineModel:
+    """Mock Moonshine model containing a mock audio encoder."""
+
     def __init__(self, *args, **kwargs):
+        """Initialize mock Moonshine model with encoder."""
         self.encoder = MockAudioEncoder()
 
 
 def get_dummy_tokenizer():
+    """Create a mock tokenizer for testing token operations."""
     tokenizer = MagicMock()
     tokenizer.bos_token_id = 0
     tokenizer.eos_token_id = 2
@@ -65,6 +79,7 @@ def get_dummy_tokenizer():
 @patch("transformers.Wav2Vec2Model.from_pretrained")
 @patch("transformers.AutoConfig.from_pretrained")
 def test_deep_fusion_xlmr_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
+    """Test XLM-RoBERTa deep fusion forward pass and output shape."""
     # Setup mocks
     mock_moonshine.return_value = MockMoonshineModel()
     mock_wav2vec2.return_value = MockAudioEncoder()
@@ -128,6 +143,7 @@ def test_deep_fusion_xlmr_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
 @patch("transformers.Wav2Vec2Model.from_pretrained")
 @patch("transformers.AutoConfig.from_pretrained")
 def test_deep_fusion_dlm_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
+    """Test DiscreteDiffusionModel with deep cross-attention layers."""
     mock_moonshine.return_value = MockMoonshineModel()
     mock_wav2vec2.return_value = MockAudioEncoder()
     mock_autoconfig.return_value = MockAudioConfig()
@@ -184,6 +200,7 @@ def test_deep_fusion_dlm_model(mock_autoconfig, mock_wav2vec2, mock_moonshine):
 @patch("transformers.Wav2Vec2Model.from_pretrained")
 @patch("transformers.AutoConfig.from_pretrained")
 def test_prefix_backward_compatibility(mock_autoconfig, mock_wav2vec2, mock_moonshine):
+    """Test prefix audio fusion strategy maintains backward compatibility."""
     mock_moonshine.return_value = MockMoonshineModel()
     mock_wav2vec2.return_value = MockAudioEncoder()
     mock_autoconfig.return_value = MockAudioConfig()
@@ -235,6 +252,7 @@ def test_prefix_backward_compatibility(mock_autoconfig, mock_wav2vec2, mock_moon
 
 @patch("numpy.load")
 def test_rainbow_padding(mock_np_load):
+    """Test rainbow padding format in PrecomputedMultiTaskDataset."""
     import numpy as np
 
     mock_np_load.return_value = np.zeros((10, 64))

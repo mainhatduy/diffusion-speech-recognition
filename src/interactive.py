@@ -1,3 +1,5 @@
+"""Interactive inference helper for step-by-step diffusion text generation."""
+
 import json
 
 import torch
@@ -14,7 +16,10 @@ logger = logging.get_logger(__name__)
 
 
 class InteractiveDiffusion:
+    """Wrapper class providing step-by-step interactive diffusion generation."""
+
     def __init__(self, model_ckpt_config_path, model_ckpt_path):
+        """Initialize interactive diffusion engine with model checkpoint and tokenizer."""
         with open(model_ckpt_config_path, "r") as f:
             model_args = DiscreteDiffusionModelArguments(**json.load(f)["model"])
         model, tokenizer = load_model_tokenizer(model_args, False)
@@ -31,6 +36,7 @@ class InteractiveDiffusion:
 
     @torch.no_grad()
     def sample(self, prompt, lengths, **kwargs):
+        """Generate text from prompt stepwise, yielding intermediate decoded text."""
         gen_args = DiscreteDiffusionGeneratorArguments(**kwargs, oracle_length=True)
         generator = DiscreteDiffusionGenerator(gen_args, tokenizer=self.tokenizer)
         full_output = self.tokenizer.encode(prompt)

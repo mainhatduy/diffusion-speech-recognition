@@ -1,3 +1,5 @@
+"""Discrete diffusion model architecture components and argument definitions."""
+
 import math
 import warnings
 from collections import namedtuple
@@ -25,6 +27,8 @@ decoder_out_t = namedtuple(
 
 @dataclass
 class DiscreteDiffusionModelArguments:
+    """Arguments defining discrete diffusion model configuration."""
+
     num_diffusion_timesteps: int = field(
         default=50,
         metadata={"help": "number of total timesteps for this diffusion model"},
@@ -108,6 +112,7 @@ class DiscreteDiffusionModelArguments:
     )
 
     def __post_init__(self):
+        """Handle backward compatibility warnings and attribute setting."""
         if self.prefix_lm:
             warnings.warn(
                 'option prefix_lm is deprecated, use attention_strategy="prefix_lm" instead.',
@@ -117,7 +122,15 @@ class DiscreteDiffusionModelArguments:
 
 
 class DiscreteDiffusionBase(nn.Module):
+    """Base class providing common discrete diffusion routines and sampling logic."""
+
     def __init__(self, args, tokenizer) -> None:
+        """Initialize DiscreteDiffusionBase.
+
+        Args:
+            args: Model configuration arguments.
+            tokenizer: Tokenizer instance for token IDs and decoding.
+        """
         super().__init__()
         self.args = args
 
@@ -133,15 +146,14 @@ class DiscreteDiffusionBase(nn.Module):
         self.line_splitter_id = tokenizer.encode("\n", add_special_tokens=True)[-1]
 
     def gradient_checkpointing_enable(self):
+        """Enable gradient checkpointing on the underlying backbone model."""
         assert hasattr(self, "model"), "self.model is not set"
         self.model.gradient_checkpointing_enable()
 
     def num_parameters(
         self, only_trainable: bool = False, exclude_shared: bool = False
     ) -> int:
-        """
-        Get number of (optionally, trainable or non-shared) parameters in the module.
-        """
+        """Get number of (optionally, trainable or non-shared) parameters in the module."""
         return sum(
             p.numel()
             for p in self.parameters()
@@ -149,12 +161,24 @@ class DiscreteDiffusionBase(nn.Module):
         )
 
     def add_fake_layer(self):
+        """Add a dummy parameter layer for compatibility with certain distributed/LoRA setups."""
         assert hasattr(self, "config"), (
             "could not infer embedding dimension because self.config is not found."
         )
         self.fake_layer = nn.Parameter(torch.zeros((self.config.hidden_size,)))
 
     def q_sample_coupled(self, x_0, t1, t2, maskable_mask):
+        """Sample coupled noisy tokens at timesteps t1 and t2.
+
+        Args:
+            x_0: Clean token sequence tensor.
+            t1: First timestep tensor.
+            t2: Second timestep tensor.
+            maskable_mask: Boolean mask indicating which tokens may be corrupted.
+
+        Returns:
+            Dictionary containing noisy sequences, timesteps, and mask indicators.
+        """
         assert self.args.diffusion_type == "absorbing", (
             "we only support absorbing diffusion temporarily"
         )
@@ -195,6 +219,19 @@ class DiscreteDiffusionBase(nn.Module):
         length_beam=1,
         mbr=1,
     ):
+        """Initialize decode state canvas for diffusion generation.
+
+        Args:
+            tokens: Input token sequence.
+            partial_masks: Boolean mask for unmaskable tokens.
+            prefix_masks: Prefix token indicators.
+            oracle_length: Whether to use ground truth sequence length.
+            length_beam: Beam size for sequence length search.
+            mbr: Minimum Bayes Risk sample count.
+
+        Returns:
+            decoder_out_t namedtuple containing initial canvas state.
+        """
         # if tokens is None, set the length of prediction as maximum length
         # if tokens is not None, set the length of prediction as oracle length temporarily.
         # TODO: Handle length predition
@@ -270,9 +307,18 @@ class DiscreteDiffusionBase(nn.Module):
 
 
 class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
+    """Discrete diffusion model backed by XLM-RoBERTa architecture."""
+
     _is_tokenizer_index_correct = True
 
     def __init__(self, args, tokenizer, model) -> None:
+        """Initialize DiscreteDiffusionXLMRModel.
+
+        Args:
+            args: Model configuration arguments.
+            tokenizer: Tokenizer instance.
+            model: Pretrained backbone model.
+        """
         super().__init__(args, tokenizer)
         if model.config.tie_word_embeddings:
             model.lm_head.decoder.weight = (
@@ -478,6 +524,11 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         return None
 
     def remove_redundant_embeddings(self, dictionary):
+        """Trim embedding layers to match a smaller sub-vocabulary dictionary.
+
+        Args:
+            dictionary: Sub-vocabulary dictionary object.
+        """
         assert self._is_tokenizer_index_correct
         self._is_tokenizer_index_correct = False
 
@@ -532,11 +583,27 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         self.line_splitter_id = dictionary.index("\n")
 
     def forward_lm_head(self, features):
+        """Pass hidden representations through the language model head.
+
+        Args:
+            features: Hidden features tensor.
+
+        Returns:
+            Logits tensor over vocabulary.
+        """
         features = self.model.lm_head.dense(features)
         features = self.model.lm_head.layer_norm(torch.nn.functional.gelu(features))
         return self.model.lm_head.decoder(features)
 
     def forward_length(self, input_ids):
+        """Predict length distribution logits for target sequence.
+
+        Args:
+            input_ids: Input tokens tensor.
+
+        Returns:
+            Logits tensor over possible output lengths.
+        """
         attention_mask = input_ids.ne(self.pad_id).int()
         with torch.no_grad():
             _feature = self.model.roberta(input_ids, attention_mask=attention_mask)[0]
@@ -566,6 +633,22 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         precomputed_audio_embeds=None,
         precomputed_audio_mask=None,
     ):
+        """Execute forward pass of the model.
+
+        Args:
+            prev_output_tokens: Corrupted input token sequence.
+            partial_mask: Mask of context/prefix tokens that cannot be masked.
+            attention_mask: Attention mask for text tokens.
+            loss_mask: Mask indicating which tokens contribute to loss.
+            cache: Cached representations for generation.
+            audio_features: Raw input audio features.
+            audio_attention_mask: Mask for input audio features.
+            precomputed_audio_embeds: Precomputed audio embedding representations.
+            precomputed_audio_mask: Mask for precomputed audio representations.
+
+        Returns:
+            Logits tensor over vocabulary for each sequence position.
+        """
         input_ids = prev_output_tokens
         if attention_mask is None:
             attention_mask = prev_output_tokens.ne(self.pad_id).int()

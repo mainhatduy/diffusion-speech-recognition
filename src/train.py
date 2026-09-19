@@ -1,3 +1,5 @@
+"""Training script for discrete diffusion speech recognition and translation models."""
+
 import warnings
 
 warnings.filterwarnings(
@@ -36,6 +38,7 @@ from utils import argument_filter, is_master, load_ckpt, load_model_tokenizer
 
 
 def parse_args():
+    """Parse training, data, model, and generator configuration arguments."""
     parser = transformers.HfArgumentParser(
         (
             DiscreteDiffusionDataArguments,  # data
@@ -103,6 +106,7 @@ def parse_args():
 
 
 def main():
+    """Main training routine initializing dataset, model, and trainer."""
     # Load environment variables from .env file
     load_dotenv()
 

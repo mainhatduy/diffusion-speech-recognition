@@ -1,5 +1,4 @@
-"""
-Streaming Audio Adapter.
+"""Streaming Audio Adapter.
 
 Bridges the gap between:
 - Audio Encoder (Moonshine, ergodic, NO position information)
@@ -25,8 +24,7 @@ from .streaming_backbone import StreamingBackboneConfig
 
 
 class StreamingAudioAdapter(nn.Module):
-    """
-    Adapter between frozen Audio Encoder (ergodic) and streaming Text Backbone (position-aware).
+    """Adapter between frozen Audio Encoder (ergodic) and streaming Text Backbone (position-aware).
 
     Input:  audio_hidden [B, num_frames, D_audio] — no position info
     Output: audio_projected [B, num_tokens, D_text] — WITH position info, ready for cross-attention
@@ -41,6 +39,16 @@ class StreamingAudioAdapter(nn.Module):
         dropout: float = 0.1,
         layer_norm_eps: float = 1e-5,
     ):
+        """Initialize StreamingAudioAdapter.
+
+        Args:
+            audio_hidden_size: Hidden dimension of audio features.
+            text_hidden_size: Hidden dimension of text backbone.
+            max_frames_per_chunk: Maximum audio frames per chunk.
+            use_downsample: Whether to downsample audio frames by 2x.
+            dropout: Dropout probability.
+            layer_norm_eps: Epsilon for LayerNorm.
+        """
         super().__init__()
 
         self.audio_hidden_size = audio_hidden_size
@@ -73,9 +81,10 @@ class StreamingAudioAdapter(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, audio_hidden: torch.Tensor) -> torch.Tensor:
-        """
+        """Project audio features to text embedding space with position encodings.
+
         Args:
-            audio_hidden: [B, T, D_audio] — from Moonshine encoder (no position)
+            audio_hidden: [B, T, D_audio] — from Moonshine encoder (no position).
 
         Returns:
             audio_projected: [B, T', D_text] — with position, normalized

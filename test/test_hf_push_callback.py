@@ -1,3 +1,5 @@
+"""Unit tests for HuggingFacePushCallback."""
+
 import os
 import shutil
 import tempfile
@@ -10,10 +12,14 @@ from trainer.dd_trainer import HuggingFacePushCallback
 
 
 class TestHuggingFacePushCallback(unittest.TestCase):
+    """Test suite for HuggingFacePushCallback functionality."""
+
     def setUp(self):
+        """Set up temporary directory for checkpoint tests."""
         self.tmpdir = tempfile.mkdtemp()
 
     def tearDown(self):
+        """Clean up temporary directory after tests."""
         shutil.rmtree(self.tmpdir)
 
     @patch("trainer.dd_trainer.is_master", return_value=True)
@@ -22,6 +28,7 @@ class TestHuggingFacePushCallback(unittest.TestCase):
     def test_callback_pushes_when_enabled(
         self, mock_spec_func, mock_mod_func, mock_is_master
     ):
+        """Test checkpoint saving and background hub push when enabled."""
         mock_push_function = MagicMock()
         mock_module = MagicMock()
         mock_module.push_checkpoint_to_hub = mock_push_function
@@ -82,6 +89,7 @@ class TestHuggingFacePushCallback(unittest.TestCase):
     @patch("trainer.dd_trainer.is_master", return_value=False)
     @patch("importlib.util.spec_from_file_location")
     def test_callback_does_not_push_on_non_master(self, mock_spec_func, mock_is_master):
+        """Test callback does not upload checkpoints on non-master ranks."""
         trainer = MagicMock()
         args = MagicMock(spec=TrainingArguments)
         args.push_to_hub = True
@@ -101,6 +109,7 @@ class TestHuggingFacePushCallback(unittest.TestCase):
     @patch("trainer.dd_trainer.is_master", return_value=True)
     @patch("importlib.util.spec_from_file_location")
     def test_callback_does_not_push_when_disabled(self, mock_spec_func, mock_is_master):
+        """Test callback does not upload checkpoints when push_to_hub is disabled."""
         trainer = MagicMock()
         args = MagicMock(spec=TrainingArguments)
         args.push_to_hub = False  # Disabled

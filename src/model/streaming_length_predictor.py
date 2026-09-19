@@ -1,5 +1,4 @@
-"""
-Streaming Length Predictor.
+"""Streaming Length Predictor.
 
 Predicts the number of new text tokens to generate for each audio chunk.
 
@@ -18,8 +17,7 @@ from torch import nn
 
 
 class StreamingLengthPredictor(nn.Module):
-    """
-    Predicts number of new text tokens for each audio chunk.
+    """Predicts number of new text tokens for each audio chunk.
 
     Input:
         - audio_embeds: [B, frames, D] — projected audio features for current chunk
@@ -37,6 +35,15 @@ class StreamingLengthPredictor(nn.Module):
         nhead: int = 4,
         dropout: float = 0.1,
     ):
+        """Initialize StreamingLengthPredictor.
+
+        Args:
+            hidden_size: Hidden representation size.
+            vocab_size: Vocabulary size for context tokens.
+            max_output_tokens: Maximum number of tokens to predict.
+            nhead: Number of attention heads for context pooler.
+            dropout: Dropout probability.
+        """
         super().__init__()
         self.hidden_size = hidden_size
         self.max_output_tokens = max_output_tokens
@@ -72,10 +79,11 @@ class StreamingLengthPredictor(nn.Module):
         audio_embeds: torch.Tensor,
         context_token_ids: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """
+        """Predict output token count logits from audio and context tokens.
+
         Args:
             audio_embeds: [B, frames, D]
-            context_token_ids: [B, context_len] (optional)
+            context_token_ids: [B, context_len] (optional).
 
         Returns:
             logits: [B, max_output_tokens + 1]
@@ -102,8 +110,7 @@ class StreamingLengthPredictor(nn.Module):
         audio_embeds: torch.Tensor,
         context_token_ids: torch.Tensor | None = None,
     ) -> int:
-        """
-        Inference: predict number of tokens for a single chunk.
+        """Inference: predict number of tokens for a single chunk.
 
         Args:
             audio_embeds: [1, frames, D] or [frames, D]

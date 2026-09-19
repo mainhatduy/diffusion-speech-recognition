@@ -1,3 +1,5 @@
+"""Custom distributed samplers grouping dataset samples by token count."""
+
 import math
 from collections.abc import Iterator
 
@@ -7,6 +9,8 @@ from transformers.trainer_pt_utils import DistributedLengthGroupedSampler
 
 
 class TokenSizeDistributedLengthGroupSampler(DistributedLengthGroupedSampler):
+    """Distributed sampler grouping variable-length sequences to maximize token density."""
+
     def __init__(
         self,
         batch_size: int,
@@ -20,6 +24,7 @@ class TokenSizeDistributedLengthGroupSampler(DistributedLengthGroupedSampler):
         model_input_name: str | None = None,
         infinite: bool = False,
     ):
+        """Initialize token size distributed sampler."""
         super().__init__(
             batch_size,
             dataset,
@@ -37,9 +42,11 @@ class TokenSizeDistributedLengthGroupSampler(DistributedLengthGroupedSampler):
         self.num_batches = None
 
     def __len__(self):
+        """Return total estimated batches per epoch."""
         return self.num_batches if self.num_batches is not None else 0x7FFFFFFF
 
     def __iter__(self) -> Iterator:
+        """Yield batches of sample indices grouped by token capacity."""
         g = torch.Generator()
         g.manual_seed(self.seed + self.epoch)
         indices = self.dataset.ordered_indices()

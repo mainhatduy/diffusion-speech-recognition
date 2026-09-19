@@ -1,3 +1,5 @@
+"""Test script for metric tensor aggregation behavior in Hugging Face Trainer."""
+
 import numpy as np
 
 # Let's simulate what Hugging Face Trainer does when prediction_step returns 1D vs 2D tensors.

@@ -1,3 +1,5 @@
+"""Hardware profiling benchmark script for latency, memory, and throughput."""
+
 import json
 import os
 import platform
@@ -236,6 +238,7 @@ def run_inference_single(
 
 
 def main():
+    """Run hardware profiling benchmarks across CPU and CUDA devices."""
     import argparse
 
     parser = argparse.ArgumentParser(

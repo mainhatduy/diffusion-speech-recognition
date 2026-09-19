@@ -1,5 +1,4 @@
-"""
-Fix BOOL operations (Pad, GatherND) in ONNX models for Qualcomm QNN compatibility.
+"""Fix BOOL operations (Pad, GatherND) in ONNX models for Qualcomm QNN compatibility.
 
 HTP (Hexagon Tensor Processor) does not natively support BOOL type inputs/outputs
 for Pad and GatherND operations. This script inserts Cast nodes to convert
@@ -234,6 +233,7 @@ def fix_bool_ops_in_graph(graph, graph_name):
 
 
 def fix_model_file(model_path):
+    """Load ONNX model, replace unsupported boolean operations, and save back."""
     print(f"\n[*] Processing model: {model_path}")
     if not os.path.exists(model_path):
         print(f"[!] File not found: {model_path}")
@@ -262,6 +262,7 @@ def fix_model_file(model_path):
 
 
 def main():
+    """Apply boolean operator patches to audio encoder and diffusion backbone."""
     fix_model_file("onnx/audio_encoder.onnx")
     fix_model_file("onnx/diffusion_backbone.onnx")
 

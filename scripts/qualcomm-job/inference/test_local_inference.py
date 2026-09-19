@@ -1,6 +1,5 @@
-"""
-Local Inference Verification Script for Diffusion Speech Translation
-===================================================================
+"""Local Inference Verification Script for Diffusion Speech Translation.
+
 This script runs end-to-end inference of the Vietnamese speech translation model
 locally using either PyTorch or ONNX Runtime. Unlike the single-step benchmark,
 this script executes the full multi-step diffusion denoising loop to produce
@@ -43,6 +42,7 @@ from utils import (
 
 
 def run_pytorch(audio_path, repo_id, steps):
+    """Run full diffusion inference locally using PyTorch."""
     print("\n--- Running PyTorch Local Inference ---")
     t0 = time.time()
 
@@ -114,6 +114,7 @@ def run_pytorch(audio_path, repo_id, steps):
 
 
 def run_onnx(audio_path, repo_id, steps):
+    """Run full diffusion inference locally using ONNX Runtime."""
     print("\n--- Running ONNX Runtime Local Inference ---")
     t0 = time.time()
 
@@ -251,6 +252,7 @@ def run_onnx(audio_path, repo_id, steps):
 
 
 def main():
+    """Verify and compare local PyTorch and ONNX inference outputs."""
     parser = argparse.ArgumentParser(
         description="Verify local PyTorch and ONNX model correctness"
     )

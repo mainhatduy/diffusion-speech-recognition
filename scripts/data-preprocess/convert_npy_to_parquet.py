@@ -1,3 +1,5 @@
+"""Convert raw .npy audio embeddings to sharded Parquet files."""
+
 import json
 import os
 import shutil
@@ -12,6 +14,7 @@ from tqdm import tqdm
 
 
 def main():
+    """Convert audio embedding .npy files to sharded Parquet format."""
     project_root = Path(__file__).resolve().parent.parent.parent
     precomputed_dir = project_root / "precomputed_data"
     npy_dir = precomputed_dir / "audio_embeds"

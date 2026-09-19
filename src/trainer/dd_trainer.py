@@ -1,3 +1,5 @@
+"""Custom Trainer, callbacks, and training arguments for discrete diffusion."""
+
 import math
 import os
 import threading
@@ -28,6 +30,8 @@ from utils import is_master
 
 @dataclass
 class DiscreteDiffusionArguments(TrainingArguments):
+    """Arguments configuring discrete diffusion evaluation and training behavior."""
+
     batch_by_tokens: bool = field(default=False)
     eval_metric: str = field(default="none")
     eval_metrics: list[str] = field(
@@ -49,6 +53,8 @@ class DiscreteDiffusionArguments(TrainingArguments):
 
 @dataclass
 class DiscreteDiffusionTrainingArguments(DiscreteDiffusionArguments):
+    """Training arguments specific to discrete diffusion training stages."""
+
     finetune_from_model: str = field(
         default=None,
         metadata={
@@ -73,6 +79,7 @@ class DiscreteDiffusionTrainingArguments(DiscreteDiffusionArguments):
     )
 
     def __post_init__(self):
+        """Map legacy lr_scheduler string to lr_scheduler_type."""
         super().__post_init__()
         # If lr_scheduler is specified as a string in the config, map it to lr_scheduler_type
         if isinstance(self.lr_scheduler, str):
@@ -81,11 +88,26 @@ class DiscreteDiffusionTrainingArguments(DiscreteDiffusionArguments):
 
 
 class HuggingFacePushCallback(TrainerCallback):
+    """Callback pushing checkpoints to Hugging Face Hub on evaluation."""
+
     def __init__(self, trainer=None):
+        """Initialize HuggingFacePushCallback.
+
+        Args:
+            trainer: Trainer instance.
+        """
         self.trainer = trainer
         self._upload_thread = None
 
     def on_evaluate(self, args, state, control, **kwargs):
+        """Trigger asynchronous model push to Hugging Face Hub after evaluation.
+
+        Args:
+            args: Training arguments.
+            state: Trainer state.
+            control: Trainer control.
+            **kwargs: Additional callback keyword arguments.
+        """
         push_to_hub = getattr(args, "push_to_hub", False)
         hub_model_id = getattr(args, "hub_model_id", None)
         if not push_to_hub or not hub_model_id:
@@ -186,6 +208,8 @@ class HuggingFacePushCallback(TrainerCallback):
 
 
 class DiscreteDiffusionTrainer(Trainer):
+    """Custom Hugging Face Trainer for discrete diffusion models."""
+
     def __init__(
         self,
         model: PreTrainedModel | nn.Module = None,
@@ -207,6 +231,22 @@ class DiscreteDiffusionTrainer(Trainer):
         ]
         | None = None,
     ):
+        """Initialize DiscreteDiffusionTrainer.
+
+        Args:
+            model: Model to train or evaluate.
+            args: Training arguments.
+            generator: Generator instance for decoding evaluation.
+            data_collator: Data collator instance.
+            train_dataset: Training dataset split.
+            eval_dataset: Evaluation dataset split(s).
+            tokenizer: Tokenizer or processing class.
+            model_init: Model initializer callable.
+            compute_metrics: Metrics computation callable.
+            callbacks: List of trainer callbacks.
+            optimizers: Tuple of optimizer and scheduler.
+            preprocess_logits_for_metrics: Callable to preprocess logits before metric computation.
+        """
         # SỬA FILE: src/trainer/dd_trainer.py
 
         super().__init__(
@@ -229,6 +269,15 @@ class DiscreteDiffusionTrainer(Trainer):
         # self.dictionary = generator.dictionary
 
     def get_token_batched_dataloader(self, dataset, train=False):
+        """Build a DataLoader batched dynamically by token count.
+
+        Args:
+            dataset: Dataset to sample batches from.
+            train: Whether the DataLoader is for training.
+
+        Returns:
+            Configured DataLoader instance.
+        """
         lengths = [dataset.size(i) for i in tqdm(range(len(dataset)))]
         batch_sampler = TokenSizeDistributedLengthGroupSampler(
             (
@@ -263,6 +312,11 @@ class DiscreteDiffusionTrainer(Trainer):
         return dataloader
 
     def get_train_dataloader(self):
+        """Construct the training DataLoader, optionally token-batched.
+
+        Returns:
+            Training DataLoader instance.
+        """
         # self.train_dataset.set_max_length(self.args.max_length)
         if self.args.batch_by_tokens:
             return self.get_token_batched_dataloader(self.train_dataset, train=True)
@@ -270,6 +324,14 @@ class DiscreteDiffusionTrainer(Trainer):
             return super().get_train_dataloader()
 
     def get_eval_dataloader(self, eval_dataset: Dataset | None = None) -> DataLoader:
+        """Construct the evaluation DataLoader, optionally token-batched.
+
+        Args:
+            eval_dataset: Optional dataset to evaluate on.
+
+        Returns:
+            Evaluation DataLoader instance.
+        """
         if eval_dataset is None and self.eval_dataset is None:
             raise ValueError("Trainer: evaluation requires an eval_dataset.")
         # if eval_dataset is not None:
@@ -285,6 +347,14 @@ class DiscreteDiffusionTrainer(Trainer):
             return super().get_eval_dataloader(eval_dataset)
 
     def get_test_dataloader(self, test_dataset: Dataset) -> DataLoader:
+        """Construct the test DataLoader, optionally token-batched.
+
+        Args:
+            test_dataset: Dataset to test on.
+
+        Returns:
+            Test DataLoader instance.
+        """
         # test_dataset.set_max_length(self.args.max_length)
         if self.args.batch_by_tokens:
             return self.get_token_batched_dataloader(test_dataset)
@@ -292,6 +362,17 @@ class DiscreteDiffusionTrainer(Trainer):
             return super().get_test_dataloader(test_dataset)
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        """Compute training or evaluation loss for discrete diffusion.
+
+        Args:
+            model: Model under training.
+            inputs: Batch inputs dictionary.
+            return_outputs: Whether to return model outputs alongside loss.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Loss tensor, or tuple of (loss, logits) if return_outputs is True.
+        """
         raw_model = model.module if hasattr(model, "module") else model
         target = inputs["net_input"]["src_tokens"]
         partial_masks = (
@@ -388,9 +469,19 @@ class DiscreteDiffusionTrainer(Trainer):
         return (diffusion_loss, logits) if return_outputs else diffusion_loss
 
     def set_eval_compute_loss(self, value):
+        """Set flag whether to compute loss during evaluation.
+
+        Args:
+            value: Boolean flag value.
+        """
         self.eval_compute_loss = value
 
     def begin_write_prediction(self, prediction_write_to):
+        """Open output file for streaming decoded predictions during evaluation.
+
+        Args:
+            prediction_write_to: Path prefix for output file.
+        """
         if prediction_write_to is None:
             return
         assert not hasattr(self, "write_to"), "writo file already exists"
@@ -403,6 +494,7 @@ class DiscreteDiffusionTrainer(Trainer):
         self.write_to = open(file_name, "w")  # noqa: SIM115
 
     def end_write_prediction(self):
+        """Close prediction file and synchronize across distributed ranks."""
         if not hasattr(self, "write_to"):
             return
         self.write_to.close()
@@ -479,6 +571,16 @@ class DiscreteDiffusionTrainer(Trainer):
         torch.save(self.args, os.path.join(output_dir, "training_args.bin"))
 
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
+        """Run evaluation loop and compute metrics.
+
+        Args:
+            eval_dataset: Dataset to evaluate on.
+            ignore_keys: Keys in outputs to ignore.
+            metric_key_prefix: Prefix for metric names in results.
+
+        Returns:
+            Dictionary of evaluation results.
+        """
         self.has_printed_sample = False
         self._current_eval_dataset = (
             eval_dataset if eval_dataset is not None else self.eval_dataset
@@ -497,6 +599,17 @@ class DiscreteDiffusionTrainer(Trainer):
         prediction_loss_only: bool,
         ignore_keys: list[str] | None = None,
     ) -> tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
+        """Perform evaluation prediction step and compute metrics/loss.
+
+        Args:
+            model: Model being evaluated.
+            inputs: Batch dictionary.
+            prediction_loss_only: Whether to only return loss.
+            ignore_keys: Keys to ignore.
+
+        Returns:
+            Tuple of (loss, predictions, labels) tensors.
+        """
         inputs = self._prepare_inputs(inputs)
         if not self.eval_compute_loss:
             loss = torch.tensor([0.0]).to(inputs["target"].device)
@@ -1166,7 +1279,20 @@ class DiscreteDiffusionTrainer(Trainer):
 
 
 class DiscreteDiffusionLengthTrainer(DiscreteDiffusionTrainer):
+    """Trainer specialized for training the sequence length predictor."""
+
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        """Compute cross-entropy loss for sequence length prediction.
+
+        Args:
+            model: Model with length predictor.
+            inputs: Batch dictionary.
+            return_outputs: Whether to return logits.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Loss tensor, or tuple of (loss, logits) if return_outputs is True.
+        """
         # global global_step_step
         # global_step_step += 1
         # if global_step_step % 2 == 0:
@@ -1194,8 +1320,7 @@ class DiscreteDiffusionLengthTrainer(DiscreteDiffusionTrainer):
 
 
 class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
-    """
-    Trainer for Streaming Discrete Diffusion.
+    """Trainer for Streaming Discrete Diffusion.
 
     Key differences from DiscreteDiffusionTrainer:
     1. Per-chunk audio encoding through frozen Moonshine + adapter
@@ -1225,6 +1350,17 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
         return dataloader
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        """Compute streaming diffusion loss with position and confidence weighting.
+
+        Args:
+            model: Streaming diffusion model.
+            inputs: Batch dictionary containing audio chunks and text tokens.
+            return_outputs: Whether to return outputs.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Computed loss tensor or tuple of (loss, outputs).
+        """
         # During evaluation, inputs come in standard format (no audio_chunks).
         # Delegate to the parent's compute_loss which handles standard format.
         if "audio_chunks" not in inputs:

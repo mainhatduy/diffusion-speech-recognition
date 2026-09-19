@@ -1,3 +1,5 @@
+"""Generation routines and evaluation metric accumulators for discrete diffusion."""
+
 import math
 from dataclasses import dataclass, field
 
@@ -16,6 +18,8 @@ except ImportError:
 
 @dataclass
 class DiscreteDiffusionGeneratorArguments:
+    """Arguments configuring generation behavior and evaluation metrics."""
+
     max_iterations: int = field(default=10)
     mbr: int = field(default=1)
     length_beam: int = field(default=1)
@@ -29,12 +33,16 @@ class DiscreteDiffusionGeneratorArguments:
 
 
 def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
-    """
-    scores: [b, n]
-    cutoff_len: [b, 1]
-    stochastic: bool, whether to add noise to select top_k or not
-    returns:
-        mask: [b, n], with 1 if the token is in top-k lowest scores, 0 otherwise
+    """Compute top-k lowest score mask for tokens.
+
+    Args:
+        scores: [b, n] tensor of scores.
+        cutoff_len: [b, 1] cutoff indices.
+        stochastic: bool, whether to add noise to select top_k or not.
+        temp: Temperature for stochastic sampling.
+
+    Returns:
+        mask: [b, n], with 1 if the token is in top-k lowest scores, 0 otherwise.
     """
     if stochastic:
         gumbel_noise = -torch.log(-torch.log(torch.rand_like(scores) + 1e-8) + 1e-8)
@@ -50,7 +58,17 @@ def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
 
 
 class MergeBLEU:
+    """Aggregator for BLEU score across distributed evaluation batches."""
+
     def __call__(self, evalpreds):
+        """Compute aggregate BLEU score from prediction statistics.
+
+        Args:
+            evalpreds: Tuple of (sys_stats, ref_stats).
+
+        Returns:
+            Dictionary containing computed BLEU score.
+        """
         # if torch.distributed.get_rank() == 0:
         #     import ipdb; ipdb.set_trace()
         # else:
@@ -84,7 +102,17 @@ class MergeBLEU:
 
 
 class MergeRouge:
+    """Aggregator for ROUGE score across evaluation batches."""
+
     def __call__(self, evalpreds):
+        """Compute aggregate ROUGE score from prediction statistics.
+
+        Args:
+            evalpreds: Tuple of (avg_rouge, batch_size).
+
+        Returns:
+            Dictionary containing computed ROUGE score.
+        """
         # if torch.distributed.get_rank() == 0:
         #     import ipdb; ipdb.set_trace()
         # else:
@@ -110,6 +138,14 @@ class MergeWER:
     """
 
     def __call__(self, evalpreds):
+        """Compute corpus-level WER from aggregated edit distances and reference counts.
+
+        Args:
+            evalpreds: Tuple of (numerators, denominators) tensors.
+
+        Returns:
+            Dictionary containing computed WER score.
+        """
         numerators = evalpreds[0].astype("float64")  # [N]
         denominators = evalpreds[1].astype("float64")  # [N]
 
@@ -147,6 +183,11 @@ class MultiMetric:
     """
 
     def __init__(self, metrics: list):
+        """Initialize MultiMetric aggregator.
+
+        Args:
+            metrics: Ordered list of metric names.
+        """
         self.metrics = metrics
         # Validate & compute slot layout
         for m in metrics:
@@ -161,6 +202,14 @@ class MultiMetric:
         }
 
     def __call__(self, evalpreds):
+        """Unpack concatenated statistics and compute each metric.
+
+        Args:
+            evalpreds: Tuple of concatenated sys_stats and ref_stats tensors.
+
+        Returns:
+            Dictionary mapping metric names to their aggregate scores.
+        """
         sys_stats, ref_stats = evalpreds  # [N, total_slots] each
         results = {}
         offset = 0
@@ -174,7 +223,16 @@ class MultiMetric:
 
 
 class DiscreteDiffusionGenerator:
+    """Generator executing iterative discrete diffusion decoding for inference."""
+
     def __init__(self, args, dictionary=None, tokenizer=None) -> None:
+        """Initialize DiscreteDiffusionGenerator.
+
+        Args:
+            args: Generator configuration arguments.
+            dictionary: Fairseq-style dictionary if used.
+            tokenizer: HuggingFace tokenizer instance if used.
+        """
         self.args = args
         self.dictionary = dictionary
         self.tokenizer = tokenizer
@@ -199,6 +257,11 @@ class DiscreteDiffusionGenerator:
         self.rouge = Rouge(["rouge-l"])
 
     def set_write_to(self, path):
+        """Set output file path for streaming decoded predictions.
+
+        Args:
+            path: Destination file path.
+        """
         self.write_prediction = path
 
     def _reparam_decoding(
@@ -214,9 +277,7 @@ class DiscreteDiffusionGenerator:
         max_step,
         noise,
     ):
-        """
-        This function is used to perform reparameterized decoding.
-        """
+        """This function is used to perform reparameterized decoding."""
         # output_tokens: [B, N]
         # output_scores: [B, N]
         # cur_tokens: [B, N]
@@ -312,6 +373,20 @@ class DiscreteDiffusionGenerator:
         precomputed_audio_embeds=None,
         precomputed_audio_mask=None,
     ):
+        """Perform one iterative denoising step on the canvas.
+
+        Args:
+            model: Discrete diffusion model.
+            decoder_out: Current decoder state namedtuple.
+            partial_masks: Mask of context/prefix tokens.
+            audio_features: Optional raw audio features.
+            audio_attention_mask: Optional audio attention mask.
+            precomputed_audio_embeds: Optional precomputed audio embeddings.
+            precomputed_audio_mask: Optional precomputed audio mask.
+
+        Returns:
+            Updated decoder_out state namedtuple.
+        """
         output_tokens = decoder_out.output_tokens
         output_scores = decoder_out.output_scores
         prev_step, cur_step = decoder_out.step, decoder_out.step + 1
@@ -425,6 +500,15 @@ class DiscreteDiffusionGenerator:
         )
 
     def decode(self, seqs_tensors, preserve_special=False):
+        """Convert tensor of token IDs into list of text strings.
+
+        Args:
+            seqs_tensors: Tensor of token IDs.
+            preserve_special: Whether to keep special tokens in output.
+
+        Returns:
+            List of decoded text strings.
+        """
         seqs_tensors[seqs_tensors < 0] = self.pad_id
         if self.dictionary is not None:
             seqs = [
@@ -440,6 +524,15 @@ class DiscreteDiffusionGenerator:
         return [seq.lower() for seq in seqs]
 
     def compute_bleu(self, hyps, refs):
+        """Compute SacreBLEU score between hypotheses and references.
+
+        Args:
+            hyps: List or tensor of hypothesis texts.
+            refs: List or tensor of reference texts.
+
+        Returns:
+            SacreBLEU score object.
+        """
         if isinstance(hyps, torch.Tensor):
             hyps = self.decode(hyps)
         if isinstance(refs, torch.Tensor):
@@ -447,6 +540,15 @@ class DiscreteDiffusionGenerator:
         return sacrebleu.corpus_bleu(hyps, [refs], tokenize=self.args.bleu_tokenize)
 
     def compute_rouge(self, hyps, refs):
+        """Compute ROUGE-L F1 score between hypotheses and references.
+
+        Args:
+            hyps: List or tensor of hypothesis texts.
+            refs: List or tensor of reference texts.
+
+        Returns:
+            Float ROUGE-L F1 score.
+        """
         if isinstance(hyps, torch.Tensor):
             hyps = self.decode(hyps)
         if isinstance(refs, torch.Tensor):
@@ -495,6 +597,15 @@ class DiscreteDiffusionGenerator:
         return total_edit, total_ref_words
 
     def stepwise_generate(self, model, inputs):
+        """Yield intermediate canvas states at each diffusion denoising step.
+
+        Args:
+            model: Discrete diffusion model.
+            inputs: Model input dictionary.
+
+        Yields:
+            Intermediate decoder_out namedtuple states.
+        """
         src_tokens = inputs["net_input"]["src_tokens"]
         partial_masks = inputs["net_input"]["partial_masks"]
         # assert src_tokens.size(-1) < 514
@@ -540,6 +651,15 @@ class DiscreteDiffusionGenerator:
 
     @torch.no_grad()
     def generate(self, model, inputs):
+        """Execute complete diffusion denoising process to produce final output.
+
+        Args:
+            model: Discrete diffusion model.
+            inputs: Model input dictionary.
+
+        Returns:
+            Final decoder_out state namedtuple.
+        """
         src_tokens = inputs["net_input"]["src_tokens"]
         partial_masks = inputs["net_input"]["partial_masks"]
         # assert src_tokens.size(-1) < 514

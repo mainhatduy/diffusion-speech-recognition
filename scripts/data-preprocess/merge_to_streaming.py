@@ -1,5 +1,7 @@
-"""Merge precomputed dataset (metadata, token IDs, audio embeddings parquet)
-into a unified streaming-ready Parquet dataset and push to Hugging Face Hub.
+"""Merge precomputed dataset into a unified streaming-ready Parquet dataset.
+
+This script merges metadata, token IDs, and audio embeddings parquet into a unified
+streaming-ready Parquet dataset and pushes to Hugging Face Hub.
 
 Usage:
     python scripts/data-preprocess/merge_to_streaming.py \
@@ -22,6 +24,7 @@ from huggingface_hub import CommitOperationAdd, HfApi, hf_hub_download, list_rep
 
 
 def parse_args():
+    """Parse command-line arguments for dataset merging and upload."""
     parser = argparse.ArgumentParser(
         description="Merge precomputed dataset into a streaming-ready dataset on HF Hub."
     )
@@ -62,6 +65,7 @@ def parse_args():
 
 
 def main():
+    """Merge precomputed dataset components and upload streaming shards."""
     args = parse_args()
     load_dotenv()
 

@@ -1,7 +1,11 @@
+"""Configuration classes for discrete diffusion models."""
+
 from transformers import AutoConfig, PretrainedConfig
 
 
 class DiscreteDiffusionConfig(PretrainedConfig):
+    """Configuration class to store the configuration of a DiscreteDiffusionModel."""
+
     model_type = "discrete_diffusion"
 
     def __init__(
@@ -44,6 +48,46 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         audio_overlap_duration=0.5,
         **kwargs,
     ):
+        """Initialize DiscreteDiffusionConfig.
+
+        Args:
+            backbone_config: Backbone model configuration.
+            num_diffusion_timesteps: Total number of diffusion timesteps.
+            diffusion_type: Type of diffusion process.
+            attention_strategy: Attention strategy ('full', 'local', etc.).
+            vocab_pad_to_multiple: Pad vocabulary size to multiple of this.
+            lora: Whether to use LoRA fine-tuning.
+            lora_target_modules: Module names to apply LoRA to.
+            lora_alpha: Scaling factor for LoRA.
+            lora_rank: Rank of LoRA update matrices.
+            lora_bias: LoRA bias configuration.
+            lora_dropout: Dropout probability for LoRA layers.
+            mask_token_id: Mask token identifier.
+            bos_token_id: Beginning-of-sequence token ID.
+            eos_token_id: End-of-sequence token ID.
+            pad_token_id: Padding token ID.
+            argmax_decoding: Whether to use argmax decoding.
+            pretrained_audio_encoder: Whether audio encoder is pretrained.
+            audio_fusion_strategy: Strategy for audio conditioning fusion.
+            num_ergodic_layers: Number of ergodic layers in streaming backbone.
+            ergodic_window_left: Left context window for ergodic attention.
+            ergodic_window_right: Right context window for ergodic attention.
+            num_position_layers: Number of position-aware layers.
+            position_window_left: Left context window for position-aware attention.
+            position_window_right: Right context window for position-aware attention.
+            rope_theta: Base period for rotary embeddings.
+            active_window_size: Size of active streaming window.
+            frozen_cache_size: Size of frozen context cache.
+            streaming_denoise_steps: Denoising steps per chunk in streaming.
+            freeze_confidence_threshold: Threshold to freeze tokens.
+            remask_confidence_threshold: Threshold to remask low-confidence tokens.
+            loss_weight_supported: Loss multiplier for supported tokens.
+            loss_weight_unsupported: Loss multiplier for unsupported tokens.
+            use_confidence_calibration: Whether to calibrate confidence.
+            audio_chunk_duration: Audio chunk duration in seconds.
+            audio_overlap_duration: Audio overlap duration in seconds.
+            **kwargs: Additional keyword arguments passed to PretrainedConfig.
+        """
         super().__init__(**kwargs)
         self.backbone_config = backbone_config
         self.num_diffusion_timesteps = num_diffusion_timesteps

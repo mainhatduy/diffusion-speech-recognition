@@ -1,5 +1,4 @@
-"""
-Fix high-rank GatherND for Qualcomm HTP compatibility.
+"""Fix high-rank GatherND for Qualcomm HTP compatibility.
 
 Problem:
     The audio encoder (Moonshine) contains a GatherND node where the indices
@@ -53,6 +52,7 @@ def build_output_map(graph):
 
 
 def fix_gathernd_in_model(model_path):
+    """Detect and decompose rank 5 GatherND operations in the model graph."""
     print(f"\n[*] Processing: {model_path}")
     if not os.path.exists(model_path):
         print(f"[!] File not found: {model_path}")
@@ -280,6 +280,7 @@ def fix_gathernd_in_model(model_path):
 
 
 def main():
+    """Apply GatherND rank reduction patch to audio encoder ONNX model."""
     # Process the standalone onnx file (with inline weights)
     result = fix_gathernd_in_model("onnx/audio_encoder.onnx")
     if not result:

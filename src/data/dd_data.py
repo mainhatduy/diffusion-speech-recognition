@@ -1,3 +1,5 @@
+"""Dataset arguments, loader dispatcher, and backward-compatible data module exports."""
+
 import os
 from dataclasses import dataclass, field
 
@@ -17,6 +19,8 @@ AMRDataset = BilingualDataset
 
 @dataclass
 class DiscreteDiffusionDataArguments:
+    """Arguments for data loading, preprocessing, and streaming configuration."""
+
     dataset_type: str = field(
         default="bilingual"  # bilingual | speech_recognition | speech_translation | speech_translation_multitask
     )

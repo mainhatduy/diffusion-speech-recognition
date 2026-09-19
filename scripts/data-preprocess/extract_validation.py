@@ -1,3 +1,5 @@
+"""Extract validation split from translated dataset and attach raw audio."""
+
 import argparse
 import os
 
@@ -7,6 +9,7 @@ from huggingface_hub import HfApi
 
 
 def main():
+    """Extract validation dataset split and map audio bytes."""
     parser = argparse.ArgumentParser(
         description="Extract validation split from vietspeech-train-translated, map raw audio bytes from VietSpeech, save as parquet, and optionally upload to Hugging Face."
     )

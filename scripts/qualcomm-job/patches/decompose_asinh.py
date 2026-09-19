@@ -1,8 +1,11 @@
+"""Decompose unsupported ONNX Asinh operator into elementary math operations."""
+
 import onnx
 from onnx import TensorProto, helper
 
 
 def main():
+    """Find and replace Asinh node with equivalent elementary ONNX math operators."""
     print("[*] Loading ONNX model onnx/audio_encoder.onnx...")
     model = onnx.load("onnx/audio_encoder.onnx")
     graph = model.graph

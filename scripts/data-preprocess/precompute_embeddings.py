@@ -29,6 +29,7 @@ TASK_TO_FIELD = {"<vi_en>": "english", "<vi_zh>": "chinese", "<vi_ko>": "korean"
 
 
 def parse_args():
+    """Parse command-line arguments for speech and text precomputation."""
     p = argparse.ArgumentParser()
     p.add_argument("--output_dir", type=str, required=True)
     p.add_argument(
@@ -54,15 +55,20 @@ def parse_args():
 
 
 class RawAudioDataset(Dataset):
+    """Dataset for extracting raw audio waveforms and feature representations."""
+
     def __init__(self, vietspeech_dataset, feature_extractor, target_sr=16000):
+        """Initialize dataset with audio sources and feature extractor."""
         self.dataset = vietspeech_dataset
         self.feature_extractor = feature_extractor
         self.target_sr = target_sr
 
     def __len__(self):
+        """Return total number of audio samples."""
         return len(self.dataset)
 
     def __getitem__(self, idx):
+        """Extract and resample audio waveform for a given index."""
         from data.utils import _decode_wav_bytes
 
         item = self.dataset[idx]
@@ -87,6 +93,7 @@ class RawAudioDataset(Dataset):
 
 
 def collate_audio(batch):
+    """Collate and pad audio input tensors for batch processing."""
     audio_list = [b["audio_values"] for b in batch]
     max_len = max(a.size(-1) for a in audio_list)
     max_len = ((max_len + 79) // 80) * 80
@@ -105,6 +112,7 @@ def collate_audio(batch):
 
 
 def load_audio_encoder(name, cache_dir, device):
+    """Load pretrained audio encoder model and move to target device."""
     if "moonshine" in name:
         from transformers import MoonshineStreamingModel
 
@@ -122,6 +130,7 @@ def load_audio_encoder(name, cache_dir, device):
 
 
 def precompute_audio(args, vietspeech_ds, feat_ext, path_to_vs_idx, out_dir, done_ids):
+    """Precompute and save audio embedding tensors."""
     embed_dir = os.path.join(out_dir, "audio_embeds")
     os.makedirs(embed_dir, exist_ok=True)
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
@@ -173,6 +182,7 @@ def precompute_audio(args, vietspeech_ds, feat_ext, path_to_vs_idx, out_dir, don
 
 
 def precompute_text(args, translated_ds, tokenizer, task_tokens, out_dir):
+    """Tokenize and save text transcripts for all translation tasks."""
     from data.utils import normalize_text
 
     tokens_dir = os.path.join(out_dir, "token_ids")
@@ -196,6 +206,7 @@ def precompute_text(args, translated_ds, tokenizer, task_tokens, out_dir):
 
 
 def build_index(translated_ds, path_to_vs_idx, out_dir):
+    """Build index mapping dataset indices to audio embedding file paths."""
     idx_path = os.path.join(out_dir, "index.json")
     if os.path.exists(idx_path):
         with open(idx_path) as f:
@@ -212,6 +223,7 @@ def build_index(translated_ds, path_to_vs_idx, out_dir):
 
 
 def main():
+    """Run full precomputation pipeline for audio embeddings and text tokens."""
     args = parse_args()
     from dotenv import load_dotenv
 

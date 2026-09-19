@@ -1,5 +1,4 @@
-"""
-app.py — Gradio UI for Discrete Diffusion Speech Translation.
+"""app.py — Gradio UI for Discrete Diffusion Speech Translation.
 
 Loads the discrete diffusion model and provides a web interface to translate
 Vietnamese speech to English, Chinese, and Korean, with a detailed, step-by-step
@@ -33,6 +32,7 @@ _device = None
 
 
 def get_model_and_tokenizer():
+    """Load and return cached tokenizer, model, and feature extractor."""
     global _tokenizer, _model, _feature_extractor, _device
     if _model is None:
         repo_id = "aiai-laboratory/diffusion-speech-translation-from-vi-v1"
@@ -152,6 +152,7 @@ def load_audio(path: str, target_sr: int = 16000) -> np.ndarray:
 def tokens_to_html_denoise_single_line(
     canvas_steps, tokenizer, step_idx, max_iterations
 ):
+    """Render HTML visualization for a single denoising step."""
     mask_id = tokenizer.mask_token_id
     curr_tokens = canvas_steps[-1]
     prev_tokens = canvas_steps[-2] if len(canvas_steps) > 1 else None
@@ -214,6 +215,7 @@ def tokens_to_html_denoise_single_line(
 
 # ─── Core translation function ───────────────────────────────────────────────
 def run_speech_translation(audio_path, max_iterations, strategy, slow_mode_enabled):
+    """Execute speech translation generator yielding intermediate denoising steps."""
     import time
 
     if not audio_path:
@@ -405,6 +407,7 @@ def run_speech_translation(audio_path, max_iterations, strategy, slow_mode_enabl
 
 # ─── Load test sample helper ─────────────────────────────────────────────────
 def load_test_sample():
+    """Load path to the bundled test sample MP3 audio if present."""
     sample_path = os.path.join(PROJECT_ROOT, "test/test_data/test_sample.mp3")
     if os.path.exists(sample_path):
         return sample_path
@@ -553,6 +556,7 @@ CSS = """
 
 # ─── Gradio layout building ───────────────────────────────────────────────────
 def build_interface():
+    """Build and configure Gradio Blocks web application interface."""
     # Pre-trigger loading of the model so weights are ready when server starts
     print("[app] Preloading model on startup...")
     get_model_and_tokenizer()

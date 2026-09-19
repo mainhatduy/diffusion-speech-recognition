@@ -1,3 +1,5 @@
+"""Repackage ONNX models into external data directories for distribution."""
+
 import os
 import sys
 
@@ -6,6 +8,7 @@ from utils import repackage_model
 
 
 def main():
+    """Repackage audio encoder and diffusion backbone ONNX models."""
     # Repackage Audio Encoder
     repackage_model(
         model_path="onnx/audio_encoder.onnx",

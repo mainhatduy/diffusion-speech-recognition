@@ -1,8 +1,4 @@
-"""
-run_all_patches.py
-==================
-Orchestrator script to apply all Qualcomm HTP compatibility patches
-to the Speech Translation models.
+"""Orchestrator script to apply all Qualcomm HTP compatibility patches.
 
 Steps:
   1. Restore diffusion_backbone.onnx from diffusion_backbone_clean.onnx
@@ -22,6 +18,7 @@ from onnx import TensorProto, helper
 
 
 def run_command(cmd, desc):
+    """Run shell command as a subprocess and check for errors."""
     print(f"\n[*] Running: {desc}...")
     print(f"    Command: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -36,6 +33,7 @@ def run_command(cmd, desc):
 
 
 def restore_backbone():
+    """Restore diffusion_backbone.onnx to its clean state from backup."""
     print("\n[*] Restoring diffusion_backbone.onnx to clean state...")
     clean_path = "onnx/diffusion_backbone_clean.onnx"
     target_path = "onnx/diffusion_backbone.onnx"
@@ -57,6 +55,7 @@ def restore_backbone():
 
 
 def patch_gathernd_backbone():
+    """Patch GatherND nodes in diffusion_backbone to reduce rank from 5 to 4."""
     print(
         "\n[*] Applying GatherND Rank 5 -> Rank 4 reduction on diffusion_backbone.onnx..."
     )
@@ -183,6 +182,7 @@ def patch_gathernd_backbone():
 
 
 def main():
+    """Execute full patch pipeline on Qualcomm target models."""
     # Step 1: Restore backbone
     restore_backbone()
 

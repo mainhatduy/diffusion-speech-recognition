@@ -1,3 +1,1 @@
-from .audio_query_resampler import AudioQueryResampler
-
-__all__ = ["AudioQueryResampler"]
+"""Diffusion model architectures, configurations, and adapters."""

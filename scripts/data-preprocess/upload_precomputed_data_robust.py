@@ -1,3 +1,5 @@
+"""Robust upload script for precomputed speech data to Hugging Face Hub."""
+
 import os
 import sys
 import time
@@ -7,6 +9,7 @@ from huggingface_hub import HfApi
 
 
 def main():
+    """Upload precomputed data files with retry logic and skip existing files."""
     load_dotenv()
     token = os.getenv("HF_TOKEN")
     if not token:

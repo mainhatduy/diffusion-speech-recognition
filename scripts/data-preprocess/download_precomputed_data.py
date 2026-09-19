@@ -15,6 +15,7 @@ from huggingface_hub import snapshot_download
 
 
 def parse_args():
+    """Parse command-line arguments for downloading precomputed data."""
     parser = argparse.ArgumentParser(
         description="Download precomputed speech dataset from Hugging Face."
     )
@@ -44,6 +45,7 @@ def parse_args():
 
 
 def main():
+    """Download precomputed dataset from Hugging Face Hub to target directory."""
     args = parse_args()
     load_dotenv()
 

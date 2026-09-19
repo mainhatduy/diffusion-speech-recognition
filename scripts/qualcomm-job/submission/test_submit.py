@@ -1,3 +1,5 @@
+"""Test script for submitting sample ONNX compile jobs to Qualcomm AI Hub."""
+
 import os
 
 import dotenv
@@ -5,6 +7,7 @@ import qai_hub as hub
 
 
 def main():
+    """Test submission of audio encoder and diffusion backbone compilation jobs."""
     dotenv.load_dotenv()
     token = os.getenv("QUALCOMM_TOKEN")
     if not token:

@@ -1,3 +1,5 @@
+"""Multi-task translated speech recognition dataset implementation."""
+
 import logging
 import multiprocessing as mp
 import os
@@ -53,6 +55,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         feature_extractor,
         ram_audio_store: dict | None = None,
     ):
+        """Initialize multitask translated speech dataset."""
         super().__init__(args, raw_data, tokenizer)
         self.vietspeech_dataset = vietspeech_dataset
         self.path_to_vs_idx = path_to_vs_idx
@@ -65,10 +68,12 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         self.max_cache_size = 10000
 
     def __len__(self):
+        """Return total samples across all translation tasks."""
         # Each base sample appears n_tasks times (one per target language)
         return len(self.raw_data) * self.n_tasks
 
     def __getitem__(self, index):
+        """Fetch sample for specific task index and extract audio waveform."""
         # Decompose flat index → (base sample, task)
         sample_idx = index // self.n_tasks
         task_idx = index % self.n_tasks
@@ -164,6 +169,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
 
     @staticmethod
     def load_data(args, tokenizer, train=True, valid=True, test=False):
+        """Load and prepare multitask speech translation dataset splits."""
         tokenizer.model_max_length = args.max_length
         logging.getLogger("transformers.tokenization_utils_base").setLevel(
             logging.ERROR

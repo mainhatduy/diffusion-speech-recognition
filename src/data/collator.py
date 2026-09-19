@@ -1,3 +1,5 @@
+"""Data collation and batch padding utilities for standard and streaming diffusion datasets."""
+
 from dataclasses import dataclass
 
 import torch
@@ -5,11 +7,14 @@ import torch
 
 @dataclass
 class DiscreteDiffusionDataCollator:
+    """Collator for batching and padding discrete diffusion source/target tokens and audio."""
+
     bos_id: int
     eos_id: int
     pad_id: int
 
     def __call__(self, samples):
+        """Collate and pad batch samples into net_input dictionary."""
         # Filter out None samples
         samples = [s for s in samples if s is not None]
         if len(samples) == 0:
@@ -94,8 +99,7 @@ class DiscreteDiffusionDataCollator:
 
 @dataclass
 class StreamingCollator:
-    """
-    Collator for StreamingAugmentedDataset.
+    """Collator for StreamingAugmentedDataset.
 
     Handles batching of:
     - Variable-length audio chunks (padded to max chunks in batch)
@@ -115,6 +119,7 @@ class StreamingCollator:
     pad_token_id: int
 
     def __call__(self, batch):
+        """Pad variable-length audio chunks and text sequences across a batch."""
         # Filter None samples
         batch = [s for s in batch if s is not None]
         if len(batch) == 0:

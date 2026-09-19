@@ -10,6 +10,8 @@ from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 from transformers import Wav2Vec2Model
 
+from .remasking import LearnedRemaskingMixin
+
 decoder_out_t = namedtuple(
     "decoder_out_t",
     [
@@ -97,6 +99,13 @@ class DiscreteDiffusionModelArguments:
     streaming_denoise_steps: int = field(default=3)
     freeze_confidence_threshold: float = field(default=0.92)
     remask_confidence_threshold: float = field(default=0.30)
+    learned_remasking: bool = field(default=False)
+    remask_training_stage: str = field(default="disabled")
+    remask_threshold: float = field(default=0.5)
+    remask_rollout_steps: int = field(default=20)
+    remask_loss_weight: float = field(default=1.0)
+    remask_reconstruction_weight: float = field(default=1.0)
+    remask_special_token_ids: list[int] = field(default_factory=list)
     loss_weight_supported: float = field(default=2.0)
     loss_weight_unsupported: float = field(default=0.3)
     use_confidence_calibration: bool = field(default=True)
@@ -121,7 +130,7 @@ class DiscreteDiffusionModelArguments:
             self.attention_strategy = "prefix_lm"
 
 
-class DiscreteDiffusionBase(nn.Module):
+class DiscreteDiffusionBase(LearnedRemaskingMixin, nn.Module):
     """Base class providing common discrete diffusion routines and sampling logic."""
 
     def __init__(self, args, tokenizer) -> None:
@@ -497,6 +506,8 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             del self.model
             self.model = None
 
+        self.init_remasker()
+
     def resize_token_embeddings(self, new_num_tokens):
         """Resize token embeddings in the underlying model and/or backbone."""
         if self.model is not None:
@@ -632,6 +643,12 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         audio_attention_mask=None,
         precomputed_audio_embeds=None,
         precomputed_audio_mask=None,
+        remask_only=False,
+        remask_training_labels=None,
+        remask_supported=None,
+        remask_rollout_kwargs=None,
+        projected_audio_hidden=None,
+        projected_audio_mask=None,
     ):
         """Execute forward pass of the model.
 
@@ -646,18 +663,43 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             precomputed_audio_embeds: Precomputed audio embedding representations.
             precomputed_audio_mask: Mask for precomputed audio representations.
 
+            remask_only: Return error logits from a fresh candidate evaluation.
+            remask_training_labels: Aligned labels for rollout supervision, if training.
+            remask_supported: Positions supported by the currently visible audio.
+            remask_rollout_kwargs: Optional older audio context for draft rollouts.
+            projected_audio_hidden: Already projected audio for streaming training.
+            projected_audio_mask: Valid positions in projected streaming audio.
+
         Returns:
             Logits tensor over vocabulary for each sequence position.
         """
+        if remask_training_labels is not None:
+            return self.remask_training_loss(
+                remask_training_labels,
+                partial_mask,
+                supported=remask_supported,
+                rollout_kwargs=remask_rollout_kwargs,
+                attention_mask=attention_mask,
+                audio_features=audio_features,
+                audio_attention_mask=audio_attention_mask,
+                precomputed_audio_embeds=precomputed_audio_embeds,
+                precomputed_audio_mask=precomputed_audio_mask,
+                projected_audio_hidden=projected_audio_hidden,
+                projected_audio_mask=projected_audio_mask,
+            )
         input_ids = prev_output_tokens
         if attention_mask is None:
             attention_mask = prev_output_tokens.ne(self.pad_id).int()
 
         # If using StreamingDiffusionBackbone, route forward pass through backbone directly
         if hasattr(self, "backbone") and self.backbone is not None:
-            audio_embeds = None
-            if self.has_audio_encoder and precomputed_audio_embeds is not None:
+            audio_embeds = projected_audio_hidden
+            audio_attn = projected_audio_mask
+            if audio_embeds is not None:
+                pass
+            elif self.has_audio_encoder and precomputed_audio_embeds is not None:
                 audio_embeds = self.audio_projector(precomputed_audio_embeds)
+                audio_attn = precomputed_audio_mask
             elif self.has_audio_encoder and audio_features is not None:
                 with torch.no_grad():
                     audio_outputs = self.audio_encoder(
@@ -666,13 +708,23 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
                     audio_embeds = audio_outputs.last_hidden_state
                 audio_embeds = self.audio_projector(audio_embeds)
 
-            if audio_embeds is not None and hasattr(self, "audio_resampler"):
-                audio_embeds = self.audio_resampler(audio_embeds)
+            if (
+                projected_audio_hidden is None
+                and audio_embeds is not None
+                and hasattr(self, "audio_resampler")
+            ):
+                audio_embeds = self.audio_resampler(audio_embeds, audio_mask=audio_attn)
+                audio_attn = None
 
             logits, _ = self.backbone(
                 input_ids=input_ids,
                 audio_hidden=audio_embeds,
+                attention_mask=attention_mask,
+                audio_attention_mask=audio_attn,
+                return_hidden_states=remask_only,
             )
+            if remask_only:
+                return self.remask_head(logits).squeeze(-1)
             logits = logits[loss_mask] if loss_mask is not None else logits
             return logits
 
@@ -686,7 +738,11 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
         )
 
         # a trick to avoid the confliction between peft's LoRA implemention and gradient checkpointing
-        if hasattr(self, "fake_layer") and self.training:
+        if (
+            hasattr(self, "fake_layer")
+            and self.training
+            and getattr(self.args, "remask_training_stage", "disabled") != "detector"
+        ):
             self.fake_layer.requires_grad = True
             embeddings = (
                 embeddings + self.fake_layer * 0
@@ -859,4 +915,6 @@ class DiscreteDiffusionXLMRModel(DiscreteDiffusionBase):
             print("nan bug!")
 
         outputs = outputs[loss_mask] if loss_mask is not None else outputs
+        if remask_only:
+            return self.remask_head(outputs).squeeze(-1)
         return self.model.lm_head(outputs)

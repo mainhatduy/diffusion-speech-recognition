@@ -72,6 +72,7 @@ def main():
     helpers = [
         ("src/model/configuration_dlm.py", "configuration_dlm.py"),
         ("src/model/modeling_dlm.py", "modeling_dlm.py"),
+        ("src/model/remasking.py", "remasking.py"),
         ("src/dd_generator.py", "dd_generator.py"),
     ]
     print("Uploading custom helper scripts...")

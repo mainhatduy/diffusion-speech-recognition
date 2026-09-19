@@ -164,6 +164,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
             "source": torch.tensor(concatenated),
             "target": torch.tensor(target_tgt),
             "src_length": src_length,
+            "task_token_id": task_token_id,
             "audio_values": audio_values,
         }
 
@@ -176,10 +177,6 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         )
 
         hf_token = args.hf_token or os.getenv("HF_TOKEN")
-        if hf_token is None:
-            raise ValueError(
-                "HF_TOKEN is required. Set it via --hf_token argument or HF_TOKEN env variable."
-            )
 
         # 1. Parse task token names and resolve their IDs from tokenizer
         task_tokens: list[str] = getattr(
@@ -236,11 +233,21 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
                 translated_repo_id,
                 token=hf_token,
                 cache_dir=getattr(args, "cache_dir", None),
-                split="train[:100%]",
+                split=getattr(args, "translated_data_split", "train"),
             )
         except Exception as e:
             print(f"Error loading translated dataset: {e}")
             raise
+
+        sample_limit = getattr(args, "max_dataset_samples", None)
+        if sample_limit is not None:
+            if sample_limit < 2:
+                raise ValueError(
+                    "max_dataset_samples must be at least two for train/validation splitting"
+                )
+            translated_dataset = translated_dataset.select(
+                range(min(sample_limit, len(translated_dataset)))
+            )
 
         # Validate that all target fields exist in the dataset
         for field_name, _ in task_configs:
@@ -256,7 +263,18 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
         path_to_vs_idx = {}
         vietspeech_dataset = None
 
-        if getattr(args, "use_ram_cache", False):
+        has_embedded_audio = "audio" in translated_dataset.column_names
+        if has_embedded_audio:
+            # Validation/mock exports carry their own bytes; no full audio corpus is needed.
+            translated_dataset = translated_dataset.cast_column(
+                "audio", Audio(decode=False)
+            )
+            vietspeech_dataset = translated_dataset
+            path_to_vs_idx = {
+                wav_id: idx for idx, wav_id in enumerate(translated_dataset["id"])
+            }
+
+        if not has_embedded_audio and getattr(args, "use_ram_cache", False):
             threshold_ratio = getattr(args, "ram_free_threshold_ratio", 0.30)
             is_approved, est_gb, _proj_ratio, _total_examples = (
                 check_ram_capacity_for_dataset(
@@ -341,7 +359,7 @@ class MultiTaskTranslatedSpeechDataset(PromptDataset):
                     )
                     ram_audio_store = None
 
-        if ram_audio_store is None:
+        if ram_audio_store is None and not has_embedded_audio:
             # Fallback to standard disk cache mode
             print(f"[MultiTask] Loading audio from {audio_repo_id} into disk cache...")
             try:

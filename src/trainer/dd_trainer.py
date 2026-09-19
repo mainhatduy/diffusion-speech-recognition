@@ -381,6 +381,31 @@ class DiscreteDiffusionTrainer(Trainer):
             else torch.zeros_like(target).bool()
         )
 
+        remask_output = None
+        remask_stage = getattr(raw_model.args, "remask_training_stage", "disabled")
+        if remask_stage != "disabled":
+            audio_kwargs = {
+                key: inputs["net_input"].get(key)
+                for key in (
+                    "audio_features",
+                    "audio_attention_mask",
+                    "precomputed_audio_embeds",
+                    "precomputed_audio_mask",
+                )
+            }
+            remask_output = model(
+                target,
+                inputs["net_input"]["partial_masks"],
+                remask_training_labels=target,
+                **audio_kwargs,
+            )
+            if remask_stage == "detector":
+                return (
+                    (remask_output["loss"], remask_output)
+                    if return_outputs
+                    else remask_output["loss"]
+                )
+
         # couple
         if self.args.mask_ratio_sampler == "diffusion":
             t1, t2 = torch.randint(
@@ -466,6 +491,8 @@ class DiscreteDiffusionTrainer(Trainer):
             diffusion_loss = (1 - ls) * ce + ls * logit_loss
         else:
             diffusion_loss = ce
+        if remask_output is not None:
+            diffusion_loss = diffusion_loss + remask_output["loss"]
         return (diffusion_loss, logits) if return_outputs else diffusion_loss
 
     def set_eval_compute_loss(self, value):
@@ -1469,6 +1496,53 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
             audio_embeds[b, : a.shape[0]] = a
             audio_attention_mask[b, : a.shape[0]] = True
 
+        remask_output = None
+        remask_stage = getattr(raw_model.args, "remask_training_stage", "disabled")
+        if remask_stage != "disabled":
+            reference = text_ids
+            protected = ~text_mask.bool()
+            supported = (
+                torch.arange(T_len, device=device)[None, :] < supported_lens[:, None]
+            )
+            if task_token_ids is not None:
+                reference = torch.cat([task_token_ids[:, None], reference], dim=1)
+                protected = torch.cat(
+                    [torch.ones(B, 1, dtype=torch.bool, device=device), protected],
+                    dim=1,
+                )
+                supported = torch.cat(
+                    [torch.zeros(B, 1, dtype=torch.bool, device=device), supported],
+                    dim=1,
+                )
+            text_attention = reference.ne(raw_model.pad_id)
+            # Draft under the previous prefix, then evaluate with newly arrived audio.
+            # Keep one chunk for rows that have no earlier prefix.
+            old_audio_mask = audio_attention_mask.clone()
+            for b, count in enumerate(batch_chunk_counts):
+                if count > 1:
+                    chunk_len = audio_embeds_list[b].shape[0] // count
+                    old_audio_mask[b, (count - 1) * chunk_len :] = False
+            current_kwargs = {
+                "attention_mask": text_attention,
+                "projected_audio_hidden": audio_embeds,
+                "projected_audio_mask": audio_attention_mask,
+            }
+            old_kwargs = dict(current_kwargs, projected_audio_mask=old_audio_mask)
+            remask_output = model(
+                reference,
+                protected,
+                remask_training_labels=reference,
+                remask_supported=supported,
+                remask_rollout_kwargs=old_kwargs,
+                **current_kwargs,
+            )
+            if remask_stage == "detector":
+                return (
+                    (remask_output["loss"], remask_output)
+                    if return_outputs
+                    else remask_output["loss"]
+                )
+
         # === 2. DIFFUSION FORWARD (q_sample) ===
         # Sample timestep t ∈ {1, ..., T}
         t = torch.randint(1, num_timesteps + 1, (B,), device=device)
@@ -1587,6 +1661,8 @@ class StreamingDiffusionTrainer(DiscreteDiffusionTrainer):
             # Add to total loss
             loss = loss + 0.2 * length_loss
 
+        if remask_output is not None:
+            loss = loss + remask_output["loss"]
         if return_outputs:
             return loss, {"logits": logits}
         return loss

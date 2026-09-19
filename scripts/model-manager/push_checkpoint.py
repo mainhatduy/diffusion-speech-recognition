@@ -61,6 +61,7 @@ def push_checkpoint_to_hub(
     for code_file, path_in_repo in [
         ("src/model/configuration_dlm.py", "configuration_dlm.py"),
         ("src/model/modeling_dlm.py", "modeling_dlm.py"),
+        ("src/model/remasking.py", "remasking.py"),
         ("src/dd_generator.py", "dd_generator.py"),
     ]:
         full_path = os.path.join(base_dir, code_file)

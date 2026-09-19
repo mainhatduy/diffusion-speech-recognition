@@ -20,6 +20,8 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 
+from .remasking import eligible_positions
+
 
 class StreamingDiffusionEngine:
     """Manages the 3-zone streaming diffusion process.
@@ -43,6 +45,9 @@ class StreamingDiffusionEngine:
         remask_confidence_threshold: float = 0.30,
         # Device
         device: torch.device | str = "cpu",
+        remask_head: torch.nn.Module | None = None,
+        remask_threshold: float = 0.5,
+        special_token_ids: list[int] | None = None,
     ):
         """Initialize StreamingDiffusionEngine.
 
@@ -56,7 +61,17 @@ class StreamingDiffusionEngine:
             freeze_confidence_threshold: Confidence threshold to freeze tokens.
             remask_confidence_threshold: Confidence threshold to remask tokens.
             device: Execution device.
+            remask_head: Trained binary classifier; None keeps legacy decoding.
+            remask_threshold: Probability threshold for learned token revision.
+            special_token_ids: BOS, task and other structural IDs to preserve.
         """
+        if streaming_denoise_steps < 1:
+            raise ValueError("streaming_denoise_steps must be positive")
+        if not 0 < remask_threshold < 1:
+            raise ValueError("remask_threshold must be between zero and one")
+        self.remask_head = remask_head
+        self.remask_threshold = remask_threshold
+        self.special_token_ids = [eos_id, pad_id] + list(special_token_ids or [])
         self.mask_id = mask_id
         self.eos_id = eos_id
         self.pad_id = pad_id
@@ -70,6 +85,31 @@ class StreamingDiffusionEngine:
 
         # State (initialized in reset())
         self.reset()
+
+    @classmethod
+    def from_model(cls, model, **overrides):
+        """Build an engine using the trained model's remask head and configuration."""
+        options = {
+            key: getattr(model.args, key)
+            for key in (
+                "active_window_size",
+                "frozen_cache_size",
+                "streaming_denoise_steps",
+                "freeze_confidence_threshold",
+                "remask_confidence_threshold",
+                "remask_threshold",
+            )
+        }
+        options.update(
+            mask_id=model.mask_id,
+            eos_id=model.eos_id,
+            pad_id=model.pad_id,
+            remask_head=model.remask_head,
+            special_token_ids=model.remask_special_ids(),
+            device=next(model.parameters()).device,
+        )
+        options.update(overrides)
+        return cls(**options)
 
     def reset(self):
         """Reset all state for a new sample."""
@@ -172,6 +212,10 @@ class StreamingDiffusionEngine:
         if not self.active_tokens:
             return
 
+        if self.remask_head is not None:
+            self._denoise_with_remasker(backbone)
+            return
+
         K = self.streaming_denoise_steps
         audio_context = self._get_audio_context()
 
@@ -213,6 +257,54 @@ class StreamingDiffusionEngine:
             # Update active zone
             self.active_tokens = predicted
             self.active_confidence = confidence
+
+    @torch.no_grad()
+    def _denoise_with_remasker(self, backbone):
+        """Re-evaluate drafts on new audio, preserving every accepted token."""
+        audio_context = self._get_audio_context()
+        tokens = torch.tensor(
+            [self.active_tokens], dtype=torch.long, device=self.device
+        )
+        confidence = torch.tensor(
+            [self.active_confidence], dtype=torch.float32, device=self.device
+        )
+
+        def requests(candidate):
+            hidden, _ = backbone(
+                input_ids=candidate,
+                past_kv_caches=self.frozen_kv_caches,
+                audio_hidden=audio_context,
+                return_hidden_states=True,
+            )
+            probabilities = self.remask_head(hidden).squeeze(-1).sigmoid()
+            valid = eligible_positions(candidate, self.mask_id, self.special_token_ids)
+            return (probabilities >= self.remask_threshold) & valid
+
+        # Audio expansion can invalidate a previously accepted active draft.
+        revisions = requests(tokens)
+        tokens.masked_fill_(revisions, self.mask_id)
+        confidence.masked_fill_(revisions, 0)
+        for step in range(self.streaming_denoise_steps):
+            masked = tokens.eq(self.mask_id)
+            if masked.any():
+                logits, _ = backbone(
+                    input_ids=tokens,
+                    past_kv_caches=self.frozen_kv_caches,
+                    audio_hidden=audio_context,
+                )
+                logits = logits.clone()
+                logits[..., self.mask_id] = -torch.inf
+                new_confidence, predictions = logits.float().softmax(-1).max(-1)
+                tokens[masked] = predictions[masked]
+                confidence[masked] = new_confidence[masked]
+            revisions = requests(tokens)  # Fresh pass over the sampled candidate.
+            confidence.masked_fill_(revisions, 0)
+            if not revisions.any() and not tokens.eq(self.mask_id).any():
+                break
+            if step + 1 < self.streaming_denoise_steps:
+                tokens.masked_fill_(revisions, self.mask_id)
+        self.active_tokens = tokens.squeeze(0).tolist()
+        self.active_confidence = confidence.squeeze(0).tolist()
 
     @torch.no_grad()
     def _force_freeze_tokens(
@@ -357,8 +449,10 @@ class StreamingDiffusionEngine:
         # Denoise with more steps for final quality
         original_steps = self.streaming_denoise_steps
         self.streaming_denoise_steps = 10
-        self._denoise_active_zone(backbone)
-        self.streaming_denoise_steps = original_steps
+        try:
+            self._denoise_active_zone(backbone)
+        finally:
+            self.streaming_denoise_steps = original_steps
 
         # Freeze everything (no confidence check)
         remaining = self.active_tokens.copy()

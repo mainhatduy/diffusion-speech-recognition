@@ -159,3 +159,10 @@ When pushing source code to Git, ensure the following configuration files are co
 
 > [!IMPORTANT]
 > **Never** commit the `.venv/` directory. It is already configured to be ignored in the project's `.gitignore` file.
+
+## Learned remasking
+
+An optional audio-conditioned error detector now supports rollout-based training,
+selective token revision, and streaming draft re-evaluation. See
+[LEARNED_REMASKING.md](LEARNED_REMASKING.md) for the training stages, configuration,
+and short runs using `aiai-laboratory/vietspeech-validation-translated`.

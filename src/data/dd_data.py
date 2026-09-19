@@ -29,6 +29,9 @@ class DiscreteDiffusionDataArguments:
         metadata={"help": "pretrained audio encoder model name for speech_recognition"},
     )
     data_path: str = field(default="")
+    translated_data_path: str = field(default="")
+    translated_data_split: str = field(default="train")
+    max_dataset_samples: int | None = field(default=None)
     src_lang: str = field(default="")
     tgt_lang: str = field(default="")
     max_length: int = field(default=2048)

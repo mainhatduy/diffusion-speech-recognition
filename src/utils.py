@@ -90,9 +90,11 @@ def load_ckpt(model, ckpt_path, do_train=False):
             )
 
             state_dict = get_fp32_state_dict_from_zero_checkpoint(ckpt_path)
-        if isinstance(model, DiscreteDiffusionXLMRModel) and state_dict[
-            "model.lm_head.decoder.weight"
-        ].shape == torch.Size([0]):
+        if (
+            isinstance(model, DiscreteDiffusionXLMRModel)
+            and "model.lm_head.decoder.weight" in state_dict
+            and state_dict["model.lm_head.decoder.weight"].shape == torch.Size([0])
+        ):
             state_dict["model.lm_head.decoder.weight"] = state_dict[
                 "model.roberta.embeddings.word_embeddings.weight"
             ]
@@ -195,6 +197,9 @@ def load_model_tokenizer(model_args, do_train):
         f"[load_model_tokenizer] Model embeddings resized to vocab size: {len(tokenizer)}"
     )
 
+    dd_model.configure_remask_training()
+    if model_args.lora and model_args.remask_training_stage != "disabled":
+        raise ValueError("Learned remask training currently requires lora=false")
     if model_args.lora:
         lora_config = LoraConfig(
             TaskType.TOKEN_CLS,

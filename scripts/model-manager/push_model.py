@@ -93,7 +93,15 @@ def main():
         backbone_config.vocab_size = len(tokenizer)
 
     # Create DiscreteDiffusionConfig
+    remask_config = {
+        key: value
+        for key, value in model_args.items()
+        if key.startswith("remask_") or key == "learned_remasking"
+    }
+    remask_config["remask_special_token_ids"] = tokenizer.all_special_ids
+    remask_config["remask_training_stage"] = "disabled"
     config = DiscreteDiffusionConfig(
+        **remask_config,
         backbone_config=backbone_config,
         num_diffusion_timesteps=model_args["num_diffusion_timesteps"],
         diffusion_type=model_args["diffusion_type"],
@@ -165,6 +173,14 @@ def main():
         repo_id=repo_id,
         repo_type="model",
         commit_message="Update dd_generator",
+    )
+
+    api.upload_file(
+        path_or_fileobj="src/model/remasking.py",
+        path_in_repo="remasking.py",
+        repo_id=repo_id,
+        repo_type="model",
+        commit_message="Update learned remasking",
     )
 
     # Create and upload README.md

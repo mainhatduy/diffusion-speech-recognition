@@ -514,6 +514,7 @@ class StreamingDiffusionBackbone(nn.Module):
         audio_hidden: torch.Tensor | None = None,
         audio_attention_mask: torch.Tensor | None = None,
         position_offset: int = 0,
+        return_hidden_states: bool = False,
     ) -> tuple[torch.Tensor, list[tuple[torch.Tensor, torch.Tensor]]]:
         """Execute forward pass through streaming backbone.
 
@@ -524,6 +525,7 @@ class StreamingDiffusionBackbone(nn.Module):
             audio_hidden: [B, A, D] — projected audio features
             audio_attention_mask: [B, A] — True for valid, False for padding
             position_offset: starting RoPE position for streaming continuity.
+            return_hidden_states: Return final hidden states instead of vocabulary logits.
 
         Returns:
             logits: [B, S, vocab_size]
@@ -551,7 +553,7 @@ class StreamingDiffusionBackbone(nn.Module):
             new_kv_caches.append(new_kv)
 
         # 3. LM Head
-        logits = self.lm_head(h)  # [B, S, vocab_size]
+        logits = h if return_hidden_states else self.lm_head(h)  # [B, S, vocab_size]
 
         return logits, new_kv_caches
 

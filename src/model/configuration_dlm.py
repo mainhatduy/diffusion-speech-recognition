@@ -41,6 +41,13 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         streaming_denoise_steps=3,
         freeze_confidence_threshold=0.92,
         remask_confidence_threshold=0.30,
+        learned_remasking=False,
+        remask_training_stage="disabled",
+        remask_threshold=0.5,
+        remask_rollout_steps=20,
+        remask_loss_weight=1.0,
+        remask_reconstruction_weight=1.0,
+        remask_special_token_ids=None,
         loss_weight_supported=2.0,
         loss_weight_unsupported=0.3,
         use_confidence_calibration=True,
@@ -81,6 +88,13 @@ class DiscreteDiffusionConfig(PretrainedConfig):
             streaming_denoise_steps: Denoising steps per chunk in streaming.
             freeze_confidence_threshold: Threshold to freeze tokens.
             remask_confidence_threshold: Threshold to remask low-confidence tokens.
+            learned_remasking: Enable the learned error classifier and decoding policy.
+            remask_training_stage: One of disabled, detector (frozen generator), joint.
+            remask_threshold: Probability threshold for requesting token revision.
+            remask_rollout_steps: Number of fresh generator rollout states per batch.
+            remask_loss_weight: Multiplier for error classification loss.
+            remask_reconstruction_weight: Multiplier for post-remask generator loss.
+            remask_special_token_ids: Additional task and structural IDs to exclude.
             loss_weight_supported: Loss multiplier for supported tokens.
             loss_weight_unsupported: Loss multiplier for unsupported tokens.
             use_confidence_calibration: Whether to calibrate confidence.
@@ -125,6 +139,13 @@ class DiscreteDiffusionConfig(PretrainedConfig):
         self.streaming_denoise_steps = streaming_denoise_steps
         self.freeze_confidence_threshold = freeze_confidence_threshold
         self.remask_confidence_threshold = remask_confidence_threshold
+        self.learned_remasking = learned_remasking
+        self.remask_training_stage = remask_training_stage
+        self.remask_threshold = remask_threshold
+        self.remask_rollout_steps = remask_rollout_steps
+        self.remask_loss_weight = remask_loss_weight
+        self.remask_reconstruction_weight = remask_reconstruction_weight
+        self.remask_special_token_ids = remask_special_token_ids or []
         self.loss_weight_supported = loss_weight_supported
         self.loss_weight_unsupported = loss_weight_unsupported
         self.use_confidence_calibration = use_confidence_calibration

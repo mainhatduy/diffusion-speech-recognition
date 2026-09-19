@@ -387,6 +387,18 @@ class DiscreteDiffusionGenerator:
         Returns:
             Updated decoder_out state namedtuple.
         """
+        raw_model = model.module if hasattr(model, "module") else model
+        if getattr(raw_model, "remask_head", None) is not None:
+            if self.retain_history and decoder_out.history is None:
+                decoder_out = decoder_out._replace(history=[])
+            return raw_model.learned_denoise_step(
+                decoder_out,
+                partial_masks,
+                audio_features=audio_features,
+                audio_attention_mask=audio_attention_mask,
+                precomputed_audio_embeds=precomputed_audio_embeds,
+                precomputed_audio_mask=precomputed_audio_mask,
+            )
         output_tokens = decoder_out.output_tokens
         output_scores = decoder_out.output_scores
         prev_step, cur_step = decoder_out.step, decoder_out.step + 1
@@ -648,6 +660,12 @@ class DiscreteDiffusionGenerator:
                 precomputed_audio_mask=precomputed_audio_mask,
             )
             yield prev_decoder_out
+            if (
+                getattr(raw_model, "remask_head", None) is not None
+                and not prev_decoder_out.output_tokens.eq(self.mask_id).any()
+                and not prev_decoder_out.output_masks.any()
+            ):
+                break
 
     @torch.no_grad()
     def generate(self, model, inputs):
@@ -701,6 +719,13 @@ class DiscreteDiffusionGenerator:
                 precomputed_audio_embeds=precomputed_audio_embeds,
                 precomputed_audio_mask=precomputed_audio_mask,
             )
+            raw_model = model.module if hasattr(model, "module") else model
+            if (
+                getattr(raw_model, "remask_head", None) is not None
+                and not prev_decoder_out.output_tokens.eq(self.mask_id).any()
+                and not prev_decoder_out.output_masks.any()
+            ):
+                break
 
         def finalized_hypos(tokens, scores, partial_mask, history=None):
             cutoff = (

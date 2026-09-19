@@ -14,8 +14,10 @@ from transformers import (
 
 try:
     from .configuration_dlm import DiscreteDiffusionConfig
+    from .remasking import LearnedRemaskingMixin
 except ImportError:
     from configuration_dlm import DiscreteDiffusionConfig
+    from remasking import LearnedRemaskingMixin
 
 import math
 from collections import namedtuple
@@ -61,7 +63,7 @@ def topk_masking(scores, cutoff_len, stochastic=False, temp=1.0):
     return masking
 
 
-class DiscreteDiffusionModel(PreTrainedModel):
+class DiscreteDiffusionModel(LearnedRemaskingMixin, PreTrainedModel):
     """Discrete diffusion model for speech recognition and translation."""
 
     config_class = DiscreteDiffusionConfig
@@ -73,7 +75,8 @@ class DiscreteDiffusionModel(PreTrainedModel):
         "model.lm_head.decoder.bias",
     ]
     _tied_weights_keys: ClassVar[dict[str, str]] = {
-        "model.lm_head.decoder.weight": "model.roberta.embeddings.word_embeddings.weight"
+        "model.lm_head.decoder.weight": "model.roberta.embeddings.word_embeddings.weight",
+        "model.lm_head.decoder.bias": "model.lm_head.bias",
     }
 
     def __init__(self, config: DiscreteDiffusionConfig):
@@ -86,7 +89,8 @@ class DiscreteDiffusionModel(PreTrainedModel):
         self.config = config
         self.args = config  # Alias for compatibility with existing code
         self.all_tied_weights_keys = {
-            "model.lm_head.decoder.weight": "model.roberta.embeddings.word_embeddings.weight"
+            "model.lm_head.decoder.weight": "model.roberta.embeddings.word_embeddings.weight",
+            "model.lm_head.decoder.bias": "model.lm_head.bias",
         }
 
         # Initialize backbone
@@ -229,6 +233,8 @@ class DiscreteDiffusionModel(PreTrainedModel):
             )
             self.model.roberta.encoder = new_encoder
 
+        self.init_remasker()
+
     def add_fake_layer(self):
         """Add a fake parameter layer to ensure proper gradient flow in certain setups."""
         self.fake_layer = nn.Parameter(torch.zeros((self.config.hidden_size,)))
@@ -240,10 +246,10 @@ class DiscreteDiffusionModel(PreTrainedModel):
     def _tie_weights(self):
         """Tie the weights between the input embeddings and the output embeddings."""
         if self.config.tie_word_embeddings:
-            self._tie_or_clone_weights(
-                self.model.lm_head.decoder,
-                self.model.roberta.embeddings.word_embeddings,
+            self.model.lm_head.decoder.weight = (
+                self.model.roberta.embeddings.word_embeddings.weight
             )
+            self.model.lm_head.decoder.bias = self.model.lm_head.bias
 
     def _init_weights(self, module):
         """Initialize the weights - called after loading checkpoint."""
@@ -454,6 +460,10 @@ class DiscreteDiffusionModel(PreTrainedModel):
         audio_attention_mask=None,
         precomputed_audio_embeds=None,
         precomputed_audio_mask=None,
+        remask_only=False,
+        remask_training_labels=None,
+        remask_supported=None,
+        remask_rollout_kwargs=None,
     ):
         """Execute forward pass of the discrete diffusion model.
 
@@ -468,9 +478,26 @@ class DiscreteDiffusionModel(PreTrainedModel):
             precomputed_audio_embeds: Precomputed audio embeddings.
             precomputed_audio_mask: Attention mask for precomputed audio embeddings.
 
+            remask_only: Return error logits from a fresh candidate evaluation.
+            remask_training_labels: Aligned labels for rollout supervision, if training.
+            remask_supported: Positions supported by the currently visible audio.
+            remask_rollout_kwargs: Optional older audio context for draft rollouts.
+
         Returns:
             Logits tensor over vocabulary for each token position.
         """
+        if remask_training_labels is not None:
+            return self.remask_training_loss(
+                remask_training_labels,
+                partial_mask,
+                supported=remask_supported,
+                rollout_kwargs=remask_rollout_kwargs,
+                attention_mask=attention_mask,
+                audio_features=audio_features,
+                audio_attention_mask=audio_attention_mask,
+                precomputed_audio_embeds=precomputed_audio_embeds,
+                precomputed_audio_mask=precomputed_audio_mask,
+            )
         input_ids = prev_output_tokens
         if attention_mask is None:
             attention_mask = prev_output_tokens.ne(self.pad_id).int()
@@ -484,7 +511,11 @@ class DiscreteDiffusionModel(PreTrainedModel):
             past_key_values_length=0,
         )
 
-        if hasattr(self, "fake_layer") and self.training:
+        if (
+            hasattr(self, "fake_layer")
+            and self.training
+            and getattr(self.args, "remask_training_stage", "disabled") != "detector"
+        ):
             self.fake_layer.requires_grad = True
             embeddings = embeddings + self.fake_layer * 0
 
@@ -648,6 +679,8 @@ class DiscreteDiffusionModel(PreTrainedModel):
         outputs = outputs[loss_mask] if loss_mask is not None else outputs
         if partial_mask is not None:
             outputs = outputs + (partial_mask.float().sum() * 0.0)
+        if remask_only:
+            return self.remask_head(outputs).squeeze(-1)
         return self.model.lm_head(outputs)
 
     def _reparam_decoding(
@@ -738,6 +771,13 @@ class DiscreteDiffusionModel(PreTrainedModel):
         Returns:
             Updated decoder state namedtuple.
         """
+        if self.remask_head is not None:
+            return self.learned_denoise_step(
+                decoder_out,
+                partial_masks,
+                audio_features=audio_features,
+                audio_attention_mask=audio_attention_mask,
+            )
         output_tokens = decoder_out.output_tokens
         output_scores = decoder_out.output_scores
         prev_step, cur_step = decoder_out.step, decoder_out.step + 1
@@ -968,6 +1008,12 @@ class DiscreteDiffusionModel(PreTrainedModel):
                 audio_features=kwargs.get("audio_features"),
                 audio_attention_mask=kwargs.get("audio_attention_mask"),
             )
+            if (
+                self.remask_head is not None
+                and not prev_decoder_out.output_tokens.eq(self.mask_id).any()
+                and not prev_decoder_out.output_masks.any()
+            ):
+                break
 
         # Finalize: discard tokens after EOS (LLaDA approach)
         def finalized_hypos(tokens, scores, partial_mask, history=None):

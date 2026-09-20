@@ -15,10 +15,12 @@ import sys
 
 import numpy as np
 import torch
+from dotenv import load_dotenv
 
 # ─── Resolve project root so we can import src/ modules ──────────────────────
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
 # ─── Audio loading helpers ────────────────────────────────────────────────────
 
@@ -99,6 +101,7 @@ def translate(
     canvas_len_override: int = None,
     strategy: str = "reparam-uncond-deterministic-cosine",
     device: str = None,
+    languages: list[str] | None = None,
 ) -> dict:
     """
     Translate a Vietnamese audio file into English, Chinese, and Korean.
@@ -111,6 +114,7 @@ def translate(
         canvas_len_override: Force a specific canvas length.
         strategy: Decoding strategy passed to the diffusion model.
         device: 'cuda', 'cpu', or None (auto-detect).
+        languages: Target languages to run (default: all three).
 
     Returns:
         dict with keys 'english', 'chinese', 'korean'.
@@ -194,7 +198,8 @@ def translate(
         "korean": "<vi_ko>",
     }
     task_token_ids = {}
-    for lang, token in TASKS.items():
+    for lang in languages if languages is not None else TASKS:
+        token = TASKS[lang]
         tid = tokenizer.convert_tokens_to_ids(token)
         if tid == tokenizer.unk_token_id:
             raise RuntimeError(
@@ -373,6 +378,13 @@ def main():
         help="Decoding strategy (default: reparam-uncond-deterministic-cosine).",
     )
     parser.add_argument(
+        "--languages",
+        nargs="+",
+        choices=["english", "chinese", "korean"],
+        default=None,
+        help="Target languages; use --languages english for VI-EN checkpoints.",
+    )
+    parser.add_argument(
         "--device",
         default=None,
         help="Device to run on: 'cuda' or 'cpu'. Auto-detects if not set.",
@@ -391,6 +403,7 @@ def main():
         canvas_len_override=args.canvas_len,
         strategy=args.strategy,
         device=args.device,
+        languages=args.languages,
     )
 
     # ── Pretty-print results ──────────────────────────────────────────────────

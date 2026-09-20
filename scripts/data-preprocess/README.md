@@ -68,3 +68,26 @@ uv run python scripts/data-preprocess/extract_validation.py \
 
 > [!IMPORTANT]
 > You must configure `HF_TOKEN` in your `.env` file or environment variables to download the raw dataset and upload the resulting file to the Hugging Face Hub.
+
+### 6. `prepare_feasibility_cn_en.py`
+
+Downloads the pinned CoVoST2 Chinese → English mirror, checks all filenames,
+translations, and split assignments against the official CoVoST2 TSV, and converts
+audio to mono 16 kHz PCM_16 WAV. The output columns are `id`, `chinese`, `english`,
+`audio`, and `client_id`; `id` equals `audio.path`. Every audio sample is checked
+with the project's WAV decoder. Official splits are preserved: 7,085 train,
+4,843 validation, and 4,898 test examples.
+
+```bash
+uv run python scripts/data-preprocess/prepare_feasibility_cn_en.py --upload
+```
+
+The default destination is `aiai-laboratory/feasibility-cn-en`. The script reads
+`HF_TOKEN` from `.env`. Omit `--upload` for local preparation only, or use
+`--skip-download` to rebuild from already downloaded source files.
+
+Local files are stored under `data/feasibility-cn-en/`: `source/` contains the
+original mirror and official TSV, `clips/` contains WAV files, and `hub/` contains
+self-contained Parquet shards, the dataset card, and a validation report with
+SHA-256 hashes. Existing training loaders still hardcode VietSpeech repositories
+and Vietnamese task tokens and need adaptation for Chinese → English training.

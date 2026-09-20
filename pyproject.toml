@@ -39,6 +39,7 @@ dependencies = [
     "nvidia-ml-py>=13.610.43",
     "sentencepiece>=0.2.2",
     "ruff>=0.16.1",
+    "ipykernel>=7.3.0",
 ]
 
 [dependency-groups]

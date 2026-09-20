@@ -176,10 +176,11 @@ wandb/
 
 precomputed_data/*
 
-# Allow committing .agents/rules
+# Allow committing agent rules and skills
 !/.agents/
 /.agents/*
 !/.agents/rules/
+!/.agents/skills/
 
 *.onnx
 *.safetensors
